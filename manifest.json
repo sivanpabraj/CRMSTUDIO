@@ -1,0 +1,28 @@
+{
+  "name": "Studio M — Photography Studio ERP/CRM",
+  "short_name": "Studio M",
+  "description": "Premium photography & videography studio management platform",
+  "version": "6.0.0",
+  "start_url": "./site.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "dir": "rtl",
+  "lang": "fa",
+  "theme_color": "#C9A96E",
+  "background_color": "#0f0f1a",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

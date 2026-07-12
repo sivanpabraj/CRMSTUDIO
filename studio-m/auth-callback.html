@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Studio M — ورود ابر</title>
+  <style>
+    body { font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; background: #f5f5f7; color: #1d1d1f; }
+    .box { text-align: center; padding: 24px; max-width: 440px; line-height: 1.7; }
+    .err { color: #b42318; font-size: 0.9rem; }
+    .hint { color: #6e6e73; font-size: 0.82rem; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <p id="msg">در حال تکمیل ورود...</p>
+    <p id="err" class="err" hidden></p>
+    <p id="hint" class="hint" hidden></p>
+  </div>
+  <script type="module">
+    import { createClient } from '@supabase/supabase-js'
+
+    async function main() {
+      const msg = document.getElementById('msg')
+      const errEl = document.getElementById('err')
+      const hintEl = document.getElementById('hint')
+      const appUrl = '/studio-m/index.html#settings'
+
+      function fail(text, hint) {
+        msg.hidden = true
+        errEl.hidden = false
+        errEl.textContent = text
+        if (hint) {
+          hintEl.hidden = false
+          hintEl.textContent = hint
+        }
+      }
+
+      const url = String(import.meta.env.VITE_SUPABASE_URL || sessionStorage.getItem('sm_cloud_url') || '').replace(/\/+$/, '')
+      const anonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || sessionStorage.getItem('sm_cloud_key') || '').trim()
+      const hash = window.location.hash || ''
+      const params = new URLSearchParams(window.location.search)
+      const queryErr = params.get('error_description') || params.get('error')
+
+      if (queryErr) {
+        fail(decodeURIComponent(queryErr.replace(/\+/g, ' ')))
+        return
+      }
+
+      if (hash.includes('access_token') || hash.includes('error=')) {
+        window.location.replace('/studio-m/index.html' + hash)
+        return
+      }
+
+      const code = params.get('code')
+      if (code) {
+        if (!url || !anonKey) {
+          fail('پیکربندی Supabase یافت نشد', 'از اپ دوباره ثبت‌نام کنید یا .env را بررسی کنید.')
+          return
+        }
+        const client = createClient(url, anonKey, {
+          auth: { persistSession: true, storageKey: 'sm_supabase_auth' }
+        })
+        const { error } = await client.auth.exchangeCodeForSession(code)
+        if (error) {
+          fail(error.message, 'Site URL در Supabase باید http://localhost:5173/studio-m/auth-callback.html باشد.')
+          return
+        }
+        window.location.replace(appUrl)
+        return
+      }
+
+      window.location.replace(appUrl)
+    }
+
+    main().catch((e) => {
+      document.getElementById('msg').hidden = true
+      const errEl = document.getElementById('err')
+      errEl.hidden = false
+      errEl.textContent = e?.message || String(e)
+    })
+  </script>
+</body>
+</html>

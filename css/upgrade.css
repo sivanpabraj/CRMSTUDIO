@@ -1,0 +1,73 @@
+/* ══════════════════════════════════════════════
+   تالار — Loader & Changelog Styles
+   ══════════════════════════════════════════════ */
+
+#talar-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+  transition: opacity 0.4s ease;
+}
+#talar-loader.talar-loader-out { opacity: 0; pointer-events: none; }
+.talar-loader-inner { text-align: center; padding: 24px; }
+.talar-loader-ring {
+  font-size: 48px;
+  animation: talarPulse 1.2s ease-in-out infinite;
+  margin-bottom: 16px;
+}
+.talar-loader-title { font-size: 22px; font-weight: 800; color: #fff; font-family: Vazirmatn, sans-serif; }
+.talar-loader-sub { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 8px; font-family: Vazirmatn, sans-serif; }
+.talar-loader-bar {
+  width: 200px; height: 3px; background: rgba(255,255,255,0.1);
+  border-radius: 3px; margin: 20px auto 0; overflow: hidden;
+}
+.talar-loader-fill {
+  height: 100%; width: 40%; background: #C9A96E;
+  border-radius: 3px;
+  animation: talarBar 1s ease-in-out infinite;
+}
+@keyframes talarPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+@keyframes talarBar { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+
+.talar-changelog-overlay {
+  position: fixed; inset: 0; z-index: 99998;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.talar-changelog-card {
+  background: #fff; border-radius: 20px; max-width: 440px; width: 100%;
+  padding: 28px; box-shadow: 0 24px 80px rgba(0,0,0,0.3);
+  font-family: Vazirmatn, sans-serif;
+}
+.talar-changelog-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 20px; }
+.talar-changelog-head span { font-size: 36px; }
+.talar-changelog-head h2 { font-size: 18px; font-weight: 800; color: #1a1a2e; margin: 0; }
+.talar-changelog-head p { font-size: 13px; color: #6b7280; margin: 4px 0 0; }
+.talar-changelog-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+.talar-changelog-item { display: flex; gap: 12px; align-items: flex-start; padding: 10px; background: #f8f7f4; border-radius: 12px; }
+.talar-changelog-icon { font-size: 22px; flex-shrink: 0; }
+.talar-changelog-item strong { font-size: 14px; color: #1a1a2e; display: block; }
+.talar-changelog-item p { font-size: 12px; color: #6b7280; margin: 2px 0 0; line-height: 1.5; }
+.talar-changelog-btn {
+  width: 100%; padding: 14px; border: none; border-radius: 12px;
+  background: #C9A96E; color: #1a1a2e; font-weight: 700; font-size: 15px;
+  cursor: pointer; font-family: inherit;
+}
+.talar-changelog-btn:hover { opacity: 0.9; }
+
+.version-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 600; padding: 2px 8px;
+  border-radius: 8px; background: rgba(201,169,110,0.15); color: #C9A96E;
+}
+
+.ph-order-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 12px 14px; margin-bottom: 6px; background: var(--clr-card-bg);
+  border-radius: 10px; cursor: pointer;
+}
+.ph-item-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }

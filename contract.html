@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ثبت قرارداد جدید — مدیریت استودیو</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="contract.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body class="contract-body">
+<div class="bg-orbs">
+  <div class="bg-orb orb1"></div>
+  <div class="bg-orb orb2"></div>
+  <div class="bg-orb orb3"></div>
+</div>
+
+<!-- ════ TOP BAR ════ -->
+<div style="position:relative;z-index:2;max-width:1280px;margin:0 auto;padding:16px 24px 0">
+  <div id="page-nav"></div>
+</div>
+<header class="page-header">
+  <a href="studio-m/#contracts" class="back-btn">
+    <i class="fas fa-arrow-right"></i>
+    <span>بازگشت به قراردادها</span>
+  </a>
+  <div class="page-header-title">
+    <div class="page-header-icon">📋</div>
+    <div>
+      <h1>ثبت قرارداد جدید</h1>
+      <p id="contract-subtitle">فیلمبرداری و عکاسی</p>
+    </div>
+  </div>
+  <div class="header-actions">
+    <div class="contract-id-badge">
+      شناسه: <span id="contract-id-display">جدید</span>
+    </div>
+    <button class="btn-save" onclick="saveContractDraft()">💾 ذخیره پیش‌نویس</button>
+  </div>
+</header>
+
+<!-- ════ STEP BAR ════ -->
+<div class="step-bar">
+  <div class="step-track">
+    <div class="step-item active" id="si-1" onclick="gotoStep(1)"><div class="step-circle">۱</div><div class="step-label">اطلاعات طرفین</div></div>
+    <div class="step-line"></div>
+    <div class="step-item" id="si-2" onclick="gotoStep(2)"><div class="step-circle">۲</div><div class="step-label">مراسم و خدمات</div></div>
+    <div class="step-line"></div>
+    <div class="step-item" id="si-3" onclick="gotoStep(3)"><div class="step-circle">۳</div><div class="step-label">خلاصه مالی</div></div>
+  </div>
+</div>
+
+<!-- ════ LAYOUT ════ -->
+<div class="contract-layout">
+  <div class="form-col">
+
+    <!-- ═══ STEP 1: PARTIES ═══ -->
+    <div class="step-panel active" id="sp-1">
+      <div class="sp-header">
+        <div class="sp-icon gold">💍</div>
+        <div><h2>اطلاعات طرفین قرارداد</h2><p>مشخصات هویتی عروس، داماد و استودیو</p></div>
+      </div>
+
+      <div class="form-grid-2">
+        <div class="party-box groom">
+          <div class="party-head"><span>🤵</span> داماد</div>
+          <div class="fg"><label>نام و نام‌خانوادگی <span class="req">*</span></label><input id="groom-name" class="fi" type="text" placeholder="علی رضایی" oninput="syncPreview()"/></div>
+          <div class="fg"><label>کد ملی <span class="req">*</span></label><input id="groom-nid" class="fi digit-field" type="text" inputmode="numeric" placeholder="۰۰۱۲۳۴۵۶۷۸" maxlength="10"/></div>
+          <div class="fg"><label>شماره تماس <span class="req">*</span></label><input id="groom-phone" class="fi digit-field" type="tel" inputmode="numeric" placeholder="۰۹۱۲۱۲۳۴۵۶۷" maxlength="11" oninput="onVerifyPhoneChange('groom')"/></div>
+          <div class="verify-box" id="verify-groom">
+            <div class="verify-head"><i class="fas fa-shield-halved"></i> استعلام و تأیید شماره</div>
+            <p class="verify-hint">کد تأیید به همین شماره پیامک می‌شود. با وارد کردن کد، داماد مالکیت شماره و این قرارداد را تأیید می‌کند.</p>
+            <button type="button" class="btn-verify-send" onclick="sendVerifySms('groom')"><i class="fas fa-paper-plane"></i> ارسال کد پیامکی</button>
+            <div class="verify-input-row">
+              <input id="verify-input-groom" class="fi digit-field verify-code-input" type="text" inputmode="numeric" placeholder="کد دریافتی از پیامک" maxlength="6"/>
+              <button type="button" class="btn-verify-confirm" onclick="confirmVerify('groom')">تأیید</button>
+            </div>
+            <div class="verify-status pending" id="status-groom">در انتظار استعلام</div>
+          </div>
+          <div class="fg"><label>آدرس</label><input id="groom-addr" class="fi" type="text" placeholder="شهر — خیابان..."/></div>
+        </div>
+
+        <div class="party-box bride">
+          <div class="party-head"><span>👰</span> عروس</div>
+          <div class="fg"><label>نام و نام‌خانوادگی <span class="req">*</span></label><input id="bride-name" class="fi" type="text" placeholder="مریم احمدی" oninput="syncPreview()"/></div>
+          <div class="fg"><label>کد ملی</label><input id="bride-nid" class="fi digit-field" type="text" inputmode="numeric" placeholder="۰۰۱۲۳۴۵۶۷۸" maxlength="10"/></div>
+          <div class="fg"><label>شماره تماس</label><input id="bride-phone" class="fi digit-field" type="tel" inputmode="numeric" placeholder="۰۹۱۲۱۲۳۴۵۶۷" maxlength="11" oninput="onVerifyPhoneChange('bride')"/></div>
+          <div class="verify-box" id="verify-bride">
+            <div class="verify-head"><i class="fas fa-shield-halved"></i> استعلام و تأیید شماره</div>
+            <p class="verify-hint">کد تأیید به همین شماره پیامک می‌شود. با وارد کردن کد، عروس مالکیت شماره و این قرارداد را تأیید می‌کند.</p>
+            <button type="button" class="btn-verify-send" onclick="sendVerifySms('bride')"><i class="fas fa-paper-plane"></i> ارسال کد پیامکی</button>
+            <div class="verify-input-row">
+              <input id="verify-input-bride" class="fi digit-field verify-code-input" type="text" inputmode="numeric" placeholder="کد دریافتی از پیامک" maxlength="6"/>
+              <button type="button" class="btn-verify-confirm" onclick="confirmVerify('bride')">تأیید</button>
+            </div>
+            <div class="verify-status pending" id="status-bride">در انتظار استعلام</div>
+          </div>
+          <div class="fg"><label>آدرس</label><input id="bride-addr" class="fi" type="text" placeholder="شهر — خیابان..."/></div>
+        </div>
+      </div>
+
+      <div class="section-sep"></div>
+
+      <div class="studio-row">
+        <div class="fg flex-1"><label>نام استودیو</label><input id="studio-name" class="fi" type="text" placeholder="نام استودیو..." readonly title="از تنظیمات استودیو"/></div>
+        <div class="fg flex-1"><label>شماره قرارداد <small class="field-hint">(تاریخ مراسم + ردیف)</small></label><input id="contract-num" class="fi ltr" type="text" dir="ltr" readonly placeholder="پس از انتخاب تاریخ مراسم" title="مثال: 040715-01"/></div>
+        <div class="fg flex-1"><label>تاریخ قرارداد <small class="field-hint">(خودکار)</small></label><input id="contract-date" class="fi" type="text" readonly/></div>
+        <div class="fg flex-1">
+          <label>تاریخ مراسم <span class="req">*</span></label>
+          <div class="date-picker-wrap">
+            <input id="event-date" class="fi jalali-picker-input" type="text" placeholder="کلیک — انتخاب از تقویم شمسی" readonly/>
+            <button type="button" class="date-picker-btn" title="تقویم شمسی"><i class="fas fa-calendar-days"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-foot">
+        <div></div>
+        <button class="btn-next" onclick="gotoStep(2)">مرحله بعد — مراسم ←</button>
+      </div>
+    </div>
+
+    <!-- ═══ STEP 2: EVENTS ═══ -->
+    <div class="step-panel" id="sp-2">
+      <div class="sp-header">
+        <div class="sp-icon blue">🎥</div>
+        <div><h2>مراسم، پکیج و خدمات</h2><p>محل مراسم، تعرفه خدمات و انتخاب همکاران</p></div>
+      </div>
+
+      <h3 class="block-title">📍 محل و برنامه مراسم</h3>
+      <div class="form-grid-2">
+        <div class="fg"><label>نام تالار / محل مراسم</label><input id="event-venue" class="fi" type="text" placeholder="مثال: تالار رویال"/></div>
+        <div class="fg"><label>آرایشگاه عروس / سالن بانوان</label><input id="event-makeup" class="fi" type="text" placeholder="سالن زیبایی / آرایشگاه"/></div>
+        <div class="fg"><label>دی‌جی / گروه موسیقی / خواننده</label><input id="event-music" class="fi" type="text" placeholder="نام دی‌جی، گروه یا خواننده"/></div>
+        <div class="fg"><label>نام خیاط / دوزنده</label><input id="event-tailor" class="fi" type="text" placeholder="در صورت نیاز"/></div>
+      </div>
+
+      <div class="section-sep"></div>
+
+      <h3 class="block-title">📦 انتخاب پکیج قیمت</h3>
+      <p class="block-desc">پکیج از Studio M بارگذاری می‌شود — با یک کلیک قیمت‌ها و گزینه‌ها پر می‌شوند. بعداً می‌توانید دستی هم اضافه کنید.</p>
+      <div id="contract-pkg-picker" class="contract-pkg-picker"></div>
+      <div id="contract-pkg-selected" class="contract-pkg-selected" hidden></div>
+
+      <div class="section-sep"></div>
+      <h3 class="block-title">🎬 جزئیات و افزودنی‌ها</h3>
+      <p class="block-desc">پس از انتخاب پکیج، موارد زیر قابل ویرایش هستند</p>
+
+      <div class="form-grid-2">
+        <div class="fg">
+          <label>تعداد مهمان (حدودی)</label>
+          <input id="pkg-guests" class="fi digit-field" type="text" inputmode="numeric" placeholder="۵۰۰"/>
+        </div>
+        <div class="fg">
+          <label>تعداد دوربین فیلمبرداری</label>
+          <div class="price-inline">
+            <select id="pkg-cameras" class="fi" onchange="updateCamOperators(); calcTotals()">
+              <option value="1">۱ دوربین</option>
+              <option value="2">۲ دوربین</option>
+              <option value="3" selected>۳ دوربین</option>
+              <option value="4">۴ دوربین</option>
+              <option value="5">۵ دوربین</option>
+            </select>
+            <input id="price-cameras" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="مبلغ کل پکیج (تومان)" oninput="calcTotals()"/>
+          </div>
+          <div class="price-subtotal" id="hint-cameras"></div>
+        </div>
+        <div class="fg">
+          <label>کیفیت تصویر</label>
+          <div class="price-inline">
+            <select id="pkg-quality" class="fi" onchange="toggleQualityPrice()">
+              <option value="fullhd">Full HD</option>
+              <option value="4k" selected>4K UHD</option>
+            </select>
+            <input id="price-quality-4k" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="مبلغ 4K (اختیاری)" oninput="calcTotals()"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="price-options">
+        <div class="price-option">
+          <label class="price-option-label"><input type="checkbox" id="pkg-photo-venue" onchange="calcTotals()"/> 📸 عکاسی مراسم (تالار)</label>
+          <input id="price-photo-venue" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" oninput="calcTotals()"/>
+        </div>
+        <div class="price-option">
+          <label class="price-option-label"><input type="checkbox" id="pkg-photo-garden" onchange="calcTotals()"/> 🌳 عکاسی باغ (جداگانه)</label>
+          <input id="price-photo-garden" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت باغ (تومان)" oninput="calcTotals()"/>
+        </div>
+        <div class="price-option">
+          <label class="price-option-label"><input type="checkbox" id="pkg-helishot" onchange="calcTotals()"/> 🚁 هلی‌شات</label>
+          <input id="price-helishot" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" oninput="calcTotals()"/>
+        </div>
+        <div class="price-option">
+          <label class="price-option-label"><input type="checkbox" id="pkg-fpv" onchange="calcTotals()"/> 🎮 FPV</label>
+          <input id="price-fpv" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" oninput="calcTotals()"/>
+        </div>
+        <div class="price-option">
+          <label class="price-option-label"><input type="checkbox" id="pkg-crane" onchange="calcTotals()"/> 🏗️ جرثقیل (کرین)</label>
+          <input id="price-crane" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" oninput="calcTotals()"/>
+        </div>
+        <div class="price-option">
+          <label class="price-option-label"><input type="checkbox" id="pkg-tv" onchange="calcTotals()"/> 📺 پروژکشن / TV شهری</label>
+          <input id="price-tv" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" oninput="calcTotals()"/>
+        </div>
+      </div>
+
+      <div class="section-sep"></div>
+      <h3 class="block-title">📔 آلبوم، چاپ و عکس (پس از مراسم)</h3>
+      <p class="block-desc">سفارش‌های بعد از مراسم — جدا از پکیج روز عروسی</p>
+      <div class="price-options">
+        <div class="price-option stacked">
+          <label class="price-option-label"><input type="checkbox" id="ord-album" onchange="toggleAlbumFields(); calcTotals()"/> 📔 سفارش آلبوم</label>
+          <div id="album-fields" class="option-extra" hidden>
+            <select id="album-size" class="fi" onchange="calcTotals()">
+              <option value="20x20">۲۰×۲۰ سانتی</option>
+              <option value="25x25">۲۵×۲۵ سانتی</option>
+              <option value="30x30">۳۰×۳۰ سانتی</option>
+              <option value="luxury">لوکس / سفارشی</option>
+            </select>
+            <input id="price-album" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت آلبوم" oninput="calcTotals()"/>
+          </div>
+        </div>
+        <div class="price-option stacked">
+          <label class="price-option-label"><input type="checkbox" id="ord-prints" onchange="togglePrintFields(); calcTotals()"/> 🖨️ چاپ / یادگاری مراسم</label>
+          <div id="print-fields" class="option-extra" hidden>
+            <input id="print-qty" class="fi digit-field" type="text" inputmode="numeric" placeholder="تعداد"/>
+            <input id="price-prints" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت کل چاپ" oninput="calcTotals()"/>
+          </div>
+        </div>
+        <div class="price-option stacked">
+          <label class="price-option-label"><input type="checkbox" id="ord-photo-pack" onchange="togglePhotoPackFields(); calcTotals()"/> 🖼️ بسته عکس جدا (مثلاً ۲۰ یا ۳۰ عدد)</label>
+          <div id="photo-pack-fields" class="option-extra" hidden>
+            <input id="photo-pack-qty" class="fi digit-field" type="text" inputmode="numeric" placeholder="تعداد عکس"/>
+            <input id="price-photo-pack" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت بسته" oninput="calcTotals()"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-sep"></div>
+      <h3 class="block-title">👥 انتخاب همکاران</h3>
+      <p class="block-desc">پس از ثبت نهایی، آفیش در پورتال پرسنل ارسال می‌شود</p>
+
+      <div class="form-grid-2">
+        <div class="fg"><label>📸 عکاس مراسم (تالار)</label><select id="staff-photographer" class="fi"><option value="">— آزاد —</option></select></div>
+        <div class="fg"><label>🌳 عکاس باغ</label><select id="staff-photographer-garden" class="fi"><option value="">— آزاد —</option></select></div>
+        <div class="fg"><label>🎥 فیلمبردار کلیپ</label><select id="staff-vid-clip" class="fi"><option value="">— آزاد —</option></select></div>
+        <div class="fg"><label>🚁 اپراتور هلی‌شات</label><select id="staff-helishot" class="fi"><option value="">— آزاد —</option></select></div>
+        <div class="fg"><label>✂️ تدوین‌گر کلیپ</label><select id="staff-edit-clip" class="fi"><option value="">— آزاد —</option></select></div>
+        <div class="fg"><label>💻 ادیتور عکس / آلبوم</label><select id="staff-edit-photo" class="fi"><option value="">— آزاد —</option></select></div>
+      </div>
+      <div id="vid-cam-slots" class="form-grid-2" style="margin-top:12px"></div>
+
+      <div class="step-foot">
+        <button class="btn-prev" onclick="gotoStep(1)">← مرحله قبل</button>
+        <button class="btn-next" onclick="gotoStep(3)">خلاصه مالی ←</button>
+      </div>
+    </div>
+
+    <!-- ═══ STEP 3: FINANCIAL SUMMARY ═══ -->
+    <div class="step-panel" id="sp-3">
+      <div class="sp-header">
+        <div class="sp-icon orange">💰</div>
+        <div><h2>خلاصه مالی و شرایط</h2><p>بررسی نهایی مبالغ و تنظیم بیعانه</p></div>
+      </div>
+
+      <!-- Financial summary generated here -->
+      <div id="fin-breakdown"></div>
+
+      <div class="section-sep"></div>
+
+      <!-- Deposit + terms -->
+      <div class="form-grid-2">
+        <div class="fg">
+          <label>بیعانه پرداخت‌شده (تومان)</label>
+          <div class="price-row">
+            <input id="deposit" class="fi price-fi" type="text" placeholder="۰" oninput="calcTotals()"/>
+            <span class="toman">تومان</span>
+          </div>
+          <div class="quick-btns">
+            <button type="button" onclick="quickDeposit(0.2)">۲۰٪</button>
+            <button type="button" onclick="quickDeposit(0.3)">۳۰٪</button>
+            <button type="button" onclick="quickDeposit(0.5)">۵۰٪</button>
+          </div>
+        </div>
+        <div class="fg">
+          <label>واریز بیعانه به حساب بانکی</label>
+          <select class="fi" id="deposit-bank" onchange="onDepositBankChange()">
+            <option value="">— انتخاب حساب —</option>
+          </select>
+          <div id="deposit-bank-preview" class="fin-bank-preview-wrap"></div>
+        </div>
+      </div>
+      <div class="form-grid-2">
+        <div class="fg">
+          <label>روش پرداخت بیعانه</label>
+          <select class="fi" id="deposit-method">
+            <option value="transfer">کارت به کارت / انتقال</option>
+            <option value="cash">نقد</option>
+            <option value="pos">کارتخوان</option>
+            <option value="cheque">چک</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>شماره پیگیری / رسید</label>
+          <input id="deposit-ref" class="fi ltr" type="text" placeholder="اختیاری" dir="ltr"/>
+        </div>
+        <div class="fg">
+          <label>شرایط پرداخت</label>
+          <select class="fi" id="pay-plan">
+            <option>دو مرحله (بیعانه + تحویل)</option>
+            <option>سه مرحله (بیعانه + مراسم + تحویل)</option>
+            <option>پرداخت کامل</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="fg">
+        <label>شرایط و ملاحظات قرارداد</label>
+        <textarea id="contract-terms" class="fi-ta" rows="8">- در صورت لغو کمتر از ۳۰ روز، بیعانه مسترد نمی‌شود.
+- یک هفته قبل از مراسم، بیعانه به قرارداد دیگر منتقل نمی‌شود.
+- فیلم خام و راش تحویل داده نمی‌شود؛ فقط خروجی نهایی طبق توافق.
+- هرگونه تغییر قبل از شروع تدوین از طریق پنل استودیو ثبت می‌شود.
+- خدمات تیک‌خورده (هلی‌شات، کرین، TV، عکس باغ و ...) بودجه جدا دارند؛ در صورت عدم انتخاب، شامل قرارداد نمی‌شوند.
+- سفارش آلبوم، چاپ و بسته عکس پس از مراسم طبق تعرفه همین فرم محاسبه می‌شود.</textarea>
+      </div>
+
+      <!-- Totals Box -->
+      <div class="totals-box" id="totals-box"></div>
+
+      <div class="step-foot" style="margin-top:20px">
+        <button class="btn-prev" onclick="gotoStep(2)">← مرحله قبل</button>
+        <button class="btn-invoice" onclick="openInvoice()">📄 صدور قرارداد رسمی</button>
+        <button class="btn-save" style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;padding:12px 32px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer" onclick="finalizeContract()">✅ ثبت نهایی و ابلاغ به پرسنل</button>
+      </div>
+    </div>
+
+  </div><!-- /form-col -->
+
+  <!-- ════ LIVE SIDEBAR ════ -->
+  <aside class="summary-sidebar">
+    <div class="ss-title">📊 خلاصه زنده</div>
+    <div class="ss-couple" id="ss-couple">عروس و داماد</div>
+    <div id="ss-pkg"></div>
+    <div class="ss-total" id="ss-total">
+      <div class="ss-total-label">جمع کل</div>
+      <div class="ss-total-amount" id="ss-amount">۰ تومان</div>
+      <div class="ss-total-balance" id="ss-balance"></div>
+    </div>
+  </aside>
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!--  INVOICE MODAL                                 -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="inv-backdrop" id="inv-backdrop">
+  <div class="inv-wrap">
+
+    <div class="inv-toolbar no-print">
+      <div class="pdf-panel">
+        <div class="pdf-panel-head">
+          <div>
+            <div class="pdf-panel-title">📁 خروجی PDF — انتخاب سایز و دانلود</div>
+            <div class="pdf-panel-desc">فایل در پوشه سایز مربوطه ذخیره می‌شود (مثلاً قراردادها/A4/...)</div>
+          </div>
+          <button class="inv-tb-btn close" onclick="document.getElementById('inv-backdrop').classList.remove('open')">✕ بستن</button>
+        </div>
+        <div class="pdf-format-grid" id="pdf-format-grid"></div>
+        <div class="pdf-actions">
+          <button class="inv-tb-btn primary" id="btn-pdf-download" onclick="exportPDF()">📄 دانلود PDF</button>
+          <button class="inv-tb-btn" onclick="printContract()">🖨️ چاپ</button>
+        </div>
+        <div class="pdf-selected-hint" id="pdf-selected-hint"></div>
+      </div>
+    </div>
+
+    <div class="inv-preview-frame" id="inv-preview-frame">
+    <div class="inv-doc" id="inv-doc" data-pdf-format="a4">
+
+      <div class="inv-hdr">
+        <div class="inv-hdr-logo">
+          <div class="inv-logo-box">💒</div>
+          <div>
+            <div class="inv-studio" id="inv-studio-title">مدیریت استودیو</div>
+            <div class="inv-studio-sub">فیلمبرداری و عکاسی حرفه‌ای مراسم</div>
+          </div>
+        </div>
+        <div class="inv-hdr-meta">
+          <div class="inv-doc-label">قرارداد خدمات</div>
+          <div class="inv-meta-row" id="im-num">شماره: —</div>
+          <div class="inv-meta-row" id="im-date">تاریخ قرارداد: —</div>
+          <div class="inv-meta-row" id="im-event-date">تاریخ مراسم: —</div>
+          <div class="inv-official-stamp">رسمی ✓</div>
+        </div>
+      </div>
+
+      <div class="inv-gold-line"></div>
+
+      <div class="inv-parties">
+        <div class="inv-party">
+          <div class="inv-party-label">طرف اول — ارائه‌دهنده خدمات</div>
+          <div class="inv-party-item"><b>نام:</b> <span id="ip-studio">مدیریت استودیو</span></div>
+          <div class="inv-party-item"><b>نوع خدمات:</b> فیلمبرداری و عکاسی</div>
+        </div>
+        <div class="inv-party-sep">⟺</div>
+        <div class="inv-party">
+          <div class="inv-party-label">طرف دوم — کارفرما</div>
+          <div class="inv-party-item"><b>داماد:</b> <span id="ip-groom">—</span></div>
+          <div class="inv-party-item"><b>عروس:</b> <span id="ip-bride">—</span></div>
+          <div class="inv-party-item"><b>کد ملی:</b> <span id="ip-nid">—</span></div>
+          <div class="inv-party-item"><b>تلفن:</b> <span id="ip-phone" class="ltr">—</span></div>
+        </div>
+      </div>
+
+      <div class="inv-event-banner" id="inv-event-banner"></div>
+
+      <div class="inv-section inv-fin-section inv-no-break">
+        <div class="inv-sec-title"><span class="inv-sec-num">۱</span> شرح خدمات و خلاصه مالی</div>
+        <div id="inv-fin-table"></div>
+        <div class="inv-fin-summary inv-no-break">
+          <div class="inv-grand-total" id="inv-grand-total"></div>
+          <div class="inv-balance-row" id="inv-balance-row"></div>
+        </div>
+      </div>
+
+      <div class="inv-section inv-terms-section">
+        <div class="inv-sec-title"><span class="inv-sec-num">۲</span> شرایط و مقررات</div>
+        <div class="inv-terms-body" id="inv-terms-body"></div>
+      </div>
+
+      <div class="inv-verify inv-no-break" id="inv-verify-section">
+        <div class="inv-sec-title"><span class="inv-sec-num">۳</span> تأیید هویت طرفین (پیامک)</div>
+        <div class="inv-verify-grid" id="inv-verify-grid"></div>
+      </div>
+
+      <div class="inv-footer-note">
+        این قرارداد در دو نسخه تنظیم و هر کدام از طرفین یک نسخه دریافت نمود.
+        <span class="inv-format-badge" id="inv-format-badge">A4</span>
+      </div>
+
+    </div><!-- /inv-doc -->
+    </div><!-- /inv-preview-frame -->
+  </div>
+</div>
+
+<div id="toast-wrap"></div>
+<script src="js/config.js" defer></script>
+<script src="js/idb-store.js" defer></script>
+<script src="js/utils.js" defer></script>
+<script src="js/roles.js" defer></script>
+<script src="js/db.js" defer></script>
+<script src="js/finance-sync.js" defer></script>
+<script src="js/sms.js" defer></script>
+<script src="js/package-catalog.js" defer></script>
+<script src="js/jalali-picker.js" defer></script>
+<script src="js/lib/signed-proof.js" type="module" defer></script>
+<script src="js/auth.js" defer></script>
+<script src="js/page-nav.js" defer></script>
+<script src="js/bootstrap.js" defer></script>
+<script src="contract.js" defer></script>
+<script src="js/sw-register.js"></script>
+<script defer>
+document.addEventListener('DOMContentLoaded', () => {
+  Bootstrap.start(async () => {
+    if (typeof PageNav !== 'undefined') PageNav.render('contractNew')
+    if (typeof Auth !== 'undefined' && !Auth.isLoggedIn()) {
+      window.location.href = 'index.html?next=' + encodeURIComponent('contract.html')
+      return
+    }
+    if (typeof Auth !== 'undefined' && Auth.getHomePage() === 'portal') {
+      window.location.href = 'index.html?view=portal'
+      return
+    }
+    const info = DB.get('studioInfo') || {}
+    const sn = document.getElementById('studio-name')
+    if (sn && !sn.value) sn.value = info.name || ''
+    if (typeof populatePersonnelDropdowns === 'function') populatePersonnelDropdowns()
+    if (typeof populateDepositBanks === 'function') populateDepositBanks()
+    if (typeof toggleQualityPrice === 'function') toggleQualityPrice()
+    if (typeof updateCamOperators === 'function') updateCamOperators()
+    if (typeof calcTotals === 'function') calcTotals()
+    if (typeof initVerifyUi === 'function') initVerifyUi()
+    if (typeof renderPackagePicker === 'function') renderPackagePicker()
+    if (typeof JalaliPicker !== 'undefined') {
+      JalaliPicker.attach('event-date', d => { if (typeof onEventDatePicked === 'function') onEventDatePicked(d) })
+    }
+  })
+})
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#C9A96E"/>
+  <title>استودیو — ورود</title>
+  <link href="https://fonts.googleapis.com/css2?family=Estedad:wght@700;800&family=Vazirmatn:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="css/glass-theme.css"/>
+  <link rel="stylesheet" href="css/auth.css"/>
+  <style>
+    .site-hero { text-align: center; padding: 48px 20px 32px; max-width: 520px; margin: 0 auto; }
+    .site-logo {
+      width: 72px; height: 72px; margin: 0 auto 16px; border-radius: 20px;
+      display: flex; align-items: center; justify-content: center; font-size: 2rem;
+      background: rgba(245,158,11,.15); border: 1px solid rgba(245,158,11,.25); color: #F59E0B;
+    }
+    .site-hero h1 { font-family: Estedad, Vazirmatn, sans-serif; font-size: clamp(1.5rem, 5vw, 2rem); color: #fff; margin: 0 0 10px; font-weight: 800; }
+    .site-hero p { color: rgba(255,255,255,0.62); line-height: 1.85; margin: 0 0 24px; font-size: 14px; }
+    .site-enter {
+      display: block; max-width: 320px; margin: 0 auto 40px; padding: 16px 24px;
+      text-align: center; text-decoration: none; border-radius: 16px;
+      background: linear-gradient(135deg, #F59E0B, #D97706); color: #111; font-weight: 800; font-size: 16px;
+      box-shadow: 0 8px 28px rgba(245,158,11,.35);
+    }
+    .site-enter:hover { transform: translateY(-2px); }
+    .site-footer { text-align: center; padding: 20px; font-size: 11px; color: rgba(255,255,255,0.32); }
+  </style>
+</head>
+<body class="auth-screen">
+  <div class="site-hero">
+    <div class="site-logo" data-site-logo><i class="fas fa-camera-retro"></i></div>
+    <h1 data-site-title>استودیو عکاسی</h1>
+    <p data-site-sub>ورود با شماره موبایل — سیستم شما را شناسایی و به پنل مربوط هدایت می‌کند.</p>
+    <a class="site-enter" data-href-login href="index.html"><i class="fas fa-sign-in-alt"></i> ورود</a>
+  </div>
+  <div class="site-footer">Studio M v<span id="app-ver">6</span></div>
+
+  <script src="js/config.js" defer></script>
+  <script src="js/idb-store.js" defer></script>
+  <script src="js/utils.js" defer></script>
+  <script src="js/db.js" defer></script>
+  <script src="js/studio.js" defer></script>
+  <script src="js/site-bridge.js" defer></script>
+  <script src="js/glass-theme.js" defer></script>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', async () => {
+      GlassTheme.init('portal')
+      await SiteBridge.initSitePage()
+    })
+  </script>
+  <script src="js/sw-register.js"></script>
+</body>
+</html>

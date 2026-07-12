@@ -1,0 +1,8 @@
+# Minimal Supabase config for Edge Functions deploy
+project_id = "gfzfmecglamyxevvttji"
+
+[api]
+enabled = true
+
+[functions.send-sms]
+verify_jwt = true

@@ -1,0 +1,17 @@
+node_modules
+.git
+.github
+.env
+.env.*
+dist
+tests
+e2e
+playwright-report
+test-results
+coverage
+*.md
+!README.md
+.DS_Store
+*.log
+.cursor
+agent-transcripts
