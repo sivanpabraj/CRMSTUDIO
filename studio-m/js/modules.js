@@ -1043,14 +1043,21 @@ SMModules.invoices = {
         }
 
         if (data.syncLedger) {
+          const txType = data.direction === 'in' ? 'deposit' : 'withdrawal'
           await SecureDB.insert('transactions', {
-            type: data.direction === 'in' ? 'deposit' : 'withdrawal',
+            type: txType,
             amount: data.amount,
             desc: `${data.title}${data.purpose ? ' — ' + data.purpose : ''}`,
             date: data.date,
             bankId: data.bankId || '',
-            invoiceRef: item?.number || data.number
+            invoiceRef: item?.number || data.number,
+            purposeCategory: data.direction === 'in' ? 'other_income' : 'other',
+            purpose: data.purpose || data.title,
+            paymentMethod: data.paymentMethod || 'transfer'
           })
+          if (data.bankId && typeof FinanceSync !== 'undefined') {
+            await FinanceSync.applyBankDelta(data.bankId, txType, data.amount)
+          }
         }
 
         SM.toast('فاکتور ثبت شد', 'success')

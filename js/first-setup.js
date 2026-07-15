@@ -44,7 +44,7 @@ const FirstSetup = {
       DB.insert('banks', {
         id: 'bank_cash_' + Date.now(),
         name: 'صندوق نقدی',
-        accountNumber: '', shaba: '', card: '',
+        account: '', accountNumber: '', iban: '', shaba: '', card: '',
         balance: 0, color: '#22C55E', icon: '💰'
       })
     }

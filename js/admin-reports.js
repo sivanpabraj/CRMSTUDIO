@@ -131,7 +131,7 @@
         return {
           title: 'گزارش بانک‌ها و صندوق',
           summary: [['جمع موجودی', fmt(total) + ' تومان', fmt(banks.length) + ' حساب']],
-          rows: banks.map(b => [b.icon || '🏦', b.name || '—', b.accountNumber || '—', fmt(b.balance || 0)]),
+          rows: banks.map(b => [b.icon || '🏦', b.name || '—', b.account || b.accountNumber || '—', fmt(b.balance || 0)]),
           headers: ['', 'نام', 'حساب', 'موجودی']
         }
       }

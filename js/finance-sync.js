@@ -17,8 +17,25 @@ const FinanceSync = {
     return c.couple || (c.bride && c.groom ? `${c.bride} و ${c.groom}` : c.bride || c.groom || '—')
   },
 
+  normalizeBankFields(b) {
+    if (!b) return null
+    const account = b.account || b.accountNumber || ''
+    const iban = b.iban || b.shaba || ''
+    return {
+      ...b,
+      account,
+      accountNumber: account,
+      iban,
+      shaba: iban,
+      card: b.card || '',
+      holder: b.holder || '',
+      balance: Number(b.balance) || 0
+    }
+  },
+
   bankInfo(bankId) {
-    const b = DB.find('banks', x => x.id === bankId)
+    const raw = DB.find('banks', x => x.id === bankId)
+    const b = this.normalizeBankFields(raw)
     if (!b) return { id: '', name: '—', bank: '', account: '', card: '', iban: '', holder: '' }
     return {
       id: b.id,
@@ -62,6 +79,74 @@ const FinanceSync = {
     const b = DB.find('banks', x => x.id === bankId)
     if (!b) return
     await SecureDB.update('banks', bankId, { balance: (b.balance || 0) + (type === 'deposit' ? amount : -amount) })
+  },
+
+  /**
+   * انتقال واقعی بین دو حساب: برداشت از مبدأ + واریز به مقصد (اتمیک از نظر موجودی)
+   */
+  async transferBetweenBanks(opts = {}) {
+    const amount = +(opts.amount || 0)
+    const fromId = opts.fromBankId
+    const toId = opts.toBankId
+    if (!amount) return { ok: false, error: 'مبلغ نامعتبر' }
+    if (!fromId || !toId) return { ok: false, error: 'انتخاب هر دو حساب الزامی است' }
+    if (fromId === toId) return { ok: false, error: 'حساب مبدأ و مقصد باید متفاوت باشند' }
+
+    const from = DB.find('banks', b => b.id === fromId)
+    const to = DB.find('banks', b => b.id === toId)
+    if (!from || !to) return { ok: false, error: 'حساب بانکی یافت نشد' }
+    if ((from.balance || 0) < amount) return { ok: false, error: 'موجودی حساب مبدأ کافی نیست' }
+
+    const date = opts.date || Utils.todayJalali()
+    const note = opts.notes || opts.purpose || 'انتقال بین حساب'
+    const pairId = opts.pairId || (`xfer_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`)
+
+    const outRow = await SecureDB.insert('transactions', {
+      type: 'withdrawal',
+      amount,
+      date,
+      periodMonth: opts.periodMonth || '',
+      bankId: fromId,
+      sourceType: 'other',
+      purposeCategory: 'transfer',
+      purpose: note,
+      paymentMethod: opts.paymentMethod || 'transfer',
+      transactionRef: opts.transactionRef || '',
+      notes: opts.notes || '',
+      desc: `انتقال به ${this.bankLabel(toId)}`,
+      transferPairId: pairId,
+      transferLeg: 'out',
+      transferToBankId: toId
+    })
+
+    const inRow = await SecureDB.insert('transactions', {
+      type: 'deposit',
+      amount,
+      date,
+      periodMonth: opts.periodMonth || '',
+      bankId: toId,
+      sourceType: 'other',
+      purposeCategory: 'transfer',
+      purpose: note,
+      paymentMethod: opts.paymentMethod || 'transfer',
+      transactionRef: opts.transactionRef || '',
+      notes: opts.notes || '',
+      desc: `انتقال از ${this.bankLabel(fromId)}`,
+      transferPairId: pairId,
+      transferLeg: 'in',
+      transferFromBankId: fromId,
+      transferSiblingId: outRow.id
+    })
+
+    await SecureDB.update('transactions', outRow.id, { transferSiblingId: inRow.id })
+    await this.applyBankDelta(fromId, 'withdrawal', amount)
+    await this.applyBankDelta(toId, 'deposit', amount)
+
+    if (typeof DB.log === 'function') {
+      DB.log('finance_transfer', `${amount.toLocaleString('fa-IR')} — ${this.bankLabel(fromId)} → ${this.bankLabel(toId)}`)
+    }
+
+    return { ok: true, pairId, outTransactionId: outRow.id, inTransactionId: inRow.id }
   },
 
   async createInvoiceFromTx(txData, txId, existingInvoiceId) {

@@ -4,7 +4,7 @@
    ══════════════════════════════════════════════ */
 
 const DB_KEY = AppConfig.DB_KEY
-const DB_VERSION = 20
+const DB_VERSION = 21
 const DB_OBJECT_KEYS = new Set(['studioInfo', 'securityState'])
 const SYNC_TOUCH_KEYS = new Set([
   'contracts', 'transactions', 'invoices', 'bookings', 'personnel', 'equipment',
@@ -287,6 +287,34 @@ const DB_MIGRATIONS = {
       data.securityState = def.securityState
     }
     data._meta.dbVersion = 20
+    return data
+  },
+  21(data) {
+    ;(data.banks || []).forEach(b => {
+      const account = b.account || b.accountNumber || ''
+      const iban = b.iban || b.shaba || ''
+      b.account = account
+      b.accountNumber = account
+      b.iban = iban
+      b.shaba = iban
+      if (b.card == null) b.card = ''
+      if (b.holder == null) b.holder = ''
+      b.balance = Number(b.balance) || 0
+    })
+    ;(data.cheques || []).forEach(c => {
+      const type = c.type || c.direction || 'incoming'
+      const number = c.number || c.chequeNumber || ''
+      const client = c.client || c.drawer || c.party || ''
+      c.type = type
+      c.direction = type
+      c.number = number
+      c.chequeNumber = number
+      c.client = client
+      c.party = client
+      if (!c.drawer) c.drawer = client
+      if (!c.status) c.status = 'pending'
+    })
+    data._meta.dbVersion = 21
     return data
   }
 }
