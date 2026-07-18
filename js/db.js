@@ -392,16 +392,24 @@ const DB = {
     } catch { /* */ }
   },
 
-  async _persist() {
+  async _persist(opts = {}) {
     try {
       await IdbStore.set(AppConfig.IDB_STORE, DB_KEY, this._data)
-      if (typeof Cloud !== 'undefined' && Cloud.schedulePush) Cloud.schedulePush()
+      if (!opts.skipCloud && typeof Cloud !== 'undefined' && Cloud.schedulePush) Cloud.schedulePush()
     } catch (e) {
       console.error('DB persist failed:', e)
       if (typeof Utils !== 'undefined') {
         Utils.toast('خطا در ذخیره‌سازی داده‌ها', 'error')
       }
     }
+  },
+
+  _logPersistTimer: null,
+  _scheduleLogPersist() {
+    clearTimeout(this._logPersistTimer)
+    this._logPersistTimer = setTimeout(() => {
+      this._persist({ skipCloud: true }).catch(() => {})
+    }, 2000)
   },
 
   _normalizePhone(phone) {
@@ -423,13 +431,19 @@ const DB = {
   findPersonnelByPhone(phone) {
     const norm = this._normalizePhone(phone)
     if (!norm) return null
-    return this.find('personnel', p => this._normalizePhone(p.phone) === norm) ?? null
+    return this.active('personnel').find(p => this._normalizePhone(p.phone) === norm) ?? null
   },
 
   findPersonnelByUserId(userId) {
-    const user = this.find('users', u => u.id === userId)
+    const user = this.find('users', u => u.id === userId && !u._deleted)
     if (!user) return null
-    return this.findPersonnelByPhone(user.phone) || this.find('personnel', p => p.userId === userId)
+    return this.findPersonnelByPhone(user.phone) ||
+      this.active('personnel').find(p => p.userId === userId) || null
+  },
+
+  /** Find active row by id (skips tombstones) */
+  findActive(collection, predicate) {
+    return this.active(collection).find(predicate) ?? null
   },
 
   syncPersonnelFromUser(user) {
@@ -545,7 +559,9 @@ const DB = {
 
   set(collection, data) {
     this._data[collection] = data
-    return this._persist().catch(err => console.error('[DB] persist error', err))
+    // logs never trigger cloud push
+    const skipCloud = collection === 'logs'
+    return this._persist({ skipCloud }).catch(err => console.error('[DB] persist error', err))
   },
 
   find(collection, predicate) {
@@ -592,13 +608,20 @@ const DB = {
 
   log(action, detail) {
     const MAX_LOGS = 500
-    const logs = this.get('logs')
-    if (logs.length >= MAX_LOGS) this._data.logs = logs.slice(-MAX_LOGS + 1)
-    this.insert('logs', {
+    if (!this._data) return
+    if (!Array.isArray(this._data.logs)) this._data.logs = []
+    if (this._data.logs.length >= MAX_LOGS) {
+      this._data.logs = this._data.logs.slice(-MAX_LOGS + 1)
+    }
+    // Direct push — avoid insert()→set()→full cloud schedule on every log
+    this._data.logs.push({
+      id: crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       action,
       detail: typeof detail === 'object' ? JSON.stringify(detail) : String(detail),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      createdAt: this._today()
     })
+    this._scheduleLogPersist()
   },
 
   _today() {

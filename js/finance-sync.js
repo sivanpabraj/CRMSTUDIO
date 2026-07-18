@@ -80,7 +80,9 @@ const FinanceSync = {
   async applyBankDelta(bankId, type, amount) {
     if (!bankId || !amount) return
     const run = async () => {
-      const b = DB.find('banks', x => x.id === bankId)
+      const b = (typeof DB.findActive === 'function'
+        ? DB.findActive('banks', x => x.id === bankId)
+        : DB.find('banks', x => x.id === bankId && !x._deleted))
       if (!b) return
       const next = (b.balance || 0) + (type === 'deposit' ? amount : -amount)
       await SecureDB.update('banks', bankId, { balance: next })
@@ -89,8 +91,27 @@ const FinanceSync = {
     return this._bankQueue
   },
 
+  async _updateContractPaid(contractId, purposeCategory, amount, { reverse = false } = {}) {
+    const c = DB.find('contracts', x => x.id === contractId && !x._deleted)
+    if (!c || !amount) return
+    // Initial deposit lives on contract.deposit — only installments update paid
+    if (purposeCategory !== 'contract_payment') return
+    const delta = reverse ? -amount : amount
+    const paid = Math.max(0, (c.paid || 0) + delta)
+    const balance = Math.max(0, (c.total || 0) - (c.deposit || 0) - paid)
+    await SecureDB.update('contracts', contractId, { paid, balance })
+  },
+
+  applyContractPaid(contractId, purposeCategory, amount) {
+    return this._updateContractPaid(contractId, purposeCategory, amount, { reverse: false })
+  },
+
+  reverseContractPaid(contractId, purposeCategory, amount) {
+    return this._updateContractPaid(contractId, purposeCategory, amount, { reverse: true })
+  },
+
   /**
-   * انتقال واقعی بین دو حساب: برداشت از مبدأ + واریز به مقصد (اتمیک از نظر موجودی)
+   * انتقال واقعی بین دو حساب — کل عملیات داخل صف بانک + rollback روی خطا
    */
   async transferBetweenBanks(opts = {}) {
     const amount = +(opts.amount || 0)
@@ -100,61 +121,87 @@ const FinanceSync = {
     if (!fromId || !toId) return { ok: false, error: 'انتخاب هر دو حساب الزامی است' }
     if (fromId === toId) return { ok: false, error: 'حساب مبدأ و مقصد باید متفاوت باشند' }
 
-    const from = DB.find('banks', b => b.id === fromId)
-    const to = DB.find('banks', b => b.id === toId)
-    if (!from || !to) return { ok: false, error: 'حساب بانکی یافت نشد' }
-    if ((from.balance || 0) < amount) return { ok: false, error: 'موجودی حساب مبدأ کافی نیست' }
+    const run = async () => {
+      const from = (typeof DB.findActive === 'function'
+        ? DB.findActive('banks', b => b.id === fromId)
+        : DB.find('banks', b => b.id === fromId && !b._deleted))
+      const to = (typeof DB.findActive === 'function'
+        ? DB.findActive('banks', b => b.id === toId)
+        : DB.find('banks', b => b.id === toId && !b._deleted))
+      if (!from || !to) return { ok: false, error: 'حساب بانکی یافت نشد' }
+      const fromBefore = from.balance || 0
+      const toBefore = to.balance || 0
+      if (fromBefore < amount) return { ok: false, error: 'موجودی حساب مبدأ کافی نیست' }
 
-    const date = opts.date || Utils.todayJalali()
-    const note = opts.notes || opts.purpose || 'انتقال بین حساب'
-    const pairId = opts.pairId || (`xfer_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`)
+      const date = opts.date || Utils.todayJalali()
+      const note = opts.notes || opts.purpose || 'انتقال بین حساب'
+      const pairId = opts.pairId || (`xfer_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`)
+      let outRow, inRow
+      let balancesTouched = false
+      try {
+        outRow = await SecureDB.insert('transactions', {
+          type: 'withdrawal',
+          amount,
+          date,
+          periodMonth: opts.periodMonth || '',
+          bankId: fromId,
+          sourceType: 'other',
+          purposeCategory: 'transfer',
+          purpose: note,
+          paymentMethod: opts.paymentMethod || 'transfer',
+          transactionRef: opts.transactionRef || '',
+          notes: opts.notes || '',
+          desc: `انتقال به ${this.bankLabel(toId)}`,
+          transferPairId: pairId,
+          transferLeg: 'out',
+          transferToBankId: toId
+        })
 
-    const outRow = await SecureDB.insert('transactions', {
-      type: 'withdrawal',
-      amount,
-      date,
-      periodMonth: opts.periodMonth || '',
-      bankId: fromId,
-      sourceType: 'other',
-      purposeCategory: 'transfer',
-      purpose: note,
-      paymentMethod: opts.paymentMethod || 'transfer',
-      transactionRef: opts.transactionRef || '',
-      notes: opts.notes || '',
-      desc: `انتقال به ${this.bankLabel(toId)}`,
-      transferPairId: pairId,
-      transferLeg: 'out',
-      transferToBankId: toId
-    })
+        inRow = await SecureDB.insert('transactions', {
+          type: 'deposit',
+          amount,
+          date,
+          periodMonth: opts.periodMonth || '',
+          bankId: toId,
+          sourceType: 'other',
+          purposeCategory: 'transfer',
+          purpose: note,
+          paymentMethod: opts.paymentMethod || 'transfer',
+          transactionRef: opts.transactionRef || '',
+          notes: opts.notes || '',
+          desc: `انتقال از ${this.bankLabel(fromId)}`,
+          transferPairId: pairId,
+          transferLeg: 'in',
+          transferFromBankId: fromId,
+          transferSiblingId: outRow.id
+        })
 
-    const inRow = await SecureDB.insert('transactions', {
-      type: 'deposit',
-      amount,
-      date,
-      periodMonth: opts.periodMonth || '',
-      bankId: toId,
-      sourceType: 'other',
-      purposeCategory: 'transfer',
-      purpose: note,
-      paymentMethod: opts.paymentMethod || 'transfer',
-      transactionRef: opts.transactionRef || '',
-      notes: opts.notes || '',
-      desc: `انتقال از ${this.bankLabel(fromId)}`,
-      transferPairId: pairId,
-      transferLeg: 'in',
-      transferFromBankId: fromId,
-      transferSiblingId: outRow.id
-    })
+        await SecureDB.update('transactions', outRow.id, { transferSiblingId: inRow.id })
 
-    await SecureDB.update('transactions', outRow.id, { transferSiblingId: inRow.id })
-    await this.applyBankDelta(fromId, 'withdrawal', amount)
-    await this.applyBankDelta(toId, 'deposit', amount)
+        // Direct balance update inside queue (avoid nested queue deadlock)
+        await SecureDB.update('banks', fromId, { balance: fromBefore - amount })
+        balancesTouched = true
+        await SecureDB.update('banks', toId, { balance: toBefore + amount })
 
-    if (typeof DB.log === 'function') {
-      DB.log('finance_transfer', `${amount.toLocaleString('fa-IR')} — ${this.bankLabel(fromId)} → ${this.bankLabel(toId)}`)
+        if (typeof DB.log === 'function') {
+          DB.log('finance_transfer', `${amount.toLocaleString('fa-IR')} — ${this.bankLabel(fromId)} → ${this.bankLabel(toId)}`)
+        }
+        return { ok: true, pairId, outTransactionId: outRow.id, inTransactionId: inRow.id }
+      } catch (e) {
+        try {
+          if (outRow?.id) await SecureDB.delete('transactions', outRow.id)
+          if (inRow?.id) await SecureDB.delete('transactions', inRow.id)
+          if (balancesTouched) {
+            await SecureDB.update('banks', fromId, { balance: fromBefore })
+            await SecureDB.update('banks', toId, { balance: toBefore })
+          }
+        } catch { /* best-effort rollback */ }
+        return { ok: false, error: e.message || 'خطا در انتقال — تغییرات برگشت داده شد' }
+      }
     }
 
-    return { ok: true, pairId, outTransactionId: outRow.id, inTransactionId: inRow.id }
+    this._bankQueue = this._bankQueue.then(run, run)
+    return this._bankQueue
   },
 
   async createInvoiceFromTx(txData, txId, existingInvoiceId) {
@@ -198,16 +245,6 @@ const FinanceSync = {
     return inv.id
   },
 
-  async _updateContractPaid(contractId, purposeCategory, amount) {
-    const c = DB.find('contracts', x => x.id === contractId)
-    if (!c || !amount) return
-    if (purposeCategory === 'contract_payment') {
-      const paid = (c.paid || 0) + amount
-      const balance = Math.max(0, (c.total || 0) - (c.deposit || 0) - paid)
-      await SecureDB.update('contracts', contractId, { paid, balance })
-    }
-  },
-
   /**
    * ثبت واریز یکپارچه: تراکنش + بانک + فاکتور (+ قرارداد)
    */
@@ -246,7 +283,7 @@ const FinanceSync = {
       : null
     if (invoiceId) await SecureDB.update('transactions', row.id, { invoiceId })
 
-    if (opts.contractId && purposeCategory === 'contract_payment') {
+    if (opts.contractId) {
       await this._updateContractPaid(opts.contractId, purposeCategory, amount)
     }
 
@@ -304,7 +341,7 @@ const FinanceSync = {
   },
 
   contractPayments(contractId) {
-    return (DB.get('transactions') || [])
+    return (typeof DB.active === 'function' ? DB.active('transactions') : DB.get('transactions') || [])
       .filter(t => t.contractId === contractId && t.type === 'deposit')
       .slice()
       .reverse()

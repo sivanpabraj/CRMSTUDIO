@@ -705,19 +705,44 @@ const SMAccounting = {
           desc: purpose || d['tx-notes'] || catLabel
         }
 
+        const syncInv = !!document.getElementById('tx-sync-inv')?.checked
+        const contractLinked = isIn && data.contractId &&
+          (data.purposeCategory === 'contract_payment' || data.purposeCategory === 'contract_deposit')
+
+        // New contract deposits/payments go through FinanceSync (bank + invoice + paid)
+        if (!item && contractLinked && typeof FinanceSync !== 'undefined') {
+          const res = await FinanceSync.recordDeposit({ ...data, syncInvoice: syncInv })
+          if (!res.ok) return SM.toast(res.error || 'خطا در ثبت', 'error')
+          SM.toast(res.invoiceId ? 'ثبت شد و در فاکتورها قرار گرفت' : 'تراکنش ثبت شد', 'success')
+          SMH.refresh('accounting')
+          return
+        }
+
         let txId
         if (item) {
+          if (typeof FinanceSync !== 'undefined' && item.contractId) {
+            await FinanceSync.reverseContractPaid(item.contractId, item.purposeCategory, item.amount)
+          }
           await SecureDB.update('transactions', item.id, data)
           await this._adjustBankBalance(item, data)
           txId = item.id
+          if (typeof FinanceSync !== 'undefined' && data.contractId) {
+            await FinanceSync.applyContractPaid(data.contractId, data.purposeCategory, data.amount)
+          }
         } else {
           const row = await SecureDB.insert('transactions', data)
           txId = row.id
           await this._applyBankDelta(data.bankId, data.type, data.amount)
+          if (typeof FinanceSync !== 'undefined' && data.contractId && data.type === 'deposit') {
+            await FinanceSync.applyContractPaid(data.contractId, data.purposeCategory, data.amount)
+          }
         }
 
-        const invId = await this._syncInvoice(data, txId, item?.invoiceId)
-        if (invId) await SecureDB.update('transactions', txId, { invoiceId: invId })
+        let invId = null
+        if (syncInv || item?.invoiceId) {
+          invId = await this._syncInvoice(data, txId, item?.invoiceId)
+          if (invId) await SecureDB.update('transactions', txId, { invoiceId: invId })
+        }
 
         SM.toast(invId ? 'ثبت شد و در فاکتورها قرار گرفت' : 'تراکنش ثبت شد', 'success')
         SMH.refresh('accounting')
@@ -728,6 +753,9 @@ const SMAccounting = {
           if (item.bankId && item.amount) {
             const revType = item.type === 'deposit' ? 'withdrawal' : 'deposit'
             await this._applyBankDelta(item.bankId, revType, item.amount)
+          }
+          if (typeof FinanceSync !== 'undefined' && item.contractId && item.type === 'deposit') {
+            await FinanceSync.reverseContractPaid(item.contractId, item.purposeCategory, item.amount)
           }
           if (item.invoiceId) await SecureDB.delete('invoices', item.invoiceId)
           await SecureDB.delete('transactions', item.id)
@@ -764,7 +792,10 @@ const SMAccounting = {
 
   /* ── Cheques ── */
   addCheque() { this._chequeForm(null) },
-  editCheque(id) { this._chequeForm((DB.get('cheques') || []).find(c => c.id === id)) },
+  editCheque(id) {
+    const rows = typeof DB.active === 'function' ? DB.active('cheques') : (DB.get('cheques') || []).filter(c => !c._deleted)
+    this._chequeForm(rows.find(c => c.id === id))
+  },
 
   async passCheque(id) {
     if (typeof ChequeManager === 'undefined') return SM.toast('ماژول چک در دسترس نیست', 'error')

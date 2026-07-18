@@ -48,7 +48,10 @@ const ChequeManager = {
   },
 
   list() {
-    return (DB.get('cheques') || []).map(c => this.normalizeFields(c))
+    const rows = typeof DB.active === 'function'
+      ? DB.active('cheques')
+      : (DB.get('cheques') || []).filter(c => !c._deleted)
+    return rows.map(c => this.normalizeFields(c))
   },
 
   pending() {

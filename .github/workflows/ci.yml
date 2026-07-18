@@ -19,6 +19,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Dependency audit (high+)
+        run: npm audit --audit-level=high
+
       - run: npm run lint
 
       - run: npm run test

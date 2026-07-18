@@ -6,6 +6,7 @@ import {
   normalizeCheque,
   normalizeBank,
   bankDelta,
+  nextContractPaid,
   previewPassCheque
 } from '../js/lib/finance-ledger.js'
 
@@ -46,6 +47,22 @@ describe('bankDelta', () => {
   it('adds on deposit and subtracts on withdrawal', () => {
     expect(bankDelta(1000, 'deposit', 200)).toBe(1200)
     expect(bankDelta(1000, 'withdrawal', 200)).toBe(800)
+  })
+})
+
+describe('nextContractPaid', () => {
+  it('updates paid/balance for installments only', () => {
+    const next = nextContractPaid({ total: 1000, deposit: 200, paid: 100 }, 'contract_payment', 150)
+    expect(next).toEqual({ paid: 250, balance: 550 })
+  })
+
+  it('ignores initial deposit category', () => {
+    expect(nextContractPaid({ total: 1000, deposit: 200, paid: 0 }, 'contract_deposit', 200)).toBeNull()
+  })
+
+  it('reverses installment without going negative', () => {
+    const next = nextContractPaid({ total: 1000, deposit: 0, paid: 50 }, 'contract_payment', 80, { reverse: true })
+    expect(next).toEqual({ paid: 0, balance: 1000 })
   })
 })
 

@@ -938,11 +938,34 @@ const SMSettings = {
   async restore(input) {
     const file = input.files?.[0]
     if (!file) return
-    const text = await file.text()
-    const result = await DB.importJSON(text)
-    if (result.ok) { SM.toast('بازیابی شد — بارگذاری مجدد', 'success'); location.reload() }
-    else SM.toast(result.error || 'خطا', 'error')
-    input.value = ''
+    try {
+      if (typeof Access !== 'undefined' && !Access.canManageStudioOps?.(SM.user())) {
+        SM.toast('فقط مدیر مجاز به بازیابی است', 'error')
+        return
+      }
+      if (!confirm('بازیابی پشتیبان تمام داده‌های فعلی را جایگزین می‌کند. ادامه می‌دهید؟')) return
+      const typed = prompt('برای تأیید، کلمه «بازیابی» را بنویسید:')
+      if (typed !== 'بازیابی') return SM.toast('لغو شد', 'info')
+      const pw = prompt('رمز ورود فعلی مدیر را برای تأیید وارد کنید:')
+      if (!pw) return SM.toast('لغو شد', 'info')
+      if (typeof Auth === 'undefined' || !Auth.verifyCurrentPassword) {
+        return SM.toast('ماژول احراز هویت در دسترس نیست', 'error')
+      }
+      const v = await Auth.verifyCurrentPassword(pw)
+      if (!v.ok) return SM.toast(v.error || 'رمز اشتباه', 'error')
+
+      const text = await file.text()
+      const result = await DB.importJSON(text)
+      if (result.ok) {
+        if (typeof DB.log === 'function') DB.log('backup_restore', file.name || 'restore.json')
+        SM.toast('بازیابی شد — بارگذاری مجدد', 'success')
+        location.reload()
+      } else {
+        SM.toast(result.error || 'خطا', 'error')
+      }
+    } finally {
+      input.value = ''
+    }
   }
 }
 

@@ -60,6 +60,19 @@ export function bankDelta(balance, type, amount) {
   return type === 'deposit' ? bal + amt : bal - amt
 }
 
+/**
+ * Contract `paid` tracks post-deposit installments only.
+ * Initial contract_deposit is stored on contract.deposit and must not inflate paid.
+ */
+export function nextContractPaid(contract, purposeCategory, amount, { reverse = false } = {}) {
+  if (!contract || !amount) return null
+  if (purposeCategory !== 'contract_payment') return null
+  const delta = reverse ? -Number(amount) : Number(amount)
+  const paid = Math.max(0, (Number(contract.paid) || 0) + delta)
+  const balance = Math.max(0, (Number(contract.total) || 0) - (Number(contract.deposit) || 0) - paid)
+  return { paid, balance }
+}
+
 /** Simulated pass: returns next bank balance and tx type, or error. */
 export function previewPassCheque(cheque, bank) {
   const ch = normalizeCheque(cheque)
