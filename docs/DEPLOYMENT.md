@@ -37,7 +37,7 @@ Required headers (see `docker/nginx.conf`):
 ## Supabase
 
 1. Create project
-2. Run migrations `001`–`005` from `supabase/migrations/`
+2. Run migrations `001`–`006` from `supabase/migrations/`
 3. Set Auth Site URL → `https://your-domain/studio-m/auth-callback.html`
 4. Deploy edge function `send-sms`:
    ```bash
