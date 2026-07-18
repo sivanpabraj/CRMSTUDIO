@@ -190,10 +190,10 @@ const SMAccounting = {
 
   render(el) {
     const q = SM.getModuleSearch('accounting')
-    const allTx = (DB.get('transactions') || []).filter(t => !t._deleted)
-    const income = allTx.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0)
-    const expense = allTx.filter(t => t.type === 'withdrawal').reduce((s, t) => s + (t.amount || 0), 0)
-    const cheques = DB.get('cheques') || []
+    const allTx = (typeof DB.active === 'function' ? DB.active('transactions') : (DB.get('transactions') || []).filter(t => !t._deleted))
+    const income = allTx.filter(t => t.type === 'deposit' && t.purposeCategory !== 'transfer').reduce((s, t) => s + (t.amount || 0), 0)
+    const expense = allTx.filter(t => t.type === 'withdrawal' && t.purposeCategory !== 'transfer').reduce((s, t) => s + (t.amount || 0), 0)
+    const cheques = (typeof DB.active === 'function' ? DB.active('cheques') : (DB.get('cheques') || []).filter(c => !c._deleted))
 
     el.innerHTML = `
       ${SMUI.sectionHead('حسابداری', 'بانک · رفت‌وبرگشت · چک', this._headActions())}
@@ -249,7 +249,7 @@ const SMAccounting = {
   },
 
   _banksView(q) {
-    let banks = DB.get('banks')
+    let banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
     if (q) {
       banks = banks.filter(b =>
         [b.name, b.bank, b.account, b.accountNumber, b.card, b.iban, b.shaba, b.holder, b.balance].join(' ').toLowerCase().includes(q)
@@ -285,7 +285,7 @@ const SMAccounting = {
   },
 
   _ledgerView(q) {
-    let tx = (DB.get('transactions') || []).filter(t => !t._deleted).slice().reverse()
+    let tx = (typeof DB.active === 'function' ? DB.active('transactions') : (DB.get('transactions') || []).filter(t => !t._deleted)).slice().reverse()
     if (this._flowFilter === 'deposit') tx = tx.filter(t => t.type === 'deposit')
     if (this._flowFilter === 'withdrawal') tx = tx.filter(t => t.type === 'withdrawal')
     if (this._flowFilter === 'transfer') tx = tx.filter(t => t.purposeCategory === 'transfer')
@@ -359,7 +359,8 @@ const SMAccounting = {
   },
 
   _chequesView(q) {
-    let cheques = (DB.get('cheques') || []).slice().reverse()
+    const all = typeof DB.active === 'function' ? DB.active('cheques') : (DB.get('cheques') || []).filter(c => !c._deleted)
+    let cheques = all.slice().reverse()
     if (this._chequeFilter === 'incoming') cheques = cheques.filter(c => this._chequeType(c) === 'incoming')
     if (this._chequeFilter === 'outgoing') cheques = cheques.filter(c => this._chequeType(c) === 'outgoing')
     if (this._chequeFilter === 'pending') cheques = cheques.filter(c => (c.status || 'pending') === 'pending')
@@ -368,7 +369,6 @@ const SMAccounting = {
         [this._chequeNumber(c), c.bank, c.amount, c.dueDate, c.purpose, this._chequeParty(c), c.transactionRef, c.iban].join(' ').toLowerCase().includes(q)
       )
     }
-    const all = DB.get('cheques') || []
     const incoming = all.filter(c => this._chequeType(c) === 'incoming')
     const outgoing = all.filter(c => this._chequeType(c) === 'outgoing')
     const pendingAmt = all.filter(c => (c.status || 'pending') === 'pending').reduce((s, c) => s + (c.amount || 0), 0)
@@ -542,7 +542,7 @@ const SMAccounting = {
 
   /* ── Transfer ── */
   addTransfer() {
-    const banks = DB.get('banks') || []
+    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
     if (banks.length < 2) {
       return SM.toast('برای انتقال حداقل دو حساب بانکی نیاز است', 'error')
     }
@@ -617,9 +617,9 @@ const SMAccounting = {
 
   _txForm(item, type) {
     const isIn = type === 'deposit'
-    const banks = DB.get('banks')
-    const contracts = DB.get('contracts').filter(c => c.status !== 'cancelled')
-    const personnel = DB.get('personnel').filter(p => p.status !== 'inactive')
+    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
+    const contracts = (typeof DB.active === 'function' ? DB.active('contracts') : DB.get('contracts')).filter(c => c.status !== 'cancelled' && !c._deleted)
+    const personnel = (typeof DB.active === 'function' ? DB.active('personnel') : DB.get('personnel')).filter(p => p.status !== 'inactive' && !p._deleted)
     const cats = isIn ? this.DEPOSIT_CATS : this.WITHDRAWAL_CATS
     const bankOpts = [{ value: '', label: '— انتخاب حساب بانکی —' }, ...banks.map(b => ({
       value: b.id, label: `${b.name || b.bank} — ${this._bankAccount(b) || this._maskCard(b.card) || ''}`
@@ -803,8 +803,8 @@ const SMAccounting = {
   },
 
   _chequeForm(item) {
-    const banks = DB.get('banks')
-    const contracts = DB.get('contracts').filter(c => c.status !== 'cancelled')
+    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
+    const contracts = (typeof DB.active === 'function' ? DB.active('contracts') : DB.get('contracts')).filter(c => c.status !== 'cancelled' && !c._deleted)
     const bankOpts = [{ value: '', label: '—' }, ...banks.map(b => ({ value: b.id, label: b.name || b.bank }))]
     const contractOpts = [{ value: '', label: '—' }, ...contracts.map(c => ({ value: c.id, label: this._couple(c) }))]
     const purposeOpts = Object.entries(this.CHEQUE_PURPOSES).map(([k, v]) => ({ value: k, label: v }))

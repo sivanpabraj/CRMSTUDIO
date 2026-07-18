@@ -4,12 +4,13 @@
    ══════════════════════════════════════════════ */
 
 const DB_KEY = AppConfig.DB_KEY
-const DB_VERSION = 21
+const DB_VERSION = 22
 const DB_OBJECT_KEYS = new Set(['studioInfo', 'securityState'])
 const SYNC_TOUCH_KEYS = new Set([
   'contracts', 'transactions', 'invoices', 'bookings', 'personnel', 'equipment',
   'workflows', 'packages', 'expenses', 'leads', 'banks', 'cheques',
-  'appointments', 'customerRequests', 'fileAssets'
+  'appointments', 'customerRequests', 'fileAssets', 'salaryPayments',
+  'attendance', 'notifications'
 ])
 
 function createDefaultData() {
@@ -61,6 +62,7 @@ function createDefaultData() {
     commLogs: [],
     apiKeys: [],
     payrollRuns: [],
+    salaryPayments: [],
     customerCustody: [],
     securityState: { loginAttempts: {}, otpSend: {}, otpVerify: {} }
   }
@@ -316,6 +318,13 @@ const DB_MIGRATIONS = {
     })
     data._meta.dbVersion = 21
     return data
+  },
+  22(data) {
+    if (!data.salaryPayments) data.salaryPayments = []
+    if (!data.attendance) data.attendance = []
+    if (!data.notifications) data.notifications = []
+    data._meta.dbVersion = 22
+    return data
   }
 }
 
@@ -527,6 +536,11 @@ const DB = {
       return val
     }
     return val ?? []
+  },
+
+  /** Active rows only (excludes soft-deleted) */
+  active(collection) {
+    return this.get(collection).filter(i => i && !i._deleted)
   },
 
   set(collection, data) {

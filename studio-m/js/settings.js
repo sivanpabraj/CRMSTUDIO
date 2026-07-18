@@ -725,12 +725,31 @@ const SMSettings = {
               </button>
             </div>
           </div>
+          <div class="sm-danger-box" style="margin-top:12px">
+            <h4><i class="fas fa-clock-rotate-left"></i> پنل کلاسیک (منسوخ)</h4>
+            <p>فقط برای بازیابی اضطراری. بعد از فعال‌سازی موقت، <code>?classic=1</code> روی admin.html کار می‌کند.</p>
+            <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.enableClassicAdmin()">
+              <i class="fas fa-unlock"></i> فعال‌سازی موقت پنل کلاسیک
+            </button>
+          </div>
           <p style="font-size:.72rem;color:var(--sm-text-muted);margin-top:14px">
             <strong>نسخه:</strong> ${AppConfig.APP_VERSION} · <strong>DB:</strong> v${DB.getStorageInfo?.()?.version || '—'}
           </p>
         </div>
       </div>
     </div>`
+  },
+
+  enableClassicAdmin() {
+    if (typeof Access !== 'undefined' && !Access.isStudioManager?.(SM.user()) && !Access.isSystemAdmin?.(SM.user())) {
+      return SM.toast('فقط مدیر مجاز است', 'error')
+    }
+    try {
+      sessionStorage.setItem('sm_allow_classic', '1')
+      SM.toast('پنل کلاسیک برای این نشست فعال شد — admin.html?classic=1', 'success')
+    } catch {
+      SM.toast('خطا در فعال‌سازی', 'error')
+    }
   },
 
   async wipeOperational() {
@@ -933,7 +952,8 @@ SMModules.settings = {
   saveStudio() { SMSettings.saveStudio() },
   saveSms() { SMSettings.saveSms() },
   backup() { SMSettings.backupNow() },
-  restore(input) { SMSettings.restore(input) }
+  restore(input) { SMSettings.restore(input) },
+  enableClassicAdmin() { SMSettings.enableClassicAdmin() }
 }
 
 window.SMSettings = SMSettings

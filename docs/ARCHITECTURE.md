@@ -69,4 +69,4 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ## Migrations
 
-Apply in order: `001` → `005` in Supabase SQL Editor.
+Apply in order: `001` → `006` in Supabase SQL Editor (includes manager RLS on contracts).

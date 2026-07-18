@@ -59,6 +59,11 @@ const SM = {
     if (typeof Access !== 'undefined') {
       if (perm === 'manage_users') return Access.canManageUsers(user)
       if (perm === 'manage_system' || perm === 'all') return Access.isSystemAdmin(user)
+      // Finance writes/views require manage_finance — not granted by view_all alone
+      if (perm === 'manage_finance') {
+        return Access.isSystemAdmin(user) || Access.isStudioManager(user) ||
+          !!Auth.userHasPermission?.('manage_finance')
+      }
       if (Access.isSystemAdmin(user) || Access.isStudioManager(user)) return true
     } else if (Auth.isAdmin?.()) return true
     return Auth.userHasPermission?.(perm) || Auth.userHasPermission?.('view_all') || false
@@ -107,13 +112,13 @@ const SM = {
       { id: 'timeline', icon: 'fa-clock', group: 'main', perm: 'view_contract' },
       { id: 'contracts', icon: 'fa-file-signature', group: 'business', perm: 'view_contract' },
       { id: 'packages', icon: 'fa-box-open', group: 'business', perm: 'view_all' },
-      { id: 'invoices', icon: 'fa-file-invoice-dollar', group: 'finance', perm: 'view_all' },
-      { id: 'accounting', icon: 'fa-calculator', group: 'finance', perm: 'view_all' },
-      { id: 'expenses', icon: 'fa-receipt', group: 'finance', perm: 'view_all' },
-      { id: 'reports', icon: 'fa-chart-pie', group: 'finance', perm: 'view_all' },
+      { id: 'invoices', icon: 'fa-file-invoice-dollar', group: 'finance', perm: 'manage_finance' },
+      { id: 'accounting', icon: 'fa-calculator', group: 'finance', perm: 'manage_finance' },
+      { id: 'expenses', icon: 'fa-receipt', group: 'finance', perm: 'manage_finance' },
+      { id: 'reports', icon: 'fa-chart-pie', group: 'finance', perm: 'manage_finance' },
       { id: 'employees', icon: 'fa-users', group: 'hr', perm: 'view_all' },
       { id: 'attendance', icon: 'fa-user-clock', group: 'hr', perm: 'view_all' },
-      { id: 'payroll', icon: 'fa-money-check-alt', group: 'hr', perm: 'view_all' },
+      { id: 'payroll', icon: 'fa-money-check-alt', group: 'hr', perm: 'manage_finance' },
       { id: 'equipment', icon: 'fa-camera', group: 'assets', perm: 'view_all' },
       { id: 'custody', icon: 'fa-right-left', group: 'assets', perm: 'view_all' },
       { id: 'files', icon: 'fa-folder-open', group: 'assets', perm: 'view_all' },

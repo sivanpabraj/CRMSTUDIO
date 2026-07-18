@@ -74,11 +74,19 @@ const FinanceSync = {
     return 'expense'
   },
 
+  _bankQueue: Promise.resolve(),
+
+  /** Serialized bank balance updates — prevents lost updates under concurrent writes */
   async applyBankDelta(bankId, type, amount) {
     if (!bankId || !amount) return
-    const b = DB.find('banks', x => x.id === bankId)
-    if (!b) return
-    await SecureDB.update('banks', bankId, { balance: (b.balance || 0) + (type === 'deposit' ? amount : -amount) })
+    const run = async () => {
+      const b = DB.find('banks', x => x.id === bankId)
+      if (!b) return
+      const next = (b.balance || 0) + (type === 'deposit' ? amount : -amount)
+      await SecureDB.update('banks', bankId, { balance: next })
+    }
+    this._bankQueue = this._bankQueue.then(run, run)
+    return this._bankQueue
   },
 
   /**
@@ -194,7 +202,9 @@ const FinanceSync = {
     const c = DB.find('contracts', x => x.id === contractId)
     if (!c || !amount) return
     if (purposeCategory === 'contract_payment') {
-      await SecureDB.update('contracts', contractId, { paid: (c.paid || 0) + amount })
+      const paid = (c.paid || 0) + amount
+      const balance = Math.max(0, (c.total || 0) - (c.deposit || 0) - paid)
+      await SecureDB.update('contracts', contractId, { paid, balance })
     }
   },
 

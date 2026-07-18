@@ -7,7 +7,13 @@
   <title>پنل مدیریت — Studio M</title>
   <script>
   (function () {
-    if (/[?&]classic=1(?:&|$)/.test(location.search)) return
+    // Classic admin is deprecated — always prefer Studio M Pro.
+    // Escape hatch only with ?classic=1 AND session flag (set by manager in Settings).
+    if (/[?&]classic=1(?:&|$)/.test(location.search)) {
+      try {
+        if (sessionStorage.getItem('sm_allow_classic') === '1') return
+      } catch (e) { /* */ }
+    }
     location.replace('studio-m/' + (location.hash || ''))
   })()
   </script>

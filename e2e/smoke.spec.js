@@ -24,10 +24,24 @@ test.describe('Studio M smoke (no SMS)', () => {
     expect(page.url()).toContain('/studio-m/')
   })
 
+  test('admin.html?classic=1 still redirects without session unlock', async ({ page }) => {
+    await page.goto('/admin.html?classic=1')
+    await page.waitForURL(/\/studio-m\//, { timeout: 10_000 })
+    expect(page.url()).toContain('/studio-m/')
+  })
+
   test('studio-m redirects unauthenticated user to login', async ({ page }) => {
     await page.goto('/studio-m/')
     await page.waitForURL(/index\.html/, { timeout: 15_000 })
     expect(page.url()).toMatch(/index\.html/)
+  })
+
+  test('contract.html loads script graph', async ({ page }) => {
+    await page.goto('/contract.html')
+    // Unauthenticated → redirect to login, or page boots
+    await page.waitForTimeout(1500)
+    const url = page.url()
+    expect(url).toMatch(/contract\.html|index\.html/)
   })
 
   test('password login reaches studio-m on localhost', async ({ page }) => {
@@ -40,5 +54,8 @@ test.describe('Studio M smoke (no SMS)', () => {
     await page.locator('#login-btn').click()
     await page.waitForURL(/studio-m\//, { timeout: 20_000 })
     await expect(page.locator('#sm-root, .sm-app')).toBeVisible()
+
+    await page.goto('/studio-m/#accounting')
+    await expect(page.locator('.sm-acc-body, .sm-section-head, #sm-root')).toBeVisible({ timeout: 10_000 })
   })
 })

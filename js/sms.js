@@ -22,7 +22,7 @@ const SmsProvider = {
     return !!(cfg.provider && cfg.apiKey)
   },
 
-  async sendStudio(phones, text) {
+  async sendStudio(phones, text, purpose = 'generic') {
     const cfg = this.getStudioConfig()
     const list = (Array.isArray(phones) ? phones : [phones])
       .map(p => Utils.normalizePhone(p))
@@ -30,7 +30,16 @@ const SmsProvider = {
     if (!list.length) return { ok: false, error: 'شماره موبایل معتبر نیست' }
 
     if (cfg.proxyUrl) {
-      return this._sendViaProxy(cfg.proxyUrl, list, text)
+      return this._sendViaProxy(cfg.proxyUrl, list, text, purpose)
+    }
+
+    // Production / non-localhost: client-side API keys are forbidden — proxy only
+    const local = typeof AppConfig !== 'undefined' && AppConfig.isLocalDev?.()
+    if (!local) {
+      return {
+        ok: false,
+        error: 'در محیط واقعی فقط پراکسی Edge (send-sms) مجاز است. smsProxyUrl را در تنظیمات بگذارید.'
+      }
     }
 
     const secure = this._isSecureEnv()
@@ -43,7 +52,7 @@ const SmsProvider = {
     return this.send(cfg.provider, { apiKey: cfg.apiKey, lineNumber: cfg.lineNumber, username: cfg.username }, list, text)
   },
 
-  async _sendViaProxy(proxyUrl, phones, text) {
+  async _sendViaProxy(proxyUrl, phones, text, purpose = 'generic') {
     try {
       const headers = { 'Content-Type': 'application/json' }
       if (typeof Cloud !== 'undefined') {
@@ -53,7 +62,7 @@ const SmsProvider = {
       const res = await fetch(String(proxyUrl).replace(/\/+$/, ''), {
         method: 'POST',
         headers,
-        body: JSON.stringify({ phones, text })
+        body: JSON.stringify({ phones, text, purpose: purpose || 'generic' })
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) return { ok: false, error: data.error || `proxy ${res.status}` }

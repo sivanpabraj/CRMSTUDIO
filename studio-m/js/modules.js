@@ -1038,23 +1038,28 @@ SMModules.invoices = {
           syncLedger: document.getElementById('inv-ledger')?.checked || false
         }
 
+        let invoiceId = item?.id
         if (item) {
           await SecureDB.update('invoices', item.id, { ...data, number: item.number })
         } else {
           const num = this._genNumber()
-          await SecureDB.insert('invoices', { ...data, number: num, createdAt: Utils.todayJalali() })
+          const inv = await SecureDB.insert('invoices', { ...data, number: num, createdAt: Utils.todayJalali() })
           data.number = num
+          invoiceId = inv.id
         }
 
-        if (data.syncLedger) {
+        // Ledger sync only when creating, or first time enabling on an invoice without a linked tx
+        const alreadyLinked = !!(item?.transactionId)
+        if (data.syncLedger && !alreadyLinked) {
           const txType = data.direction === 'in' ? 'deposit' : 'withdrawal'
-          await SecureDB.insert('transactions', {
+          const tx = await SecureDB.insert('transactions', {
             type: txType,
             amount: data.amount,
             desc: `${data.title}${data.purpose ? ' — ' + data.purpose : ''}`,
             date: data.date,
             bankId: data.bankId || '',
             invoiceRef: item?.number || data.number,
+            invoiceId: invoiceId || '',
             purposeCategory: data.direction === 'in' ? 'other_income' : 'other',
             purpose: data.purpose || data.title,
             paymentMethod: data.paymentMethod || 'transfer'
@@ -1062,12 +1067,29 @@ SMModules.invoices = {
           if (data.bankId && typeof FinanceSync !== 'undefined') {
             await FinanceSync.applyBankDelta(data.bankId, txType, data.amount)
           }
+          if (invoiceId) await SecureDB.update('invoices', invoiceId, { transactionId: tx.id })
         }
 
         SM.toast('فاکتور ثبت شد', 'success')
         SMH.refresh('invoices')
       },
-      onDelete: item ? () => SMH.remove('invoices', item.id, 'invoices') : null,
+      onDelete: item ? async () => {
+        if (!SMH.confirmDelete()) return
+        try {
+          if (item.transactionId) {
+            const t = DB.find('transactions', x => x.id === item.transactionId)
+            if (t && !t._deleted && t.bankId && t.amount) {
+              const rev = t.type === 'deposit' ? 'withdrawal' : 'deposit'
+              await FinanceSync.applyBankDelta(t.bankId, rev, t.amount)
+              await SecureDB.delete('transactions', t.id)
+            }
+          }
+          await SecureDB.delete('invoices', item.id)
+          SMH.refresh('invoices')
+        } catch (e) {
+          SM.toast(e.message || 'خطا', 'error')
+        }
+      } : null,
       width: 520
     })
 
@@ -1168,17 +1190,22 @@ SMModules.expenses = {
   _form(item) {
     const catOpts = Object.entries(this.CATEGORIES).map(([k, v]) => ({ value: k, label: v }))
     const monthOpts = this.MONTHS.map(m => ({ value: m, label: m }))
+    const banks = (typeof DB.active === 'function' ? DB.active('banks') : DB.get('banks')).filter(b => !b._deleted)
+    const bankOpts = [{ value: '', label: '— بدون کسر از بانک —' }, ...banks.map(b => ({
+      value: b.id, label: `${b.name || b.bank || 'حساب'} — ${SM.fmt(b.balance || 0)} ت`
+    }))]
 
     SMUI.modal(item ? 'ویرایش هزینه' : 'ثبت هزینه جاری', `
       ${SMUI.formField('عنوان هزینه', 'exp-title', { value: item?.title || item?.desc || '', placeholder: 'مثلاً: خرید باتری دوربین، بنر تبلیغ' })}
       ${SMUI.formField('دسته‌بندی', 'exp-cat', { type: 'select', value: item?.category || 'general', options: catOpts })}
       ${SMUI.formField('مبلغ (تومان)', 'exp-amount', { type: 'number', value: item?.amount || '', dir: 'ltr' })}
+      ${SMUI.formField('پرداخت از حساب', 'exp-bank', { type: 'select', value: item?.bankId || '', options: bankOpts })}
       ${SMUI.formField('تاریخ', 'exp-date', { value: item?.date || Utils.todayJalali() })}
       ${SMUI.formField('ماه / دوره', 'exp-month', { type: 'select', value: item?.periodMonth || '', options: [{ value: '', label: '—' }, ...monthOpts] })}
       ${SMUI.formField('توضیحات', 'exp-notes', { type: 'textarea', value: item?.notes || '', placeholder: 'اختیاری — جزئیات بیشتر' })}
       <label class="sm-check-row"><input type="checkbox" id="exp-ledger" ${item?.syncLedger !== false ? 'checked' : ''}/> ثبت همزمان در حسابداری (رفت‌وبرگشت)</label>`, {
       onSave: async () => {
-        const d = SMUI.readForm(['exp-title', 'exp-cat', 'exp-amount', 'exp-date', 'exp-month', 'exp-notes'])
+        const d = SMUI.readForm(['exp-title', 'exp-cat', 'exp-amount', 'exp-bank', 'exp-date', 'exp-month', 'exp-notes'])
         const amount = +d['exp-amount'] || 0
         if (!d['exp-title']) return SM.toast('عنوان هزینه الزامی است', 'error')
         if (!amount) return SM.toast('مبلغ الزامی است', 'error')
@@ -1188,6 +1215,7 @@ SMModules.expenses = {
           title: d['exp-title'],
           category: d['exp-cat'],
           amount,
+          bankId: d['exp-bank'] || '',
           date: d['exp-date'] || Utils.todayJalali(),
           periodMonth: d['exp-month'] || '',
           notes: d['exp-notes'] || '',
@@ -1197,18 +1225,24 @@ SMModules.expenses = {
         if (item) {
           await SecureDB.update('expenses', item.id, data)
         } else {
-          await SecureDB.insert('expenses', data)
+          const exp = await SecureDB.insert('expenses', data)
           if (data.syncLedger) {
-            await SecureDB.insert('transactions', {
+            const tx = await SecureDB.insert('transactions', {
               type: 'withdrawal',
               amount: data.amount,
               desc: `${data.title} — ${catLabel}`,
               date: data.date,
               periodMonth: data.periodMonth,
+              bankId: data.bankId || '',
               purposeCategory: 'other',
               sourceType: 'other',
-              purpose: catLabel
+              purpose: catLabel,
+              expenseId: exp.id
             })
+            if (data.bankId && typeof FinanceSync !== 'undefined') {
+              await FinanceSync.applyBankDelta(data.bankId, 'withdrawal', data.amount)
+            }
+            await SecureDB.update('expenses', exp.id, { transactionId: tx.id })
           }
         }
         SMH.refresh('expenses')

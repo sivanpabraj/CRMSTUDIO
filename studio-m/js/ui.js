@@ -25,6 +25,39 @@ const SMUI = {
     root.innerHTML = ''
     root.appendChild(overlay)
     overlay.addEventListener('click', e => { if (e.target === overlay) SMUI.closeModal() })
+
+    // Accessibility: Escape closes; focus trap inside dialog
+    const previouslyFocused = document.activeElement
+    SMUI._modalPrevFocus = previouslyFocused
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        SMUI.closeModal()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const focusables = overlay.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+      const list = Array.from(focusables).filter(el => el.offsetParent !== null)
+      if (!list.length) return
+      const first = list[0]
+      const last = list[list.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    SMUI._modalKeyHandler = onKey
+    document.addEventListener('keydown', onKey)
+    setTimeout(() => {
+      const firstInput = overlay.querySelector('input, select, textarea, button.sm-btn-primary')
+      firstInput?.focus?.()
+    }, 30)
+
     document.getElementById('sm-modal-save')?.addEventListener('click', async () => {
       if (!onSave) return
       const btn = document.getElementById('sm-modal-save')
@@ -61,8 +94,14 @@ const SMUI = {
   },
 
   closeModal() {
+    if (SMUI._modalKeyHandler) {
+      document.removeEventListener('keydown', SMUI._modalKeyHandler)
+      SMUI._modalKeyHandler = null
+    }
     document.getElementById('sm-modal-root').innerHTML = ''
     SMUI._modalBackHandler = null
+    try { SMUI._modalPrevFocus?.focus?.() } catch { /* */ }
+    SMUI._modalPrevFocus = null
   },
 
   backBar(title, onclick = 'SM.popSubView()') {

@@ -8,6 +8,7 @@ const Auth = {
   LOCKOUT_THRESHOLD: AppConfig.LOCKOUT_THRESHOLD,
   LOCKOUT_DURATION_MS: AppConfig.LOCKOUT_DURATION_MS,
   OTP_PROOF_KEY: AppConfig.OTP_LOGIN_PROOF_KEY,
+  PW_RESET_PROOF_KEY: 'talar_pw_reset_proof',
   CSRF_KEY: AppConfig.CSRF_KEY,
 
   _securityState() {
@@ -587,6 +588,14 @@ const Auth = {
       return { ok: false, error: 'بازیابی رمز فقط با کد تأیید پیامکی امکان‌پذیر است' }
     }
     phone = Utils.normalizePhone(phone)
+    if (typeof SignedProof !== 'undefined' && SignedProof.verify) {
+      const proofOk = await SignedProof.verify(this.PW_RESET_PROOF_KEY, { phone, purpose: 'pw_reset' })
+      if (!proofOk) {
+        return { ok: false, error: 'اعتبارسنجی بازیابی نامعتبر یا منقضی است — دوباره کد بگیرید' }
+      }
+    } else if (!(typeof AppConfig !== 'undefined' && AppConfig.isLocalDev?.())) {
+      return { ok: false, error: 'ماژول اعتبارسنجی بازیابی در دسترس نیست' }
+    }
     newPassword = Utils.normalizePassword(newPassword)
     const user = DB.find('users', u => Utils.normalizePhone(u.phone) === phone)
     if (!user) return { ok: false, error: 'کاربری با این شماره یافت نشد' }
@@ -608,6 +617,7 @@ const Auth = {
     })
     await DB.flush()
     this._clearAttempts(phone)
+    if (typeof SignedProof !== 'undefined') SignedProof.clear?.(this.PW_RESET_PROOF_KEY)
     DB.log('password_reset', `بازیابی رمز مدیر: ${user.name}`)
     return { ok: true }
     })
