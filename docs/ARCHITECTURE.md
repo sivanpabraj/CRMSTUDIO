@@ -30,11 +30,15 @@ Studio M is an offline-first PWA (Vanilla JS + IndexedDB) with optional Supabase
 
 Before cloud push, `js/lib/snapshot-sanitize.js` removes:
 
-- Password hashes, salts, API keys, SMS keys
+- Password hashes, salts
+- SMS credentials (`smsApiKey`, `smsUsername`) and license keys
+- Supabase URL / anon / service keys from `studioInfo`
 - `securityState`, `apiKeys` collections
-- Portal OTP codes
+- Portal OTP codes/hashes (keeps verification metadata only)
 
 After pull, local secrets are merged back from the device.
+
+Local file backups (`DB.exportJSON`) intentionally retain secrets so offline restore works; restore in Studio M requires manager re-authentication.
 
 ## Authentication
 

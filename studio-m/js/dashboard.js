@@ -83,14 +83,17 @@ const SMDashboard = {
   },
 
   _ctx() {
-    const contracts = DB.get('contracts') || []
-    const tx = DB.get('transactions') || []
-    const personnel = (DB.get('personnel') || []).filter(p => p.status === 'active')
-    const bookings = DB.get('bookings') || []
-    const cheques = DB.get('cheques') || []
-    const persProjects = DB.get('persProjects') || []
-    const expenses = DB.get('expenses') || []
-    const requests = DB.get('customerRequests') || []
+    const rows = (name) => (typeof DB.active === 'function'
+      ? DB.active(name)
+      : (DB.get(name) || []).filter(i => i && !i._deleted))
+    const contracts = rows('contracts')
+    const tx = rows('transactions')
+    const personnel = rows('personnel').filter(p => p.status === 'active')
+    const bookings = rows('bookings')
+    const cheques = rows('cheques')
+    const persProjects = rows('persProjects')
+    const expenses = rows('expenses')
+    const requests = rows('customerRequests')
 
     const income = tx.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0)
     const expense = tx.filter(t => t.type === 'withdrawal').reduce((s, t) => s + (t.amount || 0), 0)
@@ -168,11 +171,14 @@ const SMDashboard = {
       const p = Utils.parseJalali(key)
       if (p && p.jy === jy && p.jm === jm) map[key] = (map[key] || 0) + 1
     }
-    ;(DB.get('contracts') || []).forEach(c => {
+    const rows = (name) => (typeof DB.active === 'function'
+      ? DB.active(name)
+      : (DB.get(name) || []).filter(i => i && !i._deleted))
+    rows('contracts').forEach(c => {
       if (c.status !== 'cancelled' && (c.eventDate || c.date)) add(c.eventDate || c.date)
     })
-    ;(DB.get('bookings') || []).forEach(b => { if (b.date) add(b.date) })
-    ;(DB.get('appointments') || []).forEach(a => { if (a.date) add(a.date) })
+    rows('bookings').forEach(b => { if (b.date) add(b.date) })
+    rows('appointments').forEach(a => { if (a.date) add(a.date) })
     return map
   },
 

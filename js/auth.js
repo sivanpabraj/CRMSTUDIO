@@ -385,8 +385,17 @@ const Auth = {
     }
 
     if (!working.sig) {
-      await this._sessionSetSigned(this.SESSION_KEY, working)
-      return true
+      // Local/dev: upgrade legacy unsigned sessions once. Production: reject.
+      const allowUpgrade = typeof AppConfig !== 'undefined'
+        ? AppConfig.isLocalDev?.()
+        : (typeof location !== 'undefined' && ['localhost', '127.0.0.1', '::1'].includes(location.hostname))
+      if (allowUpgrade) {
+        await this._sessionSetSigned(this.SESSION_KEY, working)
+        return true
+      }
+      session._sigInvalid = true
+      this.logout()
+      return false
     }
 
     let ok = await SessionSign.verify(working)

@@ -171,46 +171,66 @@ const ChequeManager = {
     }
 
     const txType = dir === 'incoming' ? 'deposit' : 'withdrawal'
-    await this._applyBankDelta(ch.bankId, txType, amount)
-
     const purpose = dir === 'incoming' ? 'دریافت چک' : (ch.purpose || ch.category || 'پرداخت چک')
-    const tx = await SecureDB.insert('transactions', {
-      type: txType,
-      amount,
-      date: Utils.todayJalali(),
-      bankId: ch.bankId,
-      sourceType: ch.contractId ? 'customer' : 'other',
-      purposeCategory: dir === 'incoming' ? 'other_income' : 'other',
-      purpose,
-      client: this.partyOf(ch),
-      paymentMethod: 'cheque',
-      transactionRef: this.numberOf(ch),
-      notes: ch.notes || '',
-      desc: `پاس چک ${this.numberOf(ch)}${ch.purpose ? ' — ' + ch.purpose : ''}`,
-      chequeId: ch.id,
-      contractId: ch.contractId || ''
-    })
+    const balBefore = bank.balance || 0
+    let tx = null
+    let bankTouched = false
+    let paidTouched = false
+    try {
+      tx = await SecureDB.insert('transactions', {
+        type: txType,
+        amount,
+        date: Utils.todayJalali(),
+        bankId: ch.bankId,
+        sourceType: ch.contractId ? 'customer' : 'other',
+        purposeCategory: dir === 'incoming' ? 'other_income' : 'other',
+        purpose,
+        client: this.partyOf(ch),
+        paymentMethod: 'cheque',
+        transactionRef: this.numberOf(ch),
+        notes: ch.notes || '',
+        desc: `پاس چک ${this.numberOf(ch)}${ch.purpose ? ' — ' + ch.purpose : ''}`,
+        chequeId: ch.id,
+        contractId: ch.contractId || ''
+      })
 
-    await SecureDB.update('cheques', id, {
-      status: 'passed',
-      passDate: Utils.todayJalali(),
-      transactionId: tx.id,
-      type: dir,
-      direction: dir,
-      number: this.numberOf(ch),
-      chequeNumber: this.numberOf(ch),
-      client: this.partyOf(ch),
-      party: this.partyOf(ch)
-    })
+      await this._applyBankDelta(ch.bankId, txType, amount)
+      bankTouched = true
 
-    if (dir === 'incoming' && ch.contractId) {
-      const c = DB.find('contracts', x => x.id === ch.contractId)
-      if (c) {
-        const paid = (c.paid || 0) + amount
-        const total = c.total || 0
-        const balance = Math.max(0, total - (c.deposit || 0) - paid)
-        await SecureDB.update('contracts', ch.contractId, { paid, balance })
+      await SecureDB.update('cheques', id, {
+        status: 'passed',
+        passDate: Utils.todayJalali(),
+        transactionId: tx.id,
+        type: dir,
+        direction: dir,
+        number: this.numberOf(ch),
+        chequeNumber: this.numberOf(ch),
+        client: this.partyOf(ch),
+        party: this.partyOf(ch)
+      })
+
+      if (dir === 'incoming' && ch.contractId && typeof FinanceSync !== 'undefined') {
+        await FinanceSync.applyContractPaid(ch.contractId, 'contract_payment', amount)
+        paidTouched = true
+      } else if (dir === 'incoming' && ch.contractId) {
+        const c = DB.find('contracts', x => x.id === ch.contractId && !x._deleted)
+        if (c) {
+          const paid = (c.paid || 0) + amount
+          const balance = Math.max(0, (c.total || 0) - (c.deposit || 0) - paid)
+          await SecureDB.update('contracts', ch.contractId, { paid, balance })
+          paidTouched = true
+        }
       }
+    } catch (e) {
+      try {
+        if (tx?.id) await SecureDB.delete('transactions', tx.id)
+        if (bankTouched) await SecureDB.update('banks', ch.bankId, { balance: balBefore })
+        await SecureDB.update('cheques', id, { status: 'pending', passDate: '', transactionId: '' })
+        if (paidTouched && ch.contractId && typeof FinanceSync !== 'undefined') {
+          await FinanceSync.reverseContractPaid(ch.contractId, 'contract_payment', amount)
+        }
+      } catch { /* best-effort rollback */ }
+      return { ok: false, msg: e.message || 'خطا در پاس چک — تغییرات برگشت داده شد' }
     }
 
     DB.log('cheque_pass', { id, amount, direction: dir, bankId: ch.bankId })

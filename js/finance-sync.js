@@ -309,9 +309,8 @@ const FinanceSync = {
     if (!amount) return { ok: true, skipped: true }
     if (!bankId) return { ok: false, error: 'برای بیعانه، حساب بانکی را انتخاب کنید' }
 
-    const existing = DB.filter('transactions', t =>
-      t.contractId === contract.id && t.purposeCategory === 'contract_deposit'
-    )
+    const existing = (typeof DB.active === 'function' ? DB.active('transactions') : DB.filter('transactions', t => !t._deleted))
+      .filter(t => t.contractId === contract.id && t.purposeCategory === 'contract_deposit')
     if (existing.length) return { ok: true, skipped: true, transactionId: existing[0].id }
 
     return this.recordDeposit({
@@ -348,19 +347,19 @@ const FinanceSync = {
   },
 
   contractInvoices(contractId) {
-    return (DB.get('invoices') || []).filter(i => i.contractId === contractId).slice().reverse()
+    return (typeof DB.active === 'function' ? DB.active('invoices') : (DB.get('invoices') || []).filter(i => !i._deleted))
+      .filter(i => i.contractId === contractId).slice().reverse()
   },
 
   hasSyncedDeposit(contractId) {
-    return (DB.get('transactions') || []).some(t =>
-      t.contractId === contractId && t.purposeCategory === 'contract_deposit'
-    )
+    return (typeof DB.active === 'function' ? DB.active('transactions') : (DB.get('transactions') || []).filter(t => !t._deleted))
+      .some(t => t.contractId === contractId && t.purposeCategory === 'contract_deposit')
   },
 
   populateBankSelect(selectId, selectedId) {
     const el = document.getElementById(selectId)
     if (!el) return
-    const banks = DB.get('banks') || []
+    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
     el.innerHTML = banks.length
       ? `<option value="">— انتخاب حساب بانکی —</option>${banks.map(b =>
         `<option value="${b.id}"${b.id === selectedId ? ' selected' : ''}>${Utils.escapeHtml(this.bankLabel(b.id))}</option>`
