@@ -151,7 +151,7 @@ const SMSettings = {
     </div>`
   },
 
-  _studioTab(info) {
+  _studioTab(_info) {
     if (typeof Studio !== 'undefined') Studio.ensureIdentity()
     const live = SM.studio()
     const code = live.joinCode || ''

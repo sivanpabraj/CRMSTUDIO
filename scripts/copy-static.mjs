@@ -20,6 +20,7 @@ function copy(src, dest) {
 
 copy('js', 'js')
 copy('css', 'css')
+copy('icons', 'icons')
 copy('studio-m/js', 'studio-m/js')
 copy('studio-m/css', 'studio-m/css')
 

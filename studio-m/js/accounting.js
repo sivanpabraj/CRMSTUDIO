@@ -722,9 +722,20 @@ const SMAccounting = {
         SM.toast(invId ? 'ثبت شد و در فاکتورها قرار گرفت' : 'تراکنش ثبت شد', 'success')
         SMH.refresh('accounting')
       },
-      onDelete: item ? () => {
-        if (item.invoiceId) DB.delete('invoices', item.invoiceId)
-        SMH.remove('transactions', item.id, 'accounting')
+      onDelete: item ? async () => {
+        if (!SMH.confirmDelete()) return
+        try {
+          if (item.bankId && item.amount) {
+            const revType = item.type === 'deposit' ? 'withdrawal' : 'deposit'
+            await this._applyBankDelta(item.bankId, revType, item.amount)
+          }
+          if (item.invoiceId) await SecureDB.delete('invoices', item.invoiceId)
+          await SecureDB.delete('transactions', item.id)
+          SM.toast('تراکنش حذف و موجودی اصلاح شد', 'success')
+          SMH.refresh('accounting')
+        } catch (e) {
+          SM.toast(e.message || 'خطا در حذف', 'error')
+        }
       } : null,
       width: 540
     })

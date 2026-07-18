@@ -249,24 +249,28 @@ SMModules.contracts = {
       ${SMUI.formField('شماره پیگیری', 'cp-ref', { dir: 'ltr' })}
       ${SMUI.formField('شرح', 'cp-note', { type: 'textarea' })}`, {
       width: 480,
-      onSave: () => {
+      onSave: async () => {
         const d = SMUI.readForm(['cp-amt', 'cp-bank', 'cp-cat', 'cp-date', 'cp-method', 'cp-ref', 'cp-note'])
         const amount = +d['cp-amt'] || 0
         if (!amount || !d['cp-bank']) return SM.toast('مبلغ و حساب بانکی الزامی است', 'error')
         if (typeof FinanceSync === 'undefined') return SM.toast('FinanceSync بارگذاری نشده', 'error')
-        const res = d['cp-cat'] === 'contract_deposit'
-          ? FinanceSync.recordContractInitialDeposit(c, d['cp-bank'], {
-            paymentMethod: d['cp-method'], transactionRef: d['cp-ref'], date: d['cp-date'], notes: d['cp-note']
-          })
-          : FinanceSync.recordContractPayment({
-            contractId: c.id, amount, bankId: d['cp-bank'],
-            purposeCategory: 'contract_payment',
-            date: d['cp-date'], paymentMethod: d['cp-method'], transactionRef: d['cp-ref'], notes: d['cp-note']
-          })
-        if (!res.ok && !res.skipped) return SM.toast(res.error || 'خطا', 'error')
-        SMUI.closeModal()
-        SM.toast('واریز ثبت شد — حسابداری و فاکتور', 'success')
-        this.view(contractId)
+        try {
+          const res = await (d['cp-cat'] === 'contract_deposit'
+            ? FinanceSync.recordContractInitialDeposit(c, d['cp-bank'], {
+              paymentMethod: d['cp-method'], transactionRef: d['cp-ref'], date: d['cp-date'], notes: d['cp-note']
+            })
+            : FinanceSync.recordContractPayment({
+              contractId: c.id, amount, bankId: d['cp-bank'],
+              purposeCategory: 'contract_payment',
+              date: d['cp-date'], paymentMethod: d['cp-method'], transactionRef: d['cp-ref'], notes: d['cp-note']
+            }))
+          if (!res.ok && !res.skipped) return SM.toast(res.error || 'خطا', 'error')
+          SMUI.closeModal()
+          SM.toast(res.skipped ? 'بیعانه قبلاً ثبت شده' : 'واریز ثبت شد — حسابداری و فاکتور', 'success')
+          this.view(contractId)
+        } catch (e) {
+          SM.toast(e.message || 'خطا در ثبت واریز', 'error')
+        }
       }
     })
   },
