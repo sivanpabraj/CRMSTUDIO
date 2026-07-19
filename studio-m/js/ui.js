@@ -120,9 +120,12 @@ const SMUI = {
   },
 
   rowActions(buttons) {
-    return `<div class="sm-row-actions">${buttons.map(b =>
-      `<button type="button" class="sm-btn sm-btn-sm ${b.className || 'sm-btn-ghost'}" onclick="${b.onclick}">${b.icon ? `<i class="fas ${b.icon}"></i> ` : ''}${SM.esc(b.label)}</button>`
-    ).join('')}</div>`
+    return `<div class="sm-row-actions">${buttons.map(b => {
+      if (b.attrs) {
+        return `<button ${b.attrs} class="sm-btn sm-btn-sm ${b.className || 'sm-btn-ghost'}" title="${SM.esc(b.label)}">${b.icon ? `<i class="fas ${b.icon}"></i>` : SM.esc(b.label)}</button>`
+      }
+      return `<button type="button" class="sm-btn sm-btn-sm ${b.className || 'sm-btn-ghost'}" onclick="${b.onclick}">${b.icon ? `<i class="fas ${b.icon}"></i> ` : ''}${SM.esc(b.label)}</button>`
+    }).join('')}</div>`
   },
 
   formField(label, id, { type = 'text', value = '', options, placeholder, dir } = {}) {
@@ -203,9 +206,19 @@ const SMUI = {
   },
 
   tableActionsCell(viewOnclick, editOnclick, extra = '') {
+    // Prefer data-sm-fn when callers pass { fn, args }; keep onclick strings for compat
+    const toBtn = (spec, label, icon) => {
+      if (!spec) return null
+      if (typeof spec === 'object' && spec.fn) {
+        return { label, icon, attrs: (typeof SMEvents !== 'undefined' && SMEvents.attrs)
+          ? SMEvents.attrs(spec.fn, spec.args || [])
+          : `type="button" onclick="${spec.fn}(${(spec.args || []).map(a => JSON.stringify(a)).join(',')})"` }
+      }
+      return { label, icon, onclick: spec }
+    }
     return `<td>${SMUI.rowActions([
-      viewOnclick ? { label: SM.t('view'), icon: 'fa-eye', onclick: viewOnclick } : null,
-      editOnclick ? { label: SM.t('edit'), icon: 'fa-pen', onclick: editOnclick } : null
+      toBtn(viewOnclick, SM.t('view'), 'fa-eye'),
+      toBtn(editOnclick, SM.t('edit'), 'fa-pen')
     ].filter(Boolean))}${extra}</td>`
   },
 

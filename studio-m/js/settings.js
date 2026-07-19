@@ -745,13 +745,21 @@ const SMSettings = {
     </div>`
   },
 
-  enableClassicAdmin() {
+  async enableClassicAdmin() {
     if (typeof Access !== 'undefined' && !Access.isStudioManager?.(SM.user()) && !Access.isSystemAdmin?.(SM.user())) {
       return SM.toast('فقط مدیر مجاز است', 'error')
     }
+    if (!confirm('فعال‌سازی موقت پنل کلاسیک؟ فقط برای بازیابی اضطراری.')) return
+    const typed = prompt('برای تأیید، کلمه «کلاسیک» را بنویسید:')
+    if (typed !== 'کلاسیک') return SM.toast('لغو شد', 'info')
+    const pw = prompt('رمز ورود فعلی مدیر را وارد کنید:')
+    if (!pw) return SM.toast('لغو شد', 'info')
+    const v = await Auth.verifyCurrentPassword(pw)
+    if (!v.ok) return SM.toast(v.error || 'رمز اشتباه', 'error')
     try {
       sessionStorage.setItem('sm_allow_classic', '1')
       SM.toast('پنل کلاسیک برای این نشست فعال شد — admin.html?classic=1', 'success')
+      if (typeof SMObservability !== 'undefined') SMObservability.captureEvent('classic_admin_unlock')
     } catch {
       SM.toast('خطا در فعال‌سازی', 'error')
     }

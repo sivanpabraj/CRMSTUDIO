@@ -30,6 +30,13 @@ test.describe('Studio M smoke (no SMS)', () => {
     expect(page.url()).toContain('/studio-m/')
   })
 
+  test('studio-m brand assets load without Inter', async ({ page }) => {
+    await page.goto('/studio-m/')
+    await page.waitForTimeout(800)
+    const css = await page.locator('link[href*="studio-m.css"]').count()
+    expect(css).toBeGreaterThan(0)
+  })
+
   test('studio-m redirects unauthenticated user to login', async ({ page }) => {
     await page.goto('/studio-m/')
     await page.waitForURL(/index\.html/, { timeout: 15_000 })

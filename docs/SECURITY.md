@@ -75,6 +75,8 @@ supabase/migrations/006_contracts_manager_rls.sql
 
 - Session محلی client-only است (بدون HMAC سرور-side)
 - TypeScript + E2E tests گسترده‌تر
+- CSP هنوز `'unsafe-inline'` دارد (به‌خاطر handlerهای UI)؛ با `data-sm-fn` در حال کاهش است
+- سقف امتیاز واقعی: [`docs/QUALITY_SCORES.md`](./QUALITY_SCORES.md)
 
 ## Migration 002
 

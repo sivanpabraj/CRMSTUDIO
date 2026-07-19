@@ -395,21 +395,43 @@ const DB = {
   async _persist(opts = {}) {
     try {
       await IdbStore.set(AppConfig.IDB_STORE, DB_KEY, this._data)
+      this._dirty = false
       if (!opts.skipCloud && typeof Cloud !== 'undefined' && Cloud.schedulePush) Cloud.schedulePush()
     } catch (e) {
       console.error('DB persist failed:', e)
+      this._dirty = true
       if (typeof Utils !== 'undefined') {
         Utils.toast('خطا در ذخیره‌سازی داده‌ها', 'error')
+      }
+      if (typeof SMObservability !== 'undefined') {
+        SMObservability.captureError('db_persist', e)
       }
     }
   },
 
+  _dirty: false,
+  _persistTimer: null,
+  _pendingPersistOpts: { skipCloud: false },
+
+  /** Coalesce rapid writes — one IDB put per burst instead of per mutation */
+  _schedulePersist(opts = {}) {
+    this._dirty = true
+    if (opts.skipCloud) this._pendingPersistOpts.skipCloud = true
+    else if (!this._persistTimer) this._pendingPersistOpts.skipCloud = !!opts.skipCloud
+
+    clearTimeout(this._persistTimer)
+    const delay = opts.delay ?? 120
+    this._persistTimer = setTimeout(() => {
+      this._persistTimer = null
+      const skipCloud = this._pendingPersistOpts.skipCloud
+      this._pendingPersistOpts = { skipCloud: false }
+      this._persist({ skipCloud }).catch(() => {})
+    }, delay)
+  },
+
   _logPersistTimer: null,
   _scheduleLogPersist() {
-    clearTimeout(this._logPersistTimer)
-    this._logPersistTimer = setTimeout(() => {
-      this._persist({ skipCloud: true }).catch(() => {})
-    }, 2000)
+    this._schedulePersist({ skipCloud: true, delay: 2000 })
   },
 
   _normalizePhone(phone) {
@@ -490,11 +512,7 @@ const DB = {
   },
 
   save() {
-    return this._persist()
-  },
-
-  async flush() {
-    if (this._data) await this._persist()
+    return this.flush()
   },
 
   async exportData() {
@@ -559,9 +577,15 @@ const DB = {
 
   set(collection, data) {
     this._data[collection] = data
-    // logs never trigger cloud push
     const skipCloud = collection === 'logs'
-    return this._persist({ skipCloud }).catch(err => console.error('[DB] persist error', err))
+    this._schedulePersist({ skipCloud })
+    return Promise.resolve(true)
+  },
+
+  async flush() {
+    clearTimeout(this._persistTimer)
+    this._persistTimer = null
+    if (this._data) await this._persist({ skipCloud: false, force: true })
   },
 
   find(collection, predicate) {

@@ -110,7 +110,7 @@ const SMPayroll = {
         <td>${SM.fmt(p.amount || 0)}</td>
         <td>${SM.esc(p.bankName || '—')}</td>
         <td>${SM.esc(p.date || '—')}</td>
-        ${SMUI.tableActionsCell(null, `SMPayroll.view('${p.id}')`)}
+        ${SMUI.tableActionsCell(null, { fn: 'SMPayroll.view', args: [p.id] })}
       </tr>`)
     )
   },
