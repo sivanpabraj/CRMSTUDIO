@@ -61,7 +61,7 @@ const SMEmployees = {
   },
 
   _listHtml() {
-    const personnel = SMH.filterBySearch(DB.get('personnel'), ['name', 'phone', 'notes'], 'employees')
+    const personnel = SMH.filterBySearch(DB.active('personnel'), ['name', 'phone', 'notes'], 'employees')
     if (!personnel.length) {
       return SMUI.empty('fa-users', 'پرسنلی ثبت نشده', 'نام، موبایل، نقش‌ها و نحوه پرداخت را اضافه کنید')
     }
@@ -96,13 +96,13 @@ const SMEmployees = {
   },
 
   _latestContract(personnelId) {
-    return (DB.get('persContracts') || [])
+    return (DB.active('persContracts') || [])
       .filter(c => c.personnelId === personnelId && c.type === 'employment')
       .sort((a, b) => String(b.sentAt || b.createdAt || '').localeCompare(String(a.sentAt || a.createdAt || '')))[0]
   },
 
   _approvalsHtml() {
-    const contracts = (DB.get('persContracts') || []).filter(c => c.type === 'employment')
+    const contracts = (DB.active('persContracts') || []).filter(c => c.type === 'employment')
       .sort((a, b) => String(b.sentAt || '').localeCompare(String(a.sentAt || '')))
     if (!contracts.length) {
       return SMUI.empty('fa-file-signature', 'قرارداد همکاری ارسال نشده', 'از صفحه پرسنل → «ارسال قرارداد به پنل» استفاده کنید')
@@ -123,7 +123,7 @@ const SMEmployees = {
   },
 
   _statsHtml() {
-    const personnel = DB.get('personnel')
+    const personnel = DB.active('personnel')
     const active = personnel.filter(p => p.status === 'active')
     const byRole = {}
     active.forEach(p => {
@@ -137,7 +137,7 @@ const SMEmployees = {
       { label: 'کل پرسنل', value: SM.fmt(personnel.length), color: 'var(--sm-accent)' },
       { label: 'فعال', value: SM.fmt(active.length), color: 'var(--sm-success)' },
       { label: 'حقوق ماهانه', value: SM.fmt(monthlyTotal), color: 'var(--sm-warning)' },
-      { label: 'قرارداد تأییدشده', value: SM.fmt((DB.get('persContracts') || []).filter(c => c.type === 'employment' && c.status === 'verified').length), color: 'var(--sm-info)' }
+      { label: 'قرارداد تأییدشده', value: SM.fmt((DB.active('persContracts') || []).filter(c => c.type === 'employment' && c.status === 'verified').length), color: 'var(--sm-info)' }
     ])}
     <div class="sm-card" style="margin-top:16px"><div class="sm-card-head"><div class="sm-card-title">توزیع نقش‌ها</div></div>
       <div class="sm-card-body">${Object.keys(byRole).length ? Object.entries(byRole).map(([role, count]) =>
@@ -267,7 +267,7 @@ const SMEmployees = {
       if (el && el.value) roleAmounts[r] = +el.value || 0
     })
 
-    const idx = item ? DB.get('personnel').findIndex(x => x.id === item.id) : DB.get('personnel').length
+    const idx = item ? DB.active('personnel').findIndex(x => x.id === item.id) : DB.active('personnel').length
     const data = {
       name: d['emp-name'],
       phone,
@@ -297,7 +297,7 @@ const SMEmployees = {
       return
     }
 
-    if (phone && DB.get('personnel').some(p => p.phone === phone)) {
+    if (phone && DB.active('personnel').some(p => p.phone === phone)) {
       return SM.toast('این موبایل قبلاً ثبت شده', 'error')
     }
     DB.insert('personnel', { ...data, jobs: 0 })

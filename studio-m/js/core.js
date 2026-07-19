@@ -168,6 +168,12 @@ const SM = {
   },
 
   navigate(route) {
+    const routes = this.getRoutes()
+    const meta = routes.find(r => r.id === route)
+    if (meta?.perm && !this.can(meta.perm) && !this.can('all')) {
+      if (typeof SM !== 'undefined' && SM.toast) SM.toast('دسترسی به این بخش ندارید', 'error')
+      route = 'dashboard'
+    }
     this.state.route = route
     this.state.viewStack = []
     location.hash = route

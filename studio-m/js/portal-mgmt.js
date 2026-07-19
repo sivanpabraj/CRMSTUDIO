@@ -97,6 +97,10 @@ const SMPortalMgmt = {
   },
 
   inviteAdmin() {
+    if (typeof Access !== 'undefined' &&
+      !Access.isSystemAdmin?.(SM.user()) && !Access.isStudioManager?.(SM.user())) {
+      return SM.toast('فقط مدیر استودیو مجاز به افزودن ادمین است', 'error')
+    }
     const roleOpts = PortalInvite.ADMIN_ROLE_OPTIONS
     SMUI.modal('افزودن ادمین', `
       <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0 0 12px">نام و موبایل کافی است. یک کد ورود ساخته می‌شود — همان را به کاربر بدهید.</p>
@@ -191,7 +195,10 @@ const SMPortalMgmt = {
   },
 
   editUser(userId) {
-    const u = DB.find('users', x => x.id === userId)
+    if (typeof Access !== 'undefined' && !Access.canManageUsers?.(SM.user()) && !Access.canManageStudioOps?.(SM.user())) {
+      return SM.toast('دسترسی کافی ندارید', 'error')
+    }
+    const u = DB.find('users', x => x.id === userId && !x._deleted)
     if (!u) return
     const isAdmin = u.portalType === 'admin'
     const roleOpts = isAdmin
@@ -238,7 +245,11 @@ const SMPortalMgmt = {
   },
 
   async deleteUser(userId) {
-    const u = DB.find('users', x => x.id === userId)
+    if (typeof Access !== 'undefined' &&
+      !Access.isSystemAdmin?.(SM.user()) && !Access.isStudioManager?.(SM.user())) {
+      return SM.toast('فقط مدیر استودیو مجاز به حذف کاربر است', 'error')
+    }
+    const u = DB.find('users', x => x.id === userId && !x._deleted)
     if (!u) return
     if (!confirm(`حذف «${u.name || u.phone}»؟`)) return
     await SecureDB.delete('users', userId)

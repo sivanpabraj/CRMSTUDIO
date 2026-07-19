@@ -750,6 +750,9 @@ const SMAccounting = {
       onDelete: item ? async () => {
         if (!SMH.confirmDelete()) return
         try {
+          // Soft-delete first, then reverse ledger — avoids orphan reverse if delete fails
+          await SecureDB.delete('transactions', item.id)
+          if (item.invoiceId) await SecureDB.delete('invoices', item.invoiceId)
           if (item.bankId && item.amount) {
             const revType = item.type === 'deposit' ? 'withdrawal' : 'deposit'
             await this._applyBankDelta(item.bankId, revType, item.amount)
@@ -757,8 +760,6 @@ const SMAccounting = {
           if (typeof FinanceSync !== 'undefined' && item.contractId && item.type === 'deposit') {
             await FinanceSync.reverseContractPaid(item.contractId, item.purposeCategory, item.amount)
           }
-          if (item.invoiceId) await SecureDB.delete('invoices', item.invoiceId)
-          await SecureDB.delete('transactions', item.id)
           SM.toast('تراکنش حذف و موجودی اصلاح شد', 'success')
           SMH.refresh('accounting')
         } catch (e) {

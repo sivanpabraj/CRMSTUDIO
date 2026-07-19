@@ -140,7 +140,10 @@ const Access = {
   },
 
   filterVisibleRequests(user, list) {
-    const items = list || (typeof DB !== 'undefined' ? DB.get('customerRequests') : []) || []
+    const raw = list || (typeof DB !== 'undefined'
+      ? (typeof DB.active === 'function' ? DB.active('customerRequests') : DB.get('customerRequests'))
+      : []) || []
+    const items = raw.filter(r => r && !r._deleted)
     return items.filter(r => this.canViewCustomerRequest(user, r))
   },
 

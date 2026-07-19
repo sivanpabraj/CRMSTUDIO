@@ -54,7 +54,7 @@ const SMCustody = {
   },
 
   _items() {
-    return (DB.get('customerCustody') || []).slice().sort((a, b) =>
+    return (DB.active('customerCustody') || []).slice().sort((a, b) =>
       String(b.receivedAt || b.createdAt || '').localeCompare(String(a.receivedAt || a.createdAt || ''))
     )
   },
@@ -156,7 +156,7 @@ const SMCustody = {
   edit(id) { this._form(DB.find('customerCustody', x => x.id === id)) },
 
   _form(item) {
-    const contracts = DB.get('contracts').filter(c => c.status !== 'cancelled').slice(0, 80)
+    const contracts = DB.active('contracts').filter(c => c.status !== 'cancelled').slice(0, 80)
     const typeOpts = Object.entries(this.ITEM_TYPES).map(([k, v]) => ({ value: k, label: v.label }))
     const reasonOpts = Object.entries(this.REASON).map(([k, v]) => ({ value: k, label: v.label }))
     const contractOpts = [{ value: '', label: '— بدون قرارداد —' }, ...contracts.map(c => ({

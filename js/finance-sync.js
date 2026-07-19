@@ -246,14 +246,16 @@ const FinanceSync = {
   },
 
   /**
-   * ثبت واریز یکپارچه: تراکنش + بانک + فاکتور (+ قرارداد)
+   * ثبت واریز یکپارچه: تراکنش + بانک + فاکتور (+ قرارداد) — با rollback
    */
   async recordDeposit(opts = {}) {
     const amount = +(opts.amount || 0)
     if (!amount) return { ok: false, error: 'مبلغ نامعتبر' }
     if (!opts.bankId) return { ok: false, error: 'انتخاب حساب بانکی الزامی است' }
 
-    const contract = opts.contractId ? DB.find('contracts', c => c.id === opts.contractId) : null
+    const contract = opts.contractId
+      ? DB.find('contracts', c => c.id === opts.contractId && !c._deleted)
+      : null
     const purposeCategory = opts.purposeCategory || (opts.isDeposit ? 'contract_deposit' : 'contract_payment')
     const client = opts.client || (contract ? this.couple(contract) : '')
 
@@ -263,7 +265,7 @@ const FinanceSync = {
       date: opts.date || Utils.todayJalali(),
       periodMonth: opts.periodMonth || '',
       bankId: opts.bankId,
-      sourceType: 'customer',
+      sourceType: opts.sourceType || 'customer',
       contractId: opts.contractId || '',
       client,
       purposeCategory,
@@ -275,32 +277,126 @@ const FinanceSync = {
       desc: opts.purpose || opts.notes || this.DEPOSIT_CATS[purposeCategory] || 'واریز'
     }
 
-    const row = await SecureDB.insert('transactions', data)
-    await this.applyBankDelta(data.bankId, 'deposit', amount)
+    const bank = DB.find('banks', b => b.id === opts.bankId && !b._deleted)
+    const balBefore = bank?.balance || 0
+    let row = null
+    let invoiceId = null
+    let bankTouched = false
+    let paidTouched = false
+    let contractMetaTouched = false
 
-    const invoiceId = opts.syncInvoice !== false
-      ? await this.createInvoiceFromTx(data, row.id, null)
-      : null
-    if (invoiceId) await SecureDB.update('transactions', row.id, { invoiceId })
+    try {
+      row = await SecureDB.insert('transactions', data)
+      await this.applyBankDelta(data.bankId, 'deposit', amount)
+      bankTouched = true
 
-    if (opts.contractId) {
-      await this._updateContractPaid(opts.contractId, purposeCategory, amount)
+      if (opts.syncInvoice !== false) {
+        invoiceId = await this.createInvoiceFromTx(data, row.id, null)
+        if (invoiceId) await SecureDB.update('transactions', row.id, { invoiceId })
+      }
+
+      if (opts.contractId) {
+        await this._updateContractPaid(opts.contractId, purposeCategory, amount)
+        if (purposeCategory === 'contract_payment') paidTouched = true
+      }
+
+      if (opts.contractId && purposeCategory === 'contract_deposit' && contract) {
+        await SecureDB.update('contracts', opts.contractId, {
+          depositBankId: opts.bankId,
+          depositTransactionId: row.id,
+          depositInvoiceId: invoiceId || '',
+          depositRecordedAt: data.date
+        })
+        contractMetaTouched = true
+      }
+
+      if (typeof DB.log === 'function') {
+        DB.log('finance_deposit', `${client || '—'} — ${amount.toLocaleString('fa-IR')} → ${this.bankLabel(opts.bankId)}`)
+      }
+
+      return { ok: true, transactionId: row.id, invoiceId, bankId: opts.bankId }
+    } catch (e) {
+      try {
+        if (invoiceId) await SecureDB.delete('invoices', invoiceId)
+        if (row?.id) await SecureDB.delete('transactions', row.id)
+        if (bankTouched) await SecureDB.update('banks', opts.bankId, { balance: balBefore })
+        if (paidTouched) await this.reverseContractPaid(opts.contractId, purposeCategory, amount)
+        if (contractMetaTouched && opts.contractId) {
+          await SecureDB.update('contracts', opts.contractId, {
+            depositBankId: contract.depositBankId || '',
+            depositTransactionId: contract.depositTransactionId || '',
+            depositInvoiceId: contract.depositInvoiceId || '',
+            depositRecordedAt: contract.depositRecordedAt || ''
+          })
+        }
+      } catch { /* best-effort rollback */ }
+      return { ok: false, error: e.message || 'خطا در ثبت واریز — تغییرات برگشت داده شد' }
+    }
+  },
+
+  /**
+   * ثبت برداشت یکپارچه (حقوق / هزینه / …) با rollback
+   */
+  async recordWithdrawal(opts = {}) {
+    const amount = +(opts.amount || 0)
+    if (!amount) return { ok: false, error: 'مبلغ نامعتبر' }
+    if (!opts.bankId) return { ok: false, error: 'انتخاب حساب بانکی الزامی است' }
+
+    const bank = DB.find('banks', b => b.id === opts.bankId && !b._deleted)
+    if (!bank) return { ok: false, error: 'حساب بانکی یافت نشد' }
+    if ((bank.balance || 0) < amount && opts.allowOverdraft !== true) {
+      return { ok: false, error: 'موجودی حساب کافی نیست' }
     }
 
-    if (opts.contractId && purposeCategory === 'contract_deposit' && contract) {
-      await SecureDB.update('contracts', opts.contractId, {
-        depositBankId: opts.bankId,
-        depositTransactionId: row.id,
-        depositInvoiceId: invoiceId || '',
-        depositRecordedAt: data.date
-      })
+    const data = {
+      type: 'withdrawal',
+      amount,
+      date: opts.date || Utils.todayJalali(),
+      periodMonth: opts.periodMonth || '',
+      bankId: opts.bankId,
+      sourceType: opts.sourceType || 'other',
+      contractId: opts.contractId || '',
+      personnelId: opts.personnelId || '',
+      client: opts.client || '',
+      purposeCategory: opts.purposeCategory || 'other',
+      purpose: opts.purpose || 'برداشت',
+      paymentMethod: opts.paymentMethod || 'transfer',
+      transactionRef: opts.transactionRef || opts.ref || '',
+      accountOrCard: opts.accountOrCard || '',
+      notes: opts.notes || '',
+      desc: opts.desc || opts.purpose || opts.notes || 'برداشت',
+      expenseId: opts.expenseId || '',
+      salaryPaymentId: opts.salaryPaymentId || ''
     }
 
-    if (typeof DB.log === 'function') {
-      DB.log('finance_deposit', `${client || '—'} — ${amount.toLocaleString('fa-IR')} → ${this.bankLabel(opts.bankId)}`)
-    }
+    const balBefore = bank.balance || 0
+    let row = null
+    let invoiceId = null
+    let bankTouched = false
 
-    return { ok: true, transactionId: row.id, invoiceId, bankId: opts.bankId }
+    try {
+      row = await SecureDB.insert('transactions', data)
+      await this.applyBankDelta(data.bankId, 'withdrawal', amount)
+      bankTouched = true
+
+      if (opts.syncInvoice !== false) {
+        invoiceId = await this.createInvoiceFromTx(data, row.id, null)
+        if (invoiceId) await SecureDB.update('transactions', row.id, { invoiceId })
+      }
+
+      if (typeof DB.log === 'function') {
+        DB.log('finance_withdrawal', `${data.client || '—'} — ${amount.toLocaleString('fa-IR')} ← ${this.bankLabel(opts.bankId)}`)
+      }
+
+      return { ok: true, transactionId: row.id, invoiceId, bankId: opts.bankId }
+    } catch (e) {
+      try {
+        if (invoiceId) await SecureDB.delete('invoices', invoiceId)
+        if (row?.id) await SecureDB.delete('transactions', row.id)
+        if (bankTouched) await SecureDB.update('banks', opts.bankId, { balance: balBefore })
+      } catch { /* best-effort rollback */ }
+      return { ok: false, error: e.message || 'خطا در ثبت برداشت — تغییرات برگشت داده شد' }
+    }
   },
 
   /** بیعانه اولیه هنگام ثبت قرارداد */

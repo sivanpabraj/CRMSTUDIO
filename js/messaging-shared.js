@@ -348,7 +348,7 @@ const MessagingShared = {
   dueToday() {
     this.ensureTemplates()
     const templates = (DB.get('smsTemplates') || []).filter(t => t.enabled !== false && (t.channel || 'sms') === 'sms')
-    const contracts = (DB.get('contracts') || []).filter(c => c.status !== 'cancelled')
+    const contracts = (DB.active('contracts') || []).filter(c => c.status !== 'cancelled')
     const today = Utils.todayJalali()
     const queue = []
 

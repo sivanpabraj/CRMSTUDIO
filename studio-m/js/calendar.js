@@ -38,7 +38,7 @@ const SMCalendar = {
       map[key].push(ev)
     }
 
-    DB.get('contracts').forEach(c => {
+    DB.active('contracts').forEach(c => {
       if (c.status === 'cancelled') return
       const d = c.eventDate || c.date
       if (!d) return
@@ -56,7 +56,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('contracts').forEach(c => {
+    DB.active('contracts').forEach(c => {
       if (c.status === 'cancelled') return
       const ed = Utils.parseJalali(c.eventDate || c.date)
       if (!ed) return
@@ -78,7 +78,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('bookings').forEach(b => {
+    DB.active('bookings').forEach(b => {
       if (!b.date) return
       add(b.date, {
         id: `booking-${b.id}`,
@@ -94,7 +94,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('appointments').forEach(a => {
+    DB.active('appointments').forEach(a => {
       if (!a.date) return
       add(a.date, {
         id: `appt-${a.id}`,
@@ -110,7 +110,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('cheques').forEach(ch => {
+    DB.active('cheques').forEach(ch => {
       if (!ch.dueDate || ch.status === 'passed') return
       add(ch.dueDate, {
         id: `cheque-${ch.id}`,
@@ -126,7 +126,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('calendarReminders').forEach(r => {
+    DB.active('calendarReminders').forEach(r => {
       if (!r.date) return
       const rd = Utils.parseJalali(r.date)
       if (!rd) return

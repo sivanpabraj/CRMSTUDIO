@@ -55,7 +55,7 @@ const SMAttendance = {
   },
 
   _records() {
-    return DB.get('attendance') || []
+    return DB.active('attendance') || []
   },
 
   _forMonth(jy, jm, personId) {
@@ -131,7 +131,7 @@ const SMAttendance = {
   },
 
   _personFilterHtml(onchange) {
-    const personnel = DB.get('personnel').filter(p => p.status !== 'inactive')
+    const personnel = DB.active('personnel').filter(p => p.status !== 'inactive')
     return `<div class="sm-att-filter">
       <label class="sm-label">پرسنل</label>
       <select class="sm-input" id="att-filter-person" onchange="${onchange}">
@@ -255,7 +255,7 @@ const SMAttendance = {
   _statsHtml() {
     const t = Utils.parseJalaliToday()
     const stats = this._monthStats(t.jy, t.jm, this._filterPersonId || null)
-    const personnel = DB.get('personnel').filter(p => p.status === 'active')
+    const personnel = DB.active('personnel').filter(p => p.status === 'active')
     const perPerson = personnel.map(p => {
       const s = this._monthStats(t.jy, t.jm, p.id)
       return { name: p.name, id: p.id, ...s }
@@ -329,7 +329,7 @@ const SMAttendance = {
 
   add(presetDate) {
     const date = presetDate || this._selectedDate || Utils.todayJalali()
-    const personnel = DB.get('personnel').filter(p => p.status !== 'inactive')
+    const personnel = DB.active('personnel').filter(p => p.status !== 'inactive')
     const statusOpts = Object.entries(this.STATUS).map(([k, v]) => ({ value: k, label: v.label }))
     SMUI.modal('ثبت حضور و غیاب', `
       ${SMUI.formField('پرسنل', 'att-person', {
@@ -371,7 +371,7 @@ const SMAttendance = {
   edit(id) {
     const r = DB.find('attendance', x => x.id === id)
     if (!r) return
-    const personnel = DB.get('personnel')
+    const personnel = DB.active('personnel')
     const statusOpts = Object.entries(this.STATUS).map(([k, v]) => ({ value: k, label: v.label }))
     SMUI.modal('ویرایش حضور', `
       ${SMUI.formField('پرسنل', 'att-person', { type: 'select', value: r.personnelId || '', options: personnel.map(p => ({ value: p.id, label: p.name })) })}
@@ -430,7 +430,7 @@ const SMAttendance = {
 
   reportSummary(jy, jm) {
     const stats = this._monthStats(jy, jm, null)
-    const personnel = DB.get('personnel').filter(p => p.status === 'active')
+    const personnel = DB.active('personnel').filter(p => p.status === 'active')
     const withRecords = personnel.filter(p => this._forMonth(jy, jm, p.id).length > 0).length
     return {
       ...stats,

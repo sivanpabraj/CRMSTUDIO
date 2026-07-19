@@ -341,7 +341,7 @@ const SMMessaging = {
   },
 
   sendManual() {
-    const contracts = DB.get('contracts').filter(c => c.status !== 'cancelled')
+    const contracts = DB.active('contracts').filter(c => c.status !== 'cancelled')
     const cOpts = [{ value: '', label: '— بدون قرارداد —' }, ...contracts.map(c => ({
       value: c.id, label: `${MessagingShared.couple(c)} (${c.contractNum || c.id})`
     }))]

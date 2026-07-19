@@ -883,6 +883,9 @@ const SMSettings = {
   },
 
   async saveSms() {
+    if (typeof Access !== 'undefined' && !Access.canManageStudioOps?.(SM.user())) {
+      return SM.toast('فقط مدیر مجاز به تغییر تنظیمات پیامک است', 'error')
+    }
     await SecureDB.merge('studioInfo', {
       smsProxyUrl: document.getElementById('set-sms-proxy')?.value?.trim() || '',
       smsProvider: document.getElementById('set-sms-provider')?.value?.trim() || '',
@@ -896,6 +899,9 @@ const SMSettings = {
   },
 
   async saveBackupSettings() {
+    if (typeof Access !== 'undefined' && !Access.canManageStudioOps?.(SM.user())) {
+      return SM.toast('فقط مدیر مجاز است', 'error')
+    }
     await SecureDB.merge('studioInfo', {
       autoBackup: !!document.getElementById('set-autobackup')?.checked,
       backupHourly: !!document.getElementById('set-backup-hourly')?.checked,

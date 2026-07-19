@@ -27,7 +27,7 @@ const BOOKING_STATUS = {
 SMModules.bookings = {
   _statusLabel(s) { return BOOKING_STATUS[s] || s || '—' },
   render(el) {
-    const bookings = SMH.filterBySearch(DB.get('bookings'), ['title', 'client', 'date'])
+    const bookings = SMH.filterBySearch(DB.active('bookings'), ['title', 'client', 'date'])
     el.innerHTML = `
       ${SMUI.sectionHead('رزرو و مشاوره', '', SMH.addBtn('SMModules.bookings.add()'))}
       ${SMUI.moduleSearch('bookings', 'جستجو در رزروها — مشتری، عنوان، تاریخ...')}
@@ -83,8 +83,8 @@ SMModules.bookings = {
 SMModules.timeline = {
   render(el) {
     const q = SM.getModuleSearch('timeline')
-    let timelines = DB.get('timelines')
-    const contracts = DB.get('contracts')
+    let timelines = DB.active('timelines')
+    const contracts = DB.active('contracts')
     if (q) {
       timelines = timelines.filter(t => {
         const contract = contracts.find(c => c.id === t.contractId)
@@ -118,7 +118,7 @@ SMModules.timeline = {
   add() { this._form(null) },
   edit(id) { this._form(DB.find('timelines', t => t.id === id)) },
   _form(item) {
-    const contracts = DB.get('contracts')
+    const contracts = DB.active('contracts')
     SMUI.modal(item ? 'ویرایش تایم‌لاین' : 'تایم‌لاین عروسی', `
       ${SMUI.formField('عنوان', 'tl-title', { value: item?.title || '', placeholder: 'مثلاً: برنامه روز عروسی' })}
       ${SMUI.formField('قرارداد', 'tl-contract', { type: 'select', value: item?.contractId || '', options: [
@@ -230,7 +230,7 @@ SMModules.contracts = {
   addPayment(contractId) {
     const c = DB.find('contracts', x => x.id === contractId)
     if (!c) return
-    const banks = DB.get('banks') || []
+    const banks = DB.active('banks') || []
     const bankOpts = [{ value: '', label: '— انتخاب حساب —' }, ...banks.map(b => ({
       value: b.id, label: typeof FinanceSync !== 'undefined' ? FinanceSync.bankLabel(b.id) : (b.name || b.bank)
     }))]
@@ -296,7 +296,7 @@ SMModules.contracts = {
 
   render(el) {
     const q = SM.getModuleSearch('contracts')
-    let contracts = DB.get('contracts')
+    let contracts = DB.active('contracts')
     if (q) {
       contracts = contracts.filter(c =>
         [c.couple, c.groom, c.bride, c.contractNum, c.eventDate, c.date].join(' ').toLowerCase().includes(q)
@@ -370,7 +370,7 @@ SMModules.contracts = {
     const paid = (c.deposit || 0) + (c.paid || 0)
     const remain = Math.max(0, (c.total || 0) - paid)
     const st = this._statusOf(c)
-    const idx = this._sort(DB.get('contracts')).findIndex(x => x.id === id)
+    const idx = this._sort(DB.active('contracts')).findIndex(x => x.id === id)
     const color = this._color(Math.max(0, idx))
 
     SM.pushSubView(this._couple(c), () => `
@@ -439,7 +439,7 @@ SMModules.contracts = {
   edit(id, focusCancel = false) {
     const c = DB.find('contracts', x => x.id === id)
     if (!c) return
-    const idx = this._sort(DB.get('contracts')).findIndex(x => x.id === id)
+    const idx = this._sort(DB.active('contracts')).findIndex(x => x.id === id)
     const color = this._color(Math.max(0, idx))
     const cr = c.cancelRecord || {}
 
@@ -506,7 +506,7 @@ SMModules.contracts = {
 SMModules.packages = {
   render(el) {
     if (typeof PackageCatalog !== 'undefined') PackageCatalog.ensureDefaults()
-    const pkgs = DB.get('packages')
+    const pkgs = DB.active('packages')
     el.innerHTML = `
       ${SMUI.sectionHead('پکیج قیمت', 'سیلور، گلد، VIP و CBI — قابل ویرایش', `<button class="sm-btn sm-btn-primary" onclick="SMModules.packages.add()"><i class="fas fa-plus"></i> پکیج جدید</button>`)}
       <div class="sm-pkg-grid">
@@ -807,10 +807,10 @@ SMModules.invoices = {
   },
 
   _collectAll() {
-    const stored = DB.get('invoices').map(i => ({ ...i, _virtual: false }))
+    const stored = DB.active('invoices').map(i => ({ ...i, _virtual: false }))
     const linked = new Set(stored.filter(i => i.contractId && i.type?.startsWith('customer')).map(i => `${i.contractId}-${i.type}`))
 
-    DB.get('contracts').forEach(c => {
+    DB.active('contracts').forEach(c => {
       if (c.status === 'cancelled') return
       const hasSynced = typeof FinanceSync !== 'undefined' && FinanceSync.hasSyncedDeposit(c.id)
       const dep = +(c.deposit || 0)
@@ -834,7 +834,7 @@ SMModules.invoices = {
         })
       }
       const extra = +(c.paid || 0)
-      const hasPayTx = (DB.get('transactions') || []).some(t =>
+      const hasPayTx = (DB.active('transactions') || []).some(t =>
         t.contractId === c.id && t.purposeCategory === 'contract_payment'
       )
       if (extra > 0 && !linked.has(`${c.id}-customer_payment`) && !hasPayTx) {
@@ -869,7 +869,7 @@ SMModules.invoices = {
 
   _genNumber() {
     const t = Utils.todayJalali().replace(/\//g, '')
-    const n = DB.get('invoices').length + 1
+    const n = DB.active('invoices').length + 1
     return `F-${t}-${String(n).padStart(3, '0')}`
   },
 
@@ -980,8 +980,8 @@ SMModules.invoices = {
 
   _form(item, prefilled) {
     const seed = prefilled || item
-    const banks = DB.get('banks') || []
-    const contracts = DB.get('contracts').filter(c => c.status !== 'cancelled')
+    const banks = DB.active('banks') || []
+    const contracts = DB.active('contracts').filter(c => c.status !== 'cancelled')
     const typeOpts = Object.entries(this.TYPES).map(([k, v]) => ({ value: k, label: `${v.label}` }))
     const monthOpts = this.MONTHS.map(m => ({ value: m, label: m }))
     const bankOpts = [{ value: '', label: '— انتخاب حساب —' }, ...banks.map(b => ({
@@ -1052,20 +1052,28 @@ SMModules.invoices = {
         const alreadyLinked = !!(item?.transactionId)
         if (data.syncLedger && !alreadyLinked) {
           const txType = data.direction === 'in' ? 'deposit' : 'withdrawal'
+          const purposeCategory = type === 'customer_deposit' ? 'contract_deposit'
+            : (type === 'customer_payment' ? 'contract_payment'
+              : (data.direction === 'in' ? 'other_income' : 'other'))
           const tx = await SecureDB.insert('transactions', {
             type: txType,
             amount: data.amount,
             desc: `${data.title}${data.purpose ? ' — ' + data.purpose : ''}`,
             date: data.date,
             bankId: data.bankId || '',
+            contractId: data.contractId || '',
+            client: data.client || '',
             invoiceRef: item?.number || data.number,
             invoiceId: invoiceId || '',
-            purposeCategory: data.direction === 'in' ? 'other_income' : 'other',
+            purposeCategory,
             purpose: data.purpose || data.title,
             paymentMethod: data.paymentMethod || 'transfer'
           })
           if (data.bankId && typeof FinanceSync !== 'undefined') {
             await FinanceSync.applyBankDelta(data.bankId, txType, data.amount)
+          }
+          if (data.contractId && data.direction === 'in' && typeof FinanceSync !== 'undefined') {
+            await FinanceSync.applyContractPaid(data.contractId, purposeCategory, data.amount)
           }
           if (invoiceId) await SecureDB.update('invoices', invoiceId, { transactionId: tx.id })
         }
@@ -1078,10 +1086,15 @@ SMModules.invoices = {
         try {
           if (item.transactionId) {
             const t = DB.find('transactions', x => x.id === item.transactionId)
-            if (t && !t._deleted && t.bankId && t.amount) {
-              const rev = t.type === 'deposit' ? 'withdrawal' : 'deposit'
-              await FinanceSync.applyBankDelta(t.bankId, rev, t.amount)
+            if (t && !t._deleted) {
               await SecureDB.delete('transactions', t.id)
+              if (t.bankId && t.amount) {
+                const rev = t.type === 'deposit' ? 'withdrawal' : 'deposit'
+                await FinanceSync.applyBankDelta(t.bankId, rev, t.amount)
+              }
+              if (t.contractId && t.type === 'deposit' && typeof FinanceSync !== 'undefined') {
+                await FinanceSync.reverseContractPaid(t.contractId, t.purposeCategory, t.amount)
+              }
             }
           }
           await SecureDB.delete('invoices', item.id)
@@ -1131,7 +1144,7 @@ SMModules.expenses = {
   },
 
   render(el) {
-    const expenses = SMH.filterBySearch(DB.get('expenses'), ['title', 'desc', 'category', 'amount', 'date', 'periodMonth', 'notes'], 'expenses')
+    const expenses = SMH.filterBySearch(DB.active('expenses'), ['title', 'desc', 'category', 'amount', 'date', 'periodMonth', 'notes'], 'expenses')
     const total = expenses.reduce((s, e) => s + (e.amount || 0), 0)
     const byCat = {}
     expenses.forEach(e => {
@@ -1190,7 +1203,7 @@ SMModules.expenses = {
   _form(item) {
     const catOpts = Object.entries(this.CATEGORIES).map(([k, v]) => ({ value: k, label: v }))
     const monthOpts = this.MONTHS.map(m => ({ value: m, label: m }))
-    const banks = (typeof DB.active === 'function' ? DB.active('banks') : DB.get('banks')).filter(b => !b._deleted)
+    const banks = (typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || [])).filter(b => !b._deleted)
     const bankOpts = [{ value: '', label: '— بدون کسر از بانک —' }, ...banks.map(b => ({
       value: b.id, label: `${b.name || b.bank || 'حساب'} — ${SM.fmt(b.balance || 0)} ت`
     }))]
@@ -1247,7 +1260,26 @@ SMModules.expenses = {
         }
         SMH.refresh('expenses')
       },
-      onDelete: item ? () => SMH.remove('expenses', item.id, 'expenses') : null,
+      onDelete: item ? async () => {
+        if (!SMH.confirmDelete()) return
+        try {
+          if (item.transactionId) {
+            const t = DB.find('transactions', x => x.id === item.transactionId)
+            if (t && !t._deleted) {
+              await SecureDB.delete('transactions', t.id)
+              if (t.bankId && t.amount && typeof FinanceSync !== 'undefined') {
+                const rev = t.type === 'deposit' ? 'withdrawal' : 'deposit'
+                await FinanceSync.applyBankDelta(t.bankId, rev, t.amount)
+              }
+            }
+          }
+          await SecureDB.delete('expenses', item.id)
+          SM.toast('هزینه حذف و موجودی اصلاح شد', 'success')
+          SMH.refresh('expenses')
+        } catch (e) {
+          SM.toast(e.message || 'خطا در حذف', 'error')
+        }
+      } : null,
       width: 480
     })
   }
@@ -1345,7 +1377,7 @@ SMModules.files = {
 /* ── Media Library (کتابخانه رسانه) ── */
 SMModules.media = {
   render(el) {
-    const galleries = DB.get('galleries')
+    const galleries = DB.active('galleries')
     el.innerHTML = `
       ${SMUI.sectionHead('کتابخانه رسانه', 'عکس، ویدیو و فایل‌های پروژه', `<button class="sm-btn sm-btn-primary" onclick="SMModules.media.add()"><i class="fas fa-plus"></i> ${SM.t('add')}</button>`)}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">

@@ -66,6 +66,18 @@ describe('nextContractPaid', () => {
   })
 })
 
+describe('activeRows soft-delete contract', () => {
+  it('filters tombstones from salary payment-like lists', async () => {
+    const { activeRows } = await import('../js/sync/entities.js')
+    const rows = activeRows([
+      { id: 'a', amount: 1 },
+      { id: 'b', amount: 2, _deleted: true },
+      { id: 'c', amount: 3 }
+    ])
+    expect(rows.map(r => r.id)).toEqual(['a', 'c'])
+  })
+})
+
 describe('previewPassCheque', () => {
   it('passes incoming cheque and increases balance', () => {
     const r = previewPassCheque(

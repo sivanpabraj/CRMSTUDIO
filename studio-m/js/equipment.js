@@ -54,7 +54,7 @@ const SMEquipment = {
 
   render(el) {
     if (SM.state.viewStack.length) return
-    const items = SMH.filterBySearch(DB.get('equipment'), ['name', 'brand', 'model', 'serial', 'category', 'status', 'notes', 'location'], 'equipment')
+    const items = SMH.filterBySearch(DB.active('equipment'), ['name', 'brand', 'model', 'serial', 'category', 'status', 'notes', 'location'], 'equipment')
     const filtered = this._tab === 'all' ? items : items.filter(e => this._normCat(e.category) === this._tab)
     const byCat = {}
     filtered.forEach(e => {

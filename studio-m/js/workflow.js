@@ -82,7 +82,7 @@ const SMWorkflow = {
   },
 
   _items() {
-    return (DB.get('workflows') || []).slice().sort((a, b) => {
+    return (DB.active('workflows') || []).slice().sort((a, b) => {
       const pa = { urgent: 0, high: 1, normal: 2, low: 3 }[a.priority || 'normal'] ?? 2
       const pb = { urgent: 0, high: 1, normal: 2, low: 3 }[b.priority || 'normal'] ?? 2
       if (pa !== pb) return pa - pb
@@ -181,7 +181,7 @@ const SMWorkflow = {
   add() { this._form(null) },
 
   addFromContract() {
-    const contracts = DB.get('contracts').filter(c => c.status !== 'cancelled')
+    const contracts = DB.active('contracts').filter(c => c.status !== 'cancelled')
     if (!contracts.length) return SM.toast(SMH.lbl('قراردادی یافت نشد', 'No contracts'), 'error')
     SMUI.modal(SMH.lbl('پروژه تدوین از قرارداد', 'Workflow from contract'), `
       ${SMUI.formField(SMH.lbl('قرارداد', 'Contract'), 'wf-contract', {

@@ -11,7 +11,7 @@ const SMInbox = {
   _requests(user) {
     let list = typeof Access !== 'undefined'
       ? Access.filterVisibleRequests(user)
-      : (DB.get('customerRequests') || [])
+      : (DB.active('customerRequests') || [])
     if (this._tab === 'pending') list = list.filter(r => r.status === 'pending')
     else if (this._tab === 'done') list = list.filter(r => r.status === 'sent_to_editing')
     else if (this._tab === 'rejected') list = list.filter(r => r.status === 'rejected')
@@ -28,7 +28,7 @@ const SMInbox = {
   render(el) {
     if (SM.state.viewStack.length) return
     const user = SM.user()
-    const all = typeof Access !== 'undefined' ? Access.filterVisibleRequests(user) : (DB.get('customerRequests') || [])
+    const all = typeof Access !== 'undefined' ? Access.filterVisibleRequests(user) : (DB.active('customerRequests') || [])
     const reqs = this._requests(user)
     const groups = typeof InboxShared !== 'undefined' ? InboxShared.groupByCouple(reqs) : []
     const pending = all.filter(r => r.status === 'pending').length
@@ -86,7 +86,7 @@ const SMInbox = {
     const user = SM.user()
     const reqs = this._requests(user).filter(r => (r.contractId || r.customerName) === contractKey || r.contractId === contractKey)
     if (!reqs.length) {
-      const all = (typeof Access !== 'undefined' ? Access.filterVisibleRequests(user) : DB.get('customerRequests'))
+      const all = (typeof Access !== 'undefined' ? Access.filterVisibleRequests(user) : DB.active('customerRequests'))
         .filter(r => r.contractId === contractKey || r.customerName === contractKey)
       if (!all.length) return
       reqs.push(...all)
