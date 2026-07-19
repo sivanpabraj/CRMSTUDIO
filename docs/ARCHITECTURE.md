@@ -4,6 +4,9 @@
 
 Studio M is an offline-first PWA (Vanilla JS + IndexedDB) with optional Supabase cloud sync.
 
+Pro shell modules live under `studio-m/js/` (registry in `modules.js`, split feature files
+`modules-*.js`, plus dedicated `accounting.js` / `payroll.js` / `settings.js`).
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ Presentation                                                │

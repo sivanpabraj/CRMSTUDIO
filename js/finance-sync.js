@@ -56,7 +56,8 @@ const FinanceSync = {
 
   genInvoiceNumber() {
     const t = Utils.todayJalali().replace(/\//g, '')
-    const n = (DB.get('invoices') || []).length + 1
+    const rows = typeof DB.active === 'function' ? DB.active('invoices') : (DB.get('invoices') || []).filter(i => !i._deleted)
+    const n = rows.length + 1
     return `F-${t}-${String(n).padStart(3, '0')}`
   },
 
@@ -186,6 +187,7 @@ const FinanceSync = {
         if (typeof DB.log === 'function') {
           DB.log('finance_transfer', `${amount.toLocaleString('fa-IR')} — ${this.bankLabel(fromId)} → ${this.bankLabel(toId)}`)
         }
+        await DB.flush?.()
         return { ok: true, pairId, outTransactionId: outRow.id, inTransactionId: inRow.id }
       } catch (e) {
         try {
@@ -314,6 +316,7 @@ const FinanceSync = {
         DB.log('finance_deposit', `${client || '—'} — ${amount.toLocaleString('fa-IR')} → ${this.bankLabel(opts.bankId)}`)
       }
 
+      await DB.flush?.()
       return { ok: true, transactionId: row.id, invoiceId, bankId: opts.bankId }
     } catch (e) {
       try {
@@ -388,6 +391,7 @@ const FinanceSync = {
         DB.log('finance_withdrawal', `${data.client || '—'} — ${amount.toLocaleString('fa-IR')} ← ${this.bankLabel(opts.bankId)}`)
       }
 
+      await DB.flush?.()
       return { ok: true, transactionId: row.id, invoiceId, bankId: opts.bankId }
     } catch (e) {
       try {

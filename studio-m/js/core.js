@@ -280,7 +280,9 @@ const SM = {
       comms: this.t('group_comms'),
       system: this.t('group_system')
     }
-    const unread = (typeof DB !== 'undefined' ? DB.get('notifications') : []).filter(n => !n.read).length
+    const unread = (typeof DB !== 'undefined'
+      ? (typeof DB.active === 'function' ? DB.active('notifications') : DB.get('notifications'))
+      : []).filter(n => !n.read && !n._deleted).length
 
     let navHtml = ''
     for (const [gid, label] of Object.entries(groups)) {

@@ -1,24 +1,13 @@
 import { describe, it, expect } from 'vitest'
+import { SMObservability } from '../js/lib/observability.js'
 
-// Observability is a classic script; re-implement minimal contract for unit test
-function makeObs() {
-  const buf = []
-  return {
-    captureError(scope, err, meta = {}) {
-      const entry = { scope, message: err?.message || String(err), meta }
-      buf.push(entry)
-      return entry
-    },
-    recent: () => buf.slice()
-  }
-}
-
-describe('observability contract', () => {
-  it('records scoped errors', () => {
-    const obs = makeObs()
-    obs.captureError('db_persist', new Error('disk full'), { key: 'main' })
-    expect(obs.recent()).toHaveLength(1)
-    expect(obs.recent()[0].scope).toBe('db_persist')
-    expect(obs.recent()[0].message).toContain('disk full')
+describe('SMObservability', () => {
+  it('records scoped errors without requiring DB', () => {
+    const before = SMObservability.recent().length
+    SMObservability.captureError('unit_test', new Error('boom'), { noDbLog: true })
+    const recent = SMObservability.recent()
+    expect(recent.length).toBeGreaterThan(before)
+    expect(recent.at(-1).scope).toBe('unit_test')
+    expect(recent.at(-1).message).toContain('boom')
   })
 })

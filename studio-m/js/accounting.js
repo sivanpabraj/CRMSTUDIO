@@ -123,7 +123,7 @@ const SMAccounting = {
 
   _genInvoiceNumber() {
     const t = Utils.todayJalali().replace(/\//g, '')
-    const n = DB.get('invoices').length + 1
+    const n = (typeof DB.active === 'function' ? DB.active('invoices') : DB.get('invoices')).length + 1
     return `F-${t}-${String(n).padStart(3, '0')}`
   },
 

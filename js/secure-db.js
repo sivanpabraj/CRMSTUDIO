@@ -119,14 +119,17 @@ const SecureDB = {
   async insert(collection, item) {
     if (!this._canWrite(collection)) throw new Error(this._denyMsg(collection))
     const res = DB.insert(collection, item)
-    await DB.flush?.()
+    // Memory is current; coalesce disk writes (callers that need durability use DB.flush)
+    if (typeof DB._schedulePersist === 'function') DB._schedulePersist({})
+    else await DB.flush?.()
     return res
   },
 
   async update(collection, id, patch) {
     if (!this._canWrite(collection)) throw new Error(this._denyMsg(collection))
     DB.update(collection, id, patch)
-    await DB.flush?.()
+    if (typeof DB._schedulePersist === 'function') DB._schedulePersist({})
+    else await DB.flush?.()
     return true
   },
 
@@ -167,11 +170,13 @@ const SecureDB = {
         _deleted: true,
         deletedAtIso: new Date().toISOString()
       })
-      await DB.flush?.()
+      if (typeof DB._schedulePersist === 'function') DB._schedulePersist({})
+      else await DB.flush?.()
       return true
     }
     const res = this._origDelete ? this._origDelete(collection, id) : DB.delete(collection, id)
-    await DB.flush?.()
+    if (typeof DB._schedulePersist === 'function') DB._schedulePersist({})
+    else await DB.flush?.()
     return res
   },
 

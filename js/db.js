@@ -365,9 +365,11 @@ const DB = {
       await this._migrateBackupsFromLocalStorage()
       this._purgeLocalStorageMirror()
       this.syncAllPersonnel()
+      this._bindUnloadFlush()
     } catch (e) {
       console.warn('DB init failed, using defaults:', e)
       this._data = createDefaultData()
+      this._bindUnloadFlush()
     }
     return this
   },
@@ -393,47 +395,70 @@ const DB = {
   },
 
   async _persist(opts = {}) {
-    try {
-      await IdbStore.set(AppConfig.IDB_STORE, DB_KEY, this._data)
-      this._dirty = false
-      if (!opts.skipCloud && typeof Cloud !== 'undefined' && Cloud.schedulePush) Cloud.schedulePush()
-    } catch (e) {
-      console.error('DB persist failed:', e)
-      this._dirty = true
-      if (typeof Utils !== 'undefined') {
-        Utils.toast('خطا در ذخیره‌سازی داده‌ها', 'error')
-      }
-      if (typeof SMObservability !== 'undefined') {
-        SMObservability.captureError('db_persist', e)
+    const run = async () => {
+      try {
+        await IdbStore.set(AppConfig.IDB_STORE, DB_KEY, this._data)
+        this._dirty = false
+        if (!opts.skipCloud && typeof Cloud !== 'undefined' && Cloud.schedulePush) Cloud.schedulePush()
+      } catch (e) {
+        console.error('DB persist failed:', e)
+        this._dirty = true
+        if (typeof Utils !== 'undefined') {
+          Utils.toast('خطا در ذخیره‌سازی داده‌ها', 'error')
+        }
+        if (typeof SMObservability !== 'undefined') {
+          // Do not DB.log here — that would re-dirty and reschedule persist
+          SMObservability.captureError('db_persist', e, { noDbLog: true })
+        }
       }
     }
+    this._persistChain = (this._persistChain || Promise.resolve()).then(run, run)
+    return this._persistChain
   },
 
   _dirty: false,
   _persistTimer: null,
-  _pendingPersistOpts: { skipCloud: false },
+  _pendingNeedCloud: false,
+  _persistChain: Promise.resolve(),
 
-  /** Coalesce rapid writes — one IDB put per burst instead of per mutation */
+  /**
+   * Coalesce rapid writes. skipCloud only if EVERY pending op in the burst skipped cloud.
+   * Any non-skip write forces cloud schedule on flush.
+   */
   _schedulePersist(opts = {}) {
     this._dirty = true
-    if (opts.skipCloud) this._pendingPersistOpts.skipCloud = true
-    else if (!this._persistTimer) this._pendingPersistOpts.skipCloud = !!opts.skipCloud
+    if (!opts.skipCloud) this._pendingNeedCloud = true
 
     clearTimeout(this._persistTimer)
     const delay = opts.delay ?? 120
     this._persistTimer = setTimeout(() => {
       this._persistTimer = null
-      const skipCloud = this._pendingPersistOpts.skipCloud
-      this._pendingPersistOpts = { skipCloud: false }
+      const skipCloud = !this._pendingNeedCloud
+      this._pendingNeedCloud = false
       this._persist({ skipCloud }).catch(() => {})
     }, delay)
   },
 
-  _logPersistTimer: null,
   _scheduleLogPersist() {
     this._schedulePersist({ skipCloud: true, delay: 2000 })
   },
 
+  _bindUnloadFlush() {
+    if (this._unloadBound || typeof window === 'undefined') return
+    this._unloadBound = true
+    const flush = () => {
+      try {
+        clearTimeout(this._persistTimer)
+        this._persistTimer = null
+        if (this._dirty) {
+          // sync best-effort via keepalive is unavailable for IDB; fire async
+          this._persist({ skipCloud: false }).catch(() => {})
+        }
+      } catch { /* */ }
+    }
+    window.addEventListener('pagehide', flush)
+    window.addEventListener('beforeunload', flush)
+  },
   _normalizePhone(phone) {
     if (!phone) return ''
     const map = { '۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9' }

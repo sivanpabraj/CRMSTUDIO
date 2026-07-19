@@ -20,11 +20,14 @@ const SMObservability = {
     try {
       console.error(`[SM:${entry.scope}]`, entry.message, meta)
     } catch { /* */ }
-    try {
-      if (typeof DB !== 'undefined' && typeof DB.log === 'function') {
-        DB.log('obs_error', `${entry.scope}: ${entry.message}`)
-      }
-    } catch { /* */ }
+    // Avoid DB.log on persist failures — that re-dirties the store
+    if (!meta?.noDbLog) {
+      try {
+        if (typeof DB !== 'undefined' && typeof DB.log === 'function') {
+          DB.log('obs_error', `${entry.scope}: ${entry.message}`)
+        }
+      } catch { /* */ }
+    }
     return entry
   },
 
@@ -41,3 +44,5 @@ const SMObservability = {
 }
 
 if (typeof window !== 'undefined') window.SMObservability = SMObservability
+
+export { SMObservability }
