@@ -1239,7 +1239,26 @@ SMModules.expenses = {
           await SecureDB.update('expenses', item.id, data)
         } else {
           const exp = await SecureDB.insert('expenses', data)
-          if (data.syncLedger) {
+          if (data.syncLedger && data.bankId && typeof FinanceSync !== 'undefined') {
+            const res = await FinanceSync.recordWithdrawal({
+              amount: data.amount,
+              bankId: data.bankId,
+              date: data.date,
+              periodMonth: data.periodMonth,
+              purposeCategory: 'other',
+              purpose: catLabel,
+              desc: `${data.title} — ${catLabel}`,
+              notes: data.notes || '',
+              expenseId: exp.id,
+              syncInvoice: false,
+              allowOverdraft: true
+            })
+            if (!res.ok) {
+              try { await SecureDB.delete('expenses', exp.id) } catch { /* */ }
+              return SM.toast(res.error || 'خطا در ثبت دفترکل', 'error')
+            }
+            await SecureDB.update('expenses', exp.id, { transactionId: res.transactionId })
+          } else if (data.syncLedger) {
             const tx = await SecureDB.insert('transactions', {
               type: 'withdrawal',
               amount: data.amount,
@@ -1252,9 +1271,6 @@ SMModules.expenses = {
               purpose: catLabel,
               expenseId: exp.id
             })
-            if (data.bankId && typeof FinanceSync !== 'undefined') {
-              await FinanceSync.applyBankDelta(data.bankId, 'withdrawal', data.amount)
-            }
             await SecureDB.update('expenses', exp.id, { transactionId: tx.id })
           }
         }

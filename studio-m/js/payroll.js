@@ -133,7 +133,7 @@ const SMPayroll = {
   },
 
   add() {
-    const personnel = DB.get('personnel').filter(p => p.status === 'active')
+    const personnel = DB.active('personnel').filter(p => p.status === 'active')
     if (!personnel.length) return SM.toast('پرسنل فعالی نیست', 'error')
     const defaultMonth = Utils.todayJalali().slice(0, 7)
     const defaultPerson = personnel[0]?.id || ''

@@ -48,11 +48,11 @@ const SMH = {
   },
 
   personnelOptions(selected) {
-    return DB.get('personnel').map(p => ({ value: p.id, label: p.name, selected: p.id === selected }))
+    return DB.active('personnel').map(p => ({ value: p.id, label: p.name, selected: p.id === selected }))
   },
 
   contractOptions(selected) {
-    return [{ value: '', label: '—' }, ...DB.get('contracts').map(c => ({
+    return [{ value: '', label: '—' }, ...DB.active('contracts').map(c => ({
       value: c.id,
       label: c.couple || c.contractNum || c.id,
       selected: c.id === selected

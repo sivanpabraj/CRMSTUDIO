@@ -16,6 +16,11 @@ const SMSettings = {
   ],
 
   setTab(tab) {
+    const opsOnly = new Set(['sms', 'cloud', 'system', 'backup'])
+    if (opsOnly.has(tab) && typeof Access !== 'undefined' && !Access.canManageStudioOps?.(SM.user())) {
+      SM.toast('فقط مدیر به این بخش دسترسی دارد', 'error')
+      tab = 'profile'
+    }
     this._tab = tab
     this._search = ''
     SM.navigate('settings')
