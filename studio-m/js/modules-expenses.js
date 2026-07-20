@@ -117,7 +117,15 @@ SMModules.expenses = {
           await SecureDB.update('expenses', item.id, data)
         } else {
           const exp = await SecureDB.insert('expenses', data)
-          if (data.syncLedger && data.bankId && typeof FinanceSync !== 'undefined') {
+          if (data.syncLedger && data.bankId) {
+            if (typeof FinanceSync === 'undefined') {
+              try { await SecureDB.delete('expenses', exp.id) } catch (re) {
+                if (typeof SMObservability !== 'undefined') {
+                  SMObservability.captureError('finance_rollback:expenseCreate', re, { rollback: true })
+                }
+              }
+              return SM.toast('ماژول مالی در دسترس نیست', 'error')
+            }
             const res = await FinanceSync.recordWithdrawal({
               amount: data.amount,
               bankId: data.bankId,
@@ -132,24 +140,16 @@ SMModules.expenses = {
               allowOverdraft: true
             })
             if (!res.ok) {
-              try { await SecureDB.delete('expenses', exp.id) } catch { /* */ }
+              try { await SecureDB.delete('expenses', exp.id) } catch (re) {
+                if (typeof SMObservability !== 'undefined') {
+                  SMObservability.captureError('finance_rollback:expenseCreate', re, { rollback: true })
+                }
+              }
               return SM.toast(res.error || 'خطا در ثبت دفترکل', 'error')
             }
             await SecureDB.update('expenses', exp.id, { transactionId: res.transactionId })
-          } else if (data.syncLedger) {
-            const tx = await SecureDB.insert('transactions', {
-              type: 'withdrawal',
-              amount: data.amount,
-              desc: `${data.title} — ${catLabel}`,
-              date: data.date,
-              periodMonth: data.periodMonth,
-              bankId: data.bankId || '',
-              purposeCategory: 'other',
-              sourceType: 'other',
-              purpose: catLabel,
-              expenseId: exp.id
-            })
-            await SecureDB.update('expenses', exp.id, { transactionId: tx.id })
+          } else if (data.syncLedger && !data.bankId) {
+            return SM.toast('برای ثبت در دفترکل، حساب بانکی را انتخاب کنید', 'error')
           }
         }
         SMH.refresh('expenses')
@@ -158,13 +158,13 @@ SMModules.expenses = {
         if (!SMH.confirmDelete()) return
         try {
           if (item.transactionId) {
+            if (typeof FinanceSync === 'undefined') {
+              return SM.toast('ماژول مالی در دسترس نیست', 'error')
+            }
             const t = DB.find('transactions', x => x.id === item.transactionId)
             if (t && !t._deleted) {
-              await SecureDB.delete('transactions', t.id)
-              if (t.bankId && t.amount && typeof FinanceSync !== 'undefined') {
-                const rev = t.type === 'deposit' ? 'withdrawal' : 'deposit'
-                await FinanceSync.applyBankDelta(t.bankId, rev, t.amount)
-              }
+              const res = await FinanceSync.deleteTransaction(t.id)
+              if (!res.ok) return SM.toast(res.error || 'خطا در حذف تراکنش مرتبط', 'error')
             }
           }
           await SecureDB.delete('expenses', item.id)

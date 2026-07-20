@@ -63,7 +63,16 @@ const Bootstrap = {
       this._bindGlobalErrorHandler()
       if (typeof DB !== 'undefined' && DB.ready) await DB.ready
       if (typeof Auth !== 'undefined' && Auth.verifySessionSignature) {
-        try { await Auth.verifySessionSignature() } catch { /* */ }
+        try {
+          await Auth.verifySessionSignature()
+        } catch (e) {
+          if (typeof SMObservability !== 'undefined') {
+            SMObservability.captureError('session_verify', e)
+          } else {
+            console.error('[Bootstrap] session verify failed', e)
+          }
+          try { Auth.logout?.() } catch { /* */ }
+        }
       }
       if (typeof Auth !== 'undefined' && Auth.getCsrfToken) {
         Auth.getCsrfToken()

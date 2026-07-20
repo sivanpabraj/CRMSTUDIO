@@ -360,12 +360,16 @@ const Auth = {
       this.logout()
       return null
     }
-    if (typeof SessionSign !== 'undefined' && session.sig) {
-      /* verify async signature on next tick — sync path trusts expiry only if verify pending */
-      if (session._sigInvalid) {
-        this.logout()
-        return null
-      }
+    if (session._sigInvalid) {
+      this.logout()
+      return null
+    }
+    // Production fail-closed: unsigned sessions are never trusted on the sync path
+    if (typeof SessionSign !== 'undefined' && !session.sig) {
+      const allowUnsigned = typeof AppConfig !== 'undefined'
+        ? AppConfig.isLocalDev?.()
+        : (typeof location !== 'undefined' && ['localhost', '127.0.0.1', '::1'].includes(location.hostname))
+      if (!allowUnsigned) return null
     }
     return DB.find('users', u => u.id === session.userId) || null
   },

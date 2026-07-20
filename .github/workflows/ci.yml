@@ -28,5 +28,9 @@ jobs:
 
       - run: npm run build
 
+      - name: Playwright smoke (no credentials)
+        run: npx playwright install --with-deps chromium && npx playwright test
+        # Uses built dist via `vite preview` (build step above)
+
       - name: Docker build
         run: docker build -t studio-m:ci .

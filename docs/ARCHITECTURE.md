@@ -52,12 +52,14 @@ Local file backups (`DB.exportJSON`) intentionally retain secrets so offline res
 | `recordDeposit` | Customer deposits / payments (atomic + rollback) |
 | `recordWithdrawal` | Expenses, payroll, outbound (atomic + rollback) |
 | `updateTransaction` | Edit existing non-transfer txs (bank queue + snapshot rollback) |
-| `deleteTransaction` | Soft-delete + reverse bank/paid (atomic + rollback) |
+| `deleteTransaction` | Soft-delete + reverse bank/paid (atomic + rollback); used by accounting, invoices, expenses, cheque revert |
 | `transferBetweenBanks` | Inter-account transfers |
 | `applyBankDelta` | Only inside FinanceSync / ChequeManager with compensating rollback |
 | `applyContractPaid` / `reverseContractPaid` | Installments only (`contract_payment`) |
 
-Pro UI entry points: accounting, invoices, expenses, payroll, cheques. Transfers are not edited/deleted via the single-tx form.
+Pro UI entry points: accounting, invoices, expenses, payroll, cheques.  
+Classic photo-house deposits also call `recordDeposit` (admin.html loads `finance-sync.js`).  
+Transfers are not edited/deleted via the single-tx form.
 
 ## Authentication
 

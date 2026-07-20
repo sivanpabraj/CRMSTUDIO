@@ -329,7 +329,13 @@ SMModules.invoices = {
             : await FinanceSync.recordWithdrawal(ledgerOpts)
           if (!res.ok) {
             if (!item && invoiceId) {
-              try { await SecureDB.delete('invoices', invoiceId) } catch { /* */ }
+              try {
+                await SecureDB.delete('invoices', invoiceId)
+              } catch (re) {
+                if (typeof SMObservability !== 'undefined') {
+                  SMObservability.captureError('finance_rollback:invoiceCreate', re, { rollback: true })
+                }
+              }
             }
             return SM.toast(res.error || 'خطا در ثبت دفترکل', 'error')
           }
@@ -350,20 +356,19 @@ SMModules.invoices = {
       onDelete: item ? async () => {
         if (!SMH.confirmDelete()) return
         try {
-          if (item.transactionId) {
+          if (item.transactionId && typeof FinanceSync !== 'undefined') {
             const t = DB.find('transactions', x => x.id === item.transactionId)
             if (t && !t._deleted) {
-              await SecureDB.delete('transactions', t.id)
-              if (t.bankId && t.amount) {
-                const rev = t.type === 'deposit' ? 'withdrawal' : 'deposit'
-                await FinanceSync.applyBankDelta(t.bankId, rev, t.amount)
-              }
-              if (t.contractId && t.type === 'deposit' && typeof FinanceSync !== 'undefined') {
-                await FinanceSync.reverseContractPaid(t.contractId, t.purposeCategory, t.amount)
-              }
+              const res = await FinanceSync.deleteTransaction(t.id)
+              if (!res.ok) return SM.toast(res.error || 'خطا در حذف تراکنش مرتبط', 'error')
             }
+          } else if (item.transactionId) {
+            return SM.toast('ماژول مالی در دسترس نیست', 'error')
           }
-          await SecureDB.delete('invoices', item.id)
+          // Invoice may already be tombstoned if linked via deleteTransaction path
+          const inv = DB.find('invoices', x => x.id === item.id)
+          if (inv && !inv._deleted) await SecureDB.delete('invoices', item.id)
+          SM.toast('فاکتور حذف شد', 'success')
           SMH.refresh('invoices')
         } catch (e) {
           SM.toast(e.message || 'خطا', 'error')

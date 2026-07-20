@@ -221,33 +221,36 @@ const SMPayroll = {
       const paymentId = row.id
       let txId
       try {
-        if (typeof FinanceSync !== 'undefined') {
-          const res = await FinanceSync.recordWithdrawal({
-            amount: payload.amount,
-            bankId: payload.bankId,
-            date: payload.date,
-            periodMonth: payload.month,
-            personnelId: payload.personId,
-            client: payload.personName,
-            purposeCategory: 'personnel',
-            purpose: `حقوق ${payload.personName} — ${payload.monthLabel || payload.month}`,
-            paymentMethod: payload.paymentMethod || 'transfer',
-            transactionRef: payload.ref || '',
-            accountOrCard: payload.accountOrCard || '',
-            notes: payload.notes || '',
-            desc: `حقوق پرسنل — ${payload.personName}`,
-            salaryPaymentId: paymentId,
-            syncInvoice: true
-          })
-          if (!res.ok) throw new Error(res.error || 'خطا در ثبت دفترکل')
-          txId = res.transactionId
-        } else {
-          txId = await this._createLedger(payload)
+        if (typeof FinanceSync === 'undefined') {
+          throw new Error('ماژول مالی در دسترس نیست')
         }
+        const res = await FinanceSync.recordWithdrawal({
+          amount: payload.amount,
+          bankId: payload.bankId,
+          date: payload.date,
+          periodMonth: payload.month,
+          personnelId: payload.personId,
+          client: payload.personName,
+          purposeCategory: 'personnel',
+          purpose: `حقوق ${payload.personName} — ${payload.monthLabel || payload.month}`,
+          paymentMethod: payload.paymentMethod || 'transfer',
+          transactionRef: payload.ref || '',
+          accountOrCard: payload.accountOrCard || '',
+          notes: payload.notes || '',
+          desc: `حقوق پرسنل — ${payload.personName}`,
+          salaryPaymentId: paymentId,
+          syncInvoice: true
+        })
+        if (!res.ok) throw new Error(res.error || 'خطا در ثبت دفترکل')
+        txId = res.transactionId
         await this._markProjectsPaid(calc, d['pay-month'])
         if (txId) await SecureDB.update('salaryPayments', paymentId, { transactionId: txId })
       } catch (e) {
-        try { await SecureDB.delete('salaryPayments', paymentId) } catch { /* */ }
+        try { await SecureDB.delete('salaryPayments', paymentId) } catch (re) {
+          if (typeof SMObservability !== 'undefined') {
+            SMObservability.captureError('finance_rollback:payrollPay', re, { rollback: true })
+          }
+        }
         return SM.toast(e.message || 'خطا در پرداخت حقوق', 'error')
       }
     }
@@ -269,56 +272,6 @@ const SMPayroll = {
         paidAt: Utils.todayJalali()
       })
     }
-  },
-
-  async _createLedger(payment) {
-    const data = {
-      type: 'withdrawal',
-      amount: payment.amount,
-      date: payment.date,
-      periodMonth: payment.month,
-      bankId: payment.bankId,
-      personnelId: payment.personId,
-      client: payment.personName,
-      purposeCategory: 'personnel',
-      purpose: `حقوق ${payment.personName} — ${payment.monthLabel || payment.month}`,
-      paymentMethod: payment.paymentMethod || 'transfer',
-      transactionRef: payment.ref || '',
-      accountOrCard: payment.accountOrCard || '',
-      notes: payment.notes || '',
-      desc: `حقوق پرسنل — ${payment.personName}`
-    }
-    const row = await SecureDB.insert('transactions', data)
-    if (typeof SMAccounting !== 'undefined') {
-      await SMAccounting._applyBankDelta(data.bankId, data.type, data.amount)
-    } else {
-      const b = DB.find('banks', x => x.id === data.bankId)
-      if (b) await SecureDB.update('banks', data.bankId, { balance: (b.balance || 0) - data.amount })
-    }
-    const invNum = typeof SMAccounting !== 'undefined' && SMAccounting._genInvoiceNumber
-      ? SMAccounting._genInvoiceNumber()
-      : `F-OUT-${String((DB.get('invoices') || []).length + 1).padStart(3, '0')}`
-    const inv = await SecureDB.insert('invoices', {
-      type: 'personnel',
-      direction: 'out',
-      title: data.purpose,
-      client: payment.personName,
-      personnelId: payment.personId,
-      amount: payment.amount,
-      date: payment.date,
-      periodMonth: payment.month,
-      bankId: payment.bankId,
-      bankName: payment.bankName,
-      accountOrCard: payment.accountOrCard,
-      paymentMethod: payment.paymentMethod,
-      description: payment.notes || '',
-      status: 'paid',
-      transactionId: row.id,
-      number: invNum,
-      createdAt: Utils.todayJalali()
-    })
-    await SecureDB.update('transactions', row.id, { invoiceId: inv.id })
-    return row.id
   }
 }
 

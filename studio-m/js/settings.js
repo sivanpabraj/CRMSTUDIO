@@ -111,7 +111,7 @@ const SMSettings = {
           ${mustChange ? `<div class="sm-settings-alert"><i class="fas fa-shield-halved"></i> برای امنیت، لطفاً رمز پیش‌فرض را در بخش پایین عوض کنید.</div>` : ''}
           <div class="sm-profile-head">
             <div class="sm-profile-avatar" id="sm-profile-avatar-preview">${logo
-              ? `<img src="${SM.esc(logo)}" alt="logo"/>`
+              ? (Utils.safeImgHtml(logo, 'alt="logo"') || SM.esc((user?.name || '?').charAt(0)))
               : SM.esc((user?.name || '?').charAt(0))}</div>
             <div>
               <strong>${SM.esc(user?.name || '')}</strong>
@@ -129,7 +129,7 @@ const SMSettings = {
         <div class="sm-card-body">
           <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0 0 12px">لوگو در سایدبار، قرارداد و پورتال نمایش داده می‌شود.</p>
           <div class="sm-logo-preview" id="sm-logo-preview">${logo
-            ? `<img src="${SM.esc(logo)}" alt="لوگو"/>`
+            ? (Utils.safeImgHtml(logo, 'alt="لوگو"') || '<span class="sm-logo-placeholder"><i class="fas fa-camera-retro"></i></span>')
             : '<span class="sm-logo-placeholder"><i class="fas fa-camera-retro"></i></span>'}</div>
           <input type="file" id="prof-logo-file" accept="image/*" hidden onchange="SMSettings.onLogoPick(this)"/>
           <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -816,8 +816,9 @@ const SMSettings = {
       SMSettings._pendingLogo = reader.result
       const prev = document.getElementById('sm-logo-preview')
       const av = document.getElementById('sm-profile-avatar-preview')
-      if (prev) prev.innerHTML = `<img src="${reader.result}" alt="logo"/>`
-      if (av) av.innerHTML = `<img src="${reader.result}" alt="logo"/>`
+      const html = Utils.safeImgHtml(reader.result, 'alt="logo"') || ''
+      if (prev) prev.innerHTML = html || '<span class="sm-logo-placeholder"><i class="fas fa-camera-retro"></i></span>'
+      if (av) av.innerHTML = html || SM.esc((SM.user()?.name || '?').charAt(0))
       SM.toast('لوگو آماده ذخیره است — دکمه ذخیره را بزنید', 'info')
     }
     reader.readAsDataURL(file)

@@ -339,24 +339,18 @@ const ChequeManager = {
     if (!ch || ch.status !== 'passed') return { ok: false, msg: 'چک پاس‌شده یافت نشد' }
 
     if (ch.transactionId) {
-      const t = DB.find('transactions', x => x.id === ch.transactionId)
-      if (t && t.bankId && !(t._deleted)) {
-        const revType = t.type === 'deposit' ? 'withdrawal' : 'deposit'
-        await this._applyBankDelta(t.bankId, revType, t.amount || 0)
+      if (typeof FinanceSync === 'undefined') {
+        return { ok: false, msg: 'ماژول مالی در دسترس نیست' }
       }
-      if (t) await SecureDB.update('transactions', ch.transactionId, { _deleted: true })
-    }
-
-    if (this.typeOf(ch) === 'incoming' && ch.contractId) {
-      const c = DB.find('contracts', x => x.id === ch.contractId)
-      if (c) {
-        const paid = Math.max(0, (c.paid || 0) - (ch.amount || 0))
-        const balance = Math.max(0, (c.total || 0) - (c.deposit || 0) - paid)
-        await SecureDB.update('contracts', ch.contractId, { paid, balance })
+      const t = DB.find('transactions', x => x.id === ch.transactionId)
+      if (t && !t._deleted) {
+        const res = await FinanceSync.deleteTransaction(ch.transactionId)
+        if (!res.ok) return { ok: false, msg: res.error || 'خطا در برگشت تراکنش چک' }
       }
     }
 
     await SecureDB.update('cheques', id, { status: 'pending', passDate: '', transactionId: '' })
+    DB.log('cheque_revert_pass', { id })
     await this.syncNotifications()
     return { ok: true }
   }

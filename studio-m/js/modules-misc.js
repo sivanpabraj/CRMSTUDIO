@@ -245,5 +245,4 @@ SMModules.api = {
   }
 }
 
-window.SMModules = SMModules
-
+/* SMModules is owned by modules.js — do not reassign window here */
