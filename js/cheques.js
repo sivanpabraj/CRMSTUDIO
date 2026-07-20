@@ -170,10 +170,9 @@ const ChequeManager = {
       return { ok: false, msg: 'موجودی حساب برای پاس این چک کافی نیست' }
     }
 
-    const txType = dir === 'incoming' ? 'deposit' : 'withdrawal'
     const purpose = dir === 'incoming' ? 'دریافت چک' : (ch.purpose || ch.category || 'پرداخت چک')
 
-    // Prefer FinanceSync atomic writers when available
+    // FinanceSync is mandatory for cheque ledger writes
     if (typeof FinanceSync !== 'undefined') {
       const ledgerOpts = {
         amount,
@@ -211,15 +210,8 @@ const ChequeManager = {
           party: this.partyOf(ch)
         })
       } catch (e) {
-        // Compensating: reverse ledger if cheque update fails
         try {
-          if (res.transactionId) await SecureDB.delete('transactions', res.transactionId)
-          if (res.invoiceId) await SecureDB.delete('invoices', res.invoiceId)
-          const rev = dir === 'incoming' ? 'withdrawal' : 'deposit'
-          await FinanceSync.applyBankDelta(ch.bankId, rev, amount)
-          if (dir === 'incoming' && ch.contractId) {
-            await FinanceSync.reverseContractPaid(ch.contractId, 'contract_payment', amount)
-          }
+          await FinanceSync.deleteTransaction(res.transactionId)
         } catch (re) {
           if (typeof SMObservability !== 'undefined') {
             SMObservability.captureError('finance_rollback:chequePassCompensate', re, { rollback: true })
@@ -233,74 +225,7 @@ const ChequeManager = {
       return { ok: true, transactionId: res.transactionId }
     }
 
-    const balBefore = bank.balance || 0
-    let tx = null
-    let bankTouched = false
-    let paidTouched = false
-    try {
-      tx = await SecureDB.insert('transactions', {
-        type: txType,
-        amount,
-        date: Utils.todayJalali(),
-        bankId: ch.bankId,
-        sourceType: ch.contractId ? 'customer' : 'other',
-        purposeCategory: dir === 'incoming' ? 'other_income' : 'other',
-        purpose,
-        client: this.partyOf(ch),
-        paymentMethod: 'cheque',
-        transactionRef: this.numberOf(ch),
-        notes: ch.notes || '',
-        desc: `پاس چک ${this.numberOf(ch)}${ch.purpose ? ' — ' + ch.purpose : ''}`,
-        chequeId: ch.id,
-        contractId: ch.contractId || ''
-      })
-
-      await this._applyBankDelta(ch.bankId, txType, amount)
-      bankTouched = true
-
-      await SecureDB.update('cheques', id, {
-        status: 'passed',
-        passDate: Utils.todayJalali(),
-        transactionId: tx.id,
-        type: dir,
-        direction: dir,
-        number: this.numberOf(ch),
-        chequeNumber: this.numberOf(ch),
-        client: this.partyOf(ch),
-        party: this.partyOf(ch)
-      })
-
-      if (dir === 'incoming' && ch.contractId && typeof FinanceSync !== 'undefined') {
-        await FinanceSync.applyContractPaid(ch.contractId, 'contract_payment', amount)
-        paidTouched = true
-      } else if (dir === 'incoming' && ch.contractId) {
-        const c = DB.find('contracts', x => x.id === ch.contractId && !x._deleted)
-        if (c) {
-          const paid = (c.paid || 0) + amount
-          const balance = Math.max(0, (c.total || 0) - (c.deposit || 0) - paid)
-          await SecureDB.update('contracts', ch.contractId, { paid, balance })
-          paidTouched = true
-        }
-      }
-    } catch (e) {
-      try {
-        if (tx?.id) await SecureDB.delete('transactions', tx.id)
-        if (bankTouched) await SecureDB.update('banks', ch.bankId, { balance: balBefore })
-        await SecureDB.update('cheques', id, { status: 'pending', passDate: '', transactionId: '' })
-        if (paidTouched && ch.contractId && typeof FinanceSync !== 'undefined') {
-          await FinanceSync.reverseContractPaid(ch.contractId, 'contract_payment', amount)
-        }
-      } catch (re) {
-        if (typeof SMObservability !== 'undefined') {
-          SMObservability.captureError('finance_rollback:chequePassLegacy', re, { rollback: true })
-        }
-      }
-      return { ok: false, msg: e.message || 'خطا در پاس چک — تغییرات برگشت داده شد' }
-    }
-
-    DB.log('cheque_pass', { id, amount, direction: dir, bankId: ch.bankId })
-    await this.syncNotifications()
-    return { ok: true, transactionId: tx.id }
+    return { ok: false, msg: 'ماژول مالی در دسترس نیست — از Studio M استفاده کنید' }
   },
 
   async bounceCheque(id, reason = '') {

@@ -3,13 +3,13 @@
 **Date:** 2026-07-20  
 **Branch:** `cursor/finance-cheque-p0-66da`  
 **Version:** 6.0.0  
-**Overall Score: 76 / 100** (was 74; unified remaining finance writers + session fail-closed + CRUD tests + CI e2e)
+**Overall Score: 77 / 100** (was 76; purged remaining dual finance writers + allowlist regression test)
 
 ---
 
 ## 1. Executive Summary
 
-Studio M is a production-credible **offline-first single-studio ERP/CRM**. Finance mutations in Pro (and classic photo-house deposits) now route through **FinanceSync** with serialized bank queue + compensating rollback. Session handling **fail-closes** on unsigned production sessions; Playwright smoke runs in CI; **91 unit tests** cover FinanceSync create/update/delete.
+Studio M is a production-credible **offline-first single-studio ERP/CRM**. Finance mutations (Pro + classic photo-house + classic finance modal) route through **FinanceSync** only — enforced by an allowlist regression test. Session handling **fail-closes** on unsigned production sessions; Playwright smoke runs in CI; **92 unit tests**.
 
 Suitable for a **trusted single studio**. Not multi-tenant SaaS. Honest ceilings: Security ~70–75, Scalability ~55–60 while browser IDB is system of record.
 
@@ -19,8 +19,8 @@ Suitable for a **trusted single studio**. Not multi-tenant SaaS. Honest ceilings
 
 | Metric | Score |
 |--------|------:|
-| **Overall** | **76 / 100** |
-| Production readiness (single studio) | 82 |
+| **Overall** | **77 / 100** |
+| Production readiness (single studio) | 83 |
 | SaaS / multi-tenant readiness | 42 |
 
 ---
@@ -29,20 +29,20 @@ Suitable for a **trusted single studio**. Not multi-tenant SaaS. Honest ceilings
 
 | Category | Score | Risk | Priority | Strengths | Weaknesses |
 |----------|------:|------|----------|-----------|------------|
-| Architecture | 73 | Med | P1 | FinanceSync as sole money writer in Pro + photo-house | Global scripts; classic surface still exists |
-| Code Quality | 78 | Med | P1 | Lint clean; dead payroll fallback removed | Megafiles remain |
+| Architecture | 74 | Med | P1 | FinanceSync sole `insert(transactions)` (allowlist CI) | Global scripts; classic surface still exists |
+| Code Quality | 79 | Med | P1 | Lint clean; legacy cheque/admin writers removed | Megafiles remain |
 | Maintainability | 74 | Med | P1 | Clear finance contract in ARCHITECTURE | settings/accounting size |
 | Scalability | 55 | High | P0 | Sync cursors; tombstones | In-memory collections; LWW money |
 | Performance | 72 | Med | P2 | Coalesced IDB; ledger page | Full re-renders |
 | Security | 71 | High | P0 | Unsigned prod sessions rejected sync+async; CSRF; SMS sanitize | Browser authority; CSP unsafe-inline |
 | UI/UX | 73 | Low | P2 | RTL Pro; Estedad brand | Dense ERP |
 | Accessibility | 60 | Med | P2 | Modal trap; route focus | No axe CI |
-| Testing | 80 | Med | P1 | 91 Vitest incl. FinanceSync CRUD harness; CI Playwright | Thin authenticated finance e2e |
+| Testing | 81 | Med | P1 | 92 Vitest + allowlist guard + CI Playwright | Thin authenticated finance e2e |
 | Documentation | 86 | Low | P3 | Honest scores + write contract | Some phase docs stale |
 | DevOps & Deployment | 80 | Med | P2 | CI lint/test/build/audit/e2e/Docker | No staging deploys |
-| Error Handling | 76 | Med | P1 | Rollback observability across finance paths | Storage catches still quiet |
+| Error Handling | 77 | Med | P1 | Cheque compensate via deleteTransaction | Storage catches still quiet |
 | Logging & Monitoring | 61 | High | P1 | Rollback + session verify capture | No default APM |
-| API Design | 70 | Med | P1 | FinanceSync CRUD + transfer + cheque | No server mutation API |
+| API Design | 71 | Med | P1 | FinanceSync mandatory for money mutations | No server mutation API |
 | Database Design | 66 | High | P0 | Soft-delete; migrations | Blob SoR |
 | Project Structure | 78 | Low | P2 | Clear folders | Legacy admin coexists |
 
