@@ -4,6 +4,8 @@ const SMAccounting = {
   _tab: 'banks',
   _flowFilter: 'all',
   _chequeFilter: 'all',
+  _ledgerPage: 0,
+  _ledgerPageSize: 40,
 
   MONTHS: ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'],
 
@@ -54,6 +56,12 @@ const SMAccounting = {
 
   setFlowFilter(f) {
     this._flowFilter = f
+    this._ledgerPage = 0
+    SM.navigate('accounting')
+  },
+
+  setLedgerPage(p) {
+    this._ledgerPage = Math.max(0, Number(p) || 0)
     SM.navigate('accounting')
   },
 
@@ -297,6 +305,13 @@ const SMAccounting = {
       })
     }
 
+    const pageFn = (typeof paginate === 'function')
+      ? paginate
+      : (typeof ListPage !== 'undefined' ? ListPage.paginate : null)
+    const page = pageFn
+      ? pageFn(tx, this._ledgerPage, this._ledgerPageSize)
+      : { items: tx.slice(0, this._ledgerPageSize), page: 0, pages: 1, total: tx.length, hasPrev: false, hasNext: tx.length > this._ledgerPageSize }
+
     const filters = [
       { id: 'all', label: 'همه' },
       { id: 'deposit', label: 'واریز', cls: 'is-in' },
@@ -308,11 +323,18 @@ const SMAccounting = {
       <div class="sm-inv-cats">
         ${filters.map(f => `
           <button type="button" class="sm-inv-cat ${f.cls || ''}${this._flowFilter === f.id ? ' active' : ''}"
-            onclick="SMAccounting.setFlowFilter('${f.id}')">${f.label}</button>`).join('')}
+            ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.setFlowFilter', [f.id]) : `onclick="SMAccounting.setFlowFilter('${f.id}')"`}>${f.label}</button>`).join('')}
       </div>
       <div class="sm-acc-tx-list">
-        ${tx.length ? tx.map(t => this._txRow(t)).join('') : SMUI.empty('fa-book', q ? 'تراکنشی یافت نشد' : 'تراکنشی ثبت نشده — از دکمه «واریز و برداشت» بالا استفاده کنید')}
-      </div>`
+        ${page.items.length ? page.items.map(t => this._txRow(t)).join('') : SMUI.empty('fa-book', q ? 'تراکنشی یافت نشد' : 'تراکنشی ثبت نشده — از دکمه «واریز و برداشت» بالا استفاده کنید')}
+      </div>
+      ${page.pages > 1 ? `<div class="sm-pager" style="display:flex;gap:8px;justify-content:center;margin-top:12px;align-items:center">
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${page.hasPrev ? '' : 'disabled '}
+          ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.setLedgerPage', [page.page - 1]) : `onclick="SMAccounting.setLedgerPage(${page.page - 1})"`}>قبلی</button>
+        <span style="font-size:.85rem;color:var(--sm-text-muted)">${(page.page + 1).toLocaleString('fa-IR')} / ${page.pages.toLocaleString('fa-IR')} — ${page.total.toLocaleString('fa-IR')} مورد</span>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${page.hasNext ? '' : 'disabled '}
+          ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.setLedgerPage', [page.page + 1]) : `onclick="SMAccounting.setLedgerPage(${page.page + 1})"`}>بعدی</button>
+      </div>` : ''}`
   },
 
   _txRow(t) {
@@ -347,8 +369,10 @@ const SMAccounting = {
       <div class="sm-acc-tx-side">
         <div class="sm-acc-tx-amt">${isIn ? '+' : '−'} ${SM.fmt(t.amount || 0)} <small>تومان</small></div>
         <div class="sm-acc-tx-btns">
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.printReceipt('${t.id}')" title="PDF"><i class="fas fa-file-pdf"></i></button>
-          ${!isTransfer ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.editTx('${t.id}')"><i class="fas fa-pen"></i></button>` : ''}
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="PDF"
+            ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.printReceipt', [t.id]) : `onclick="SMAccounting.printReceipt('${t.id}')"`}><i class="fas fa-file-pdf"></i></button>
+          ${!isTransfer ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost"
+            ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.editTx', [t.id]) : `onclick="SMAccounting.editTx('${t.id}')"`}><i class="fas fa-pen"></i></button>` : ''}
         </div>
       </div>
     </div>`

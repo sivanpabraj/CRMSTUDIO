@@ -54,6 +54,24 @@ const SecureDB = {
 
   /** @param {string} [collection] */
   _canWrite(collection) {
+    if (typeof canWriteCollection === 'function') {
+      const t = this._token()
+      const csrfValid = typeof Auth !== 'undefined' && Auth.validateCsrf
+        ? !!(t && Auth.validateCsrf(t))
+        : false
+      const manageFinance = typeof Auth !== 'undefined' &&
+        !!(Auth.userHasPermission?.('manage_finance') || Auth.userHasPermission?.('all'))
+      return canWriteCollection({
+        collection,
+        authInternal: this._authInternal,
+        systemSync: this._systemSync,
+        setupPhase: this._isSetupPhase(),
+        csrfValid,
+        manageFinance,
+        isManager: this._isManagerUser(),
+        financeCollections: this.FINANCE_COLLECTIONS
+      })
+    }
     if (this._authInternal || this._systemSync) return true
     if (collection === 'securityState' || collection === 'logs') return true
     if (this._isSetupPhase()) return true

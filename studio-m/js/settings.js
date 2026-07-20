@@ -324,14 +324,15 @@ const SMSettings = {
       customerLabel: document.getElementById('site-cust-label')?.value?.trim() || 'پیگیری مراسم',
       managerLabel: document.getElementById('site-mgr-label')?.value?.trim() || 'مدیریت استودیو'
     }
-    DB.set('studioInfo', {
+    SecureDB.merge('studioInfo', {
       ...prev,
       externalSiteUrl: document.getElementById('site-external')?.value?.trim() || '',
       appBaseUrl: document.getElementById('site-app-base')?.value?.trim() || '',
       siteLinks: links
+    }).then(() => {
+      SM.toast('تنظیمات سایت ذخیره شد', 'success')
+      SM.navigate('settings')
     })
-    SM.toast('تنظیمات سایت ذخیره شد', 'success')
-    SM.navigate('settings')
   },
 
   copyEmbed() {
@@ -899,15 +900,29 @@ const SMSettings = {
     if (typeof Access !== 'undefined' && !Access.canManageStudioOps?.(SM.user())) {
       return SM.toast('فقط مدیر مجاز به تغییر تنظیمات پیامک است', 'error')
     }
-    await SecureDB.merge('studioInfo', {
+    const raw = {
       smsProxyUrl: document.getElementById('set-sms-proxy')?.value?.trim() || '',
       smsProvider: document.getElementById('set-sms-provider')?.value?.trim() || '',
       smsUsername: document.getElementById('set-sms-user')?.value?.trim() || '',
       smsApiKey: document.getElementById('set-sms-key')?.value?.trim() || '',
       smsLineNumber: document.getElementById('set-sms-line')?.value?.trim() || '',
       smsMorningReminders: document.getElementById('set-sms-morning')?.checked !== false
-    })
-    SM.toast('تنظیمات پیامک ذخیره شد', 'success')
+    }
+    const isLocal = typeof AppConfig !== 'undefined' && AppConfig.isLocalDev?.()
+    const sanitized = (typeof sanitizeSmsSettings === 'function'
+      ? sanitizeSmsSettings(raw, { isLocalDev: !!isLocal })
+      : (typeof SmsSettingsSanitize !== 'undefined'
+        ? SmsSettingsSanitize.sanitizeSmsSettings(raw, { isLocalDev: !!isLocal })
+        : raw))
+    if (!isLocal && !sanitized.smsProxyUrl && (raw.smsApiKey || raw.smsUsername)) {
+      return SM.toast('در production فقط URL پراکسی مجاز است — کلید API را در Edge Function بگذارید', 'error')
+    }
+    await SecureDB.merge('studioInfo', sanitized)
+    if (sanitized.smsProxyUrl && (raw.smsApiKey || raw.smsUsername)) {
+      SM.toast('پراکسی ذخیره شد — کلید API از دستگاه پاک شد', 'success')
+    } else {
+      SM.toast('تنظیمات پیامک ذخیره شد', 'success')
+    }
     SM.navigate('settings')
   },
 

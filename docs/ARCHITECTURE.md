@@ -43,6 +43,20 @@ After pull, local secrets are merged back from the device.
 
 Local file backups (`DB.exportJSON`) intentionally retain secrets so offline restore works; restore in Studio M requires manager re-authentication.
 
+## Finance write contract
+
+**All bank balance and contract `paid` mutations must go through `FinanceSync`:**
+
+| API | Use |
+|-----|-----|
+| `recordDeposit` | Customer deposits / payments (atomic + rollback) |
+| `recordWithdrawal` | Expenses, payroll, outbound (atomic + rollback) |
+| `transferBetweenBanks` | Inter-account transfers |
+| `applyBankDelta` | Only inside FinanceSync / ChequeManager with compensating rollback |
+| `applyContractPaid` / `reverseContractPaid` | Installments only (`contract_payment`) |
+
+Pro UI entry points: accounting, invoices, expenses, payroll, cheques.
+
 ## Authentication
 
 | Layer | Mechanism |

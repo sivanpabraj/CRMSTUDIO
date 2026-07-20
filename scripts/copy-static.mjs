@@ -34,6 +34,9 @@ for (const file of ['sw.js', 'manifest.json', 'admin.css', 'contract.css', 'admi
 
 const required = [
   'js/lib/observability.js',
+  'js/lib/list-page.js',
+  'js/lib/sms-settings.js',
+  'js/lib/secure-db-policy.js',
   'studio-m/js/events.js',
   'studio-m/js/modules.js',
   'studio-m/js/modules-bookings.js',

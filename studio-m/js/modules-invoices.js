@@ -303,34 +303,45 @@ SMModules.invoices = {
           invoiceId = inv.id
         }
 
-        // Ledger sync only when creating, or first time enabling on an invoice without a linked tx
+        // Ledger sync via FinanceSync (atomic bank + optional contract paid)
         const alreadyLinked = !!(item?.transactionId)
-        if (data.syncLedger && !alreadyLinked) {
-          const txType = data.direction === 'in' ? 'deposit' : 'withdrawal'
+        if (data.syncLedger && !alreadyLinked && data.bankId && typeof FinanceSync !== 'undefined') {
           const purposeCategory = type === 'customer_deposit' ? 'contract_deposit'
             : (type === 'customer_payment' ? 'contract_payment'
               : (data.direction === 'in' ? 'other_income' : 'other'))
-          const tx = await SecureDB.insert('transactions', {
-            type: txType,
+          const ledgerOpts = {
             amount: data.amount,
-            desc: `${data.title}${data.purpose ? ' — ' + data.purpose : ''}`,
+            bankId: data.bankId,
             date: data.date,
-            bankId: data.bankId || '',
+            periodMonth: data.periodMonth,
             contractId: data.contractId || '',
             client: data.client || '',
-            invoiceRef: item?.number || data.number,
-            invoiceId: invoiceId || '',
             purposeCategory,
             purpose: data.purpose || data.title,
-            paymentMethod: data.paymentMethod || 'transfer'
-          })
-          if (data.bankId && typeof FinanceSync !== 'undefined') {
-            await FinanceSync.applyBankDelta(data.bankId, txType, data.amount)
+            paymentMethod: data.paymentMethod || 'transfer',
+            accountOrCard: data.accountOrCard || '',
+            notes: data.description || '',
+            syncInvoice: false,
+            allowOverdraft: true
           }
-          if (data.contractId && data.direction === 'in' && typeof FinanceSync !== 'undefined') {
-            await FinanceSync.applyContractPaid(data.contractId, purposeCategory, data.amount)
+          const res = data.direction === 'in'
+            ? await FinanceSync.recordDeposit(ledgerOpts)
+            : await FinanceSync.recordWithdrawal(ledgerOpts)
+          if (!res.ok) {
+            if (!item && invoiceId) {
+              try { await SecureDB.delete('invoices', invoiceId) } catch { /* */ }
+            }
+            return SM.toast(res.error || 'خطا در ثبت دفترکل', 'error')
           }
-          if (invoiceId) await SecureDB.update('invoices', invoiceId, { transactionId: tx.id })
+          if (invoiceId) await SecureDB.update('invoices', invoiceId, { transactionId: res.transactionId })
+          if (res.transactionId) {
+            await SecureDB.update('transactions', res.transactionId, {
+              invoiceId,
+              invoiceRef: item?.number || data.number
+            })
+          }
+        } else if (data.syncLedger && !alreadyLinked && !data.bankId) {
+          return SM.toast('برای ثبت در دفترکل، حساب بانکی را انتخاب کنید', 'error')
         }
 
         SM.toast('فاکتور ثبت شد', 'success')
