@@ -842,12 +842,12 @@ const SMSettings = {
     const studioName = document.getElementById('prof-studio-name')?.value?.trim()
     const manager = document.getElementById('prof-manager')?.value?.trim()
 
-    if (name) DB.update('users', user.id, { name, email: email || user.email || '' })
+    if (name) await SecureDB.update('users', user.id, { name, email: email || user.email || '' })
     if (phone && phone !== user.phone) {
       if (DB.find('users', u => u.id !== user.id && Utils.normalizePhone(u.phone) === phone)) {
         return SM.toast('این موبایل قبلاً ثبت شده', 'error')
       }
-      DB.update('users', user.id, { phone })
+      await SecureDB.update('users', user.id, { phone })
     }
 
     const prev = SM.studio()

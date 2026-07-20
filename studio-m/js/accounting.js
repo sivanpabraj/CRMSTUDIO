@@ -735,11 +735,21 @@ const SMAccounting = {
         }
 
         const syncInv = !!document.getElementById('tx-sync-inv')?.checked
-        const contractLinked = isIn && data.contractId &&
-          (data.purposeCategory === 'contract_payment' || data.purposeCategory === 'contract_deposit')
 
-        // All NEW txs with a bank go through FinanceSync (atomic + rollback)
-        if (!item && data.bankId && typeof FinanceSync !== 'undefined') {
+        // EDIT — atomic FinanceSync path
+        if (item && typeof FinanceSync !== 'undefined') {
+          const res = await FinanceSync.updateTransaction(item.id, data, {
+            syncInvoice: syncInv,
+            allowOverdraft: true
+          })
+          if (!res.ok) return SM.toast(res.error || 'خطا در ویرایش', 'error')
+          SM.toast(res.invoiceId ? 'ویرایش شد و فاکتور به‌روز شد' : 'تراکنش ویرایش شد', 'success')
+          SMH.refresh('accounting')
+          return
+        }
+
+        // CREATE — atomic FinanceSync path (bank required by validation above)
+        if (!item && typeof FinanceSync !== 'undefined') {
           const res = isIn
             ? await FinanceSync.recordDeposit({
               ...data,
@@ -757,33 +767,16 @@ const SMAccounting = {
           return
         }
 
-        // Legacy edit path (or create without bank) — keep compensate for contract paid
-        if (!item && contractLinked && typeof FinanceSync !== 'undefined') {
-          const res = await FinanceSync.recordDeposit({ ...data, syncInvoice: syncInv })
-          if (!res.ok) return SM.toast(res.error || 'خطا در ثبت', 'error')
-          SM.toast(res.invoiceId ? 'ثبت شد و در فاکتورها قرار گرفت' : 'تراکنش ثبت شد', 'success')
-          SMH.refresh('accounting')
-          return
-        }
-
+        // Fallback when FinanceSync unavailable (should not happen in Pro shell)
         let txId
         if (item) {
-          if (typeof FinanceSync !== 'undefined' && item.contractId) {
-            await FinanceSync.reverseContractPaid(item.contractId, item.purposeCategory, item.amount)
-          }
           await SecureDB.update('transactions', item.id, data)
           await this._adjustBankBalance(item, data)
           txId = item.id
-          if (typeof FinanceSync !== 'undefined' && data.contractId) {
-            await FinanceSync.applyContractPaid(data.contractId, data.purposeCategory, data.amount)
-          }
         } else {
           const row = await SecureDB.insert('transactions', data)
           txId = row.id
           await this._applyBankDelta(data.bankId, data.type, data.amount)
-          if (typeof FinanceSync !== 'undefined' && data.contractId && data.type === 'deposit') {
-            await FinanceSync.applyContractPaid(data.contractId, data.purposeCategory, data.amount)
-          }
         }
 
         let invId = null
@@ -798,15 +791,18 @@ const SMAccounting = {
       onDelete: item ? async () => {
         if (!SMH.confirmDelete()) return
         try {
-          // Soft-delete first, then reverse ledger — avoids orphan reverse if delete fails
+          if (typeof FinanceSync !== 'undefined') {
+            const res = await FinanceSync.deleteTransaction(item.id)
+            if (!res.ok) return SM.toast(res.error || 'خطا در حذف', 'error')
+            SM.toast('تراکنش حذف و موجودی اصلاح شد', 'success')
+            SMH.refresh('accounting')
+            return
+          }
           await SecureDB.delete('transactions', item.id)
           if (item.invoiceId) await SecureDB.delete('invoices', item.invoiceId)
           if (item.bankId && item.amount) {
             const revType = item.type === 'deposit' ? 'withdrawal' : 'deposit'
             await this._applyBankDelta(item.bankId, revType, item.amount)
-          }
-          if (typeof FinanceSync !== 'undefined' && item.contractId && item.type === 'deposit') {
-            await FinanceSync.reverseContractPaid(item.contractId, item.purposeCategory, item.amount)
           }
           SM.toast('تراکنش حذف و موجودی اصلاح شد', 'success')
           SMH.refresh('accounting')

@@ -220,7 +220,11 @@ const ChequeManager = {
           if (dir === 'incoming' && ch.contractId) {
             await FinanceSync.reverseContractPaid(ch.contractId, 'contract_payment', amount)
           }
-        } catch { /* best-effort */ }
+        } catch (re) {
+          if (typeof SMObservability !== 'undefined') {
+            SMObservability.captureError('finance_rollback:chequePassCompensate', re, { rollback: true })
+          }
+        }
         return { ok: false, msg: e.message || 'خطا در پاس چک — تغییرات برگشت داده شد' }
       }
 
@@ -286,7 +290,11 @@ const ChequeManager = {
         if (paidTouched && ch.contractId && typeof FinanceSync !== 'undefined') {
           await FinanceSync.reverseContractPaid(ch.contractId, 'contract_payment', amount)
         }
-      } catch { /* best-effort rollback */ }
+      } catch (re) {
+        if (typeof SMObservability !== 'undefined') {
+          SMObservability.captureError('finance_rollback:chequePassLegacy', re, { rollback: true })
+        }
+      }
       return { ok: false, msg: e.message || 'خطا در پاس چک — تغییرات برگشت داده شد' }
     }
 

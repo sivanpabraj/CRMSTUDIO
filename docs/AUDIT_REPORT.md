@@ -3,15 +3,15 @@
 **Date:** 2026-07-20  
 **Branch:** `cursor/finance-cheque-p0-66da`  
 **Version:** 6.0.0  
-**Overall Score: 73 / 100** (was ~71 before this audit pass)
+**Overall Score: 74 / 100** (was 73; edit/delete FinanceSync + a11y focus + rollback observability)
 
 ---
 
 ## 1. Executive Summary
 
-Studio M is a production-credible **offline-first single-studio ERP/CRM** (Vanilla JS, IndexedDB system-of-record, optional Supabase sync). Recent hardening delivered a real FinanceSync ledger contract, module split, SMS secret sanitization, coalesced persistence, ledger pagination, and **83+ unit tests**.
+Studio M is a production-credible **offline-first single-studio ERP/CRM** (Vanilla JS, IndexedDB system-of-record, optional Supabase sync). Hardening now includes a full FinanceSync write contract for **create, edit, delete, transfer, and cheque pass**, module split, SMS secret sanitization, coalesced persistence, ledger pagination, nav `data-sm-fn` delegation, main-region focus for keyboard users, and **86+ unit tests**.
 
-The product is suitable for a **trusted single studio with many staff and customers**. It is **not** yet a multi-tenant SaaS with server-authoritative mutations. Client-held auth/RBAC and a document IDB store impose honest ceilings on Security (~68–72) and Scalability (~54–58).
+The product is suitable for a **trusted single studio with many staff and customers**. It is **not** yet a multi-tenant SaaS with server-authoritative mutations. Client-held auth/RBAC and a document IDB store impose honest ceilings on Security (~70–75) and Scalability (~54–58).
 
 ---
 
@@ -19,8 +19,8 @@ The product is suitable for a **trusted single studio with many staff and custom
 
 | Metric | Score |
 |--------|------:|
-| **Overall** | **73 / 100** |
-| Production readiness (single studio) | 78 |
+| **Overall** | **74 / 100** |
+| Production readiness (single studio) | 80 |
 | SaaS / multi-tenant readiness | 42 |
 
 ---
@@ -29,20 +29,20 @@ The product is suitable for a **trusted single studio with many staff and custom
 
 | Category | Score | Risk | Priority | Strengths | Weaknesses |
 |----------|------:|------|----------|-----------|------------|
-| Architecture | 71 | Med | P1 | Layered Pro shell; FinanceSync contract; sync model documented | Global script graph; dual Pro/classic surfaces |
-| Code Quality | 76 | Med | P1 | Lint clean; pure libs; atomic finance writers | Large settings/accounting files; string UI |
-| Maintainability | 72 | Med | P1 | `modules-*.js` split; eslint globals | Script-order coupling; legacy admin writers |
+| Architecture | 72 | Med | P1 | Layered Pro shell; full FinanceSync CRUD contract | Global script graph; dual Pro/classic surfaces |
+| Code Quality | 77 | Med | P1 | Lint clean; pure libs; atomic finance writers | Large settings/accounting files; string UI |
+| Maintainability | 73 | Med | P1 | `modules-*.js` split; eslint globals | Script-order coupling; legacy admin writers |
 | Scalability | 55 | High | P0 | Sync cursors; tombstones; RLS | Full collections in memory; LWW money |
 | Performance | 72 | Med | P2 | Coalesced IDB; ledger page size 40 | No virtualization; innerHTML rebuilds |
 | Security | 70 | High | P0 | CSRF, HMAC session, SMS proxy sanitize, CSP headers | Browser authority; `unsafe-inline` residual |
 | UI/UX | 73 | Low | P2 | RTL Pro shell; Estedad/gold brand | Dense ERP; uneven polish |
-| Accessibility | 58 | Med | P2 | Modal focus trap; aria-live | Incomplete keyboard; no axe CI |
-| Testing | 76 | Med | P1 | 83 Vitest; policy/SMS/list real modules | Thin Playwright; little UI finance e2e |
+| Accessibility | 60 | Med | P2 | Modal focus trap; route focus on `#sm-content` | Incomplete keyboard; no axe CI |
+| Testing | 77 | Med | P1 | 86+ Vitest; edit/delete ledger math | Thin Playwright; little UI finance e2e |
 | Documentation | 86 | Low | P3 | ARCHITECTURE/SECURITY/QUALITY_SCORES honest | Phase docs partially stale |
 | DevOps & Deployment | 76 | Med | P2 | CI lint/test/build/audit/Docker | No deploy pipeline / staging |
-| Error Handling | 70 | Med | P1 | Finance/cheque rollback | Empty catches; edit paths less atomic |
-| Logging & Monitoring | 58 | High | P1 | SMObservability + optional remote sink | No default APM/alerts |
-| API Design | 66 | Med | P1 | FinanceSync domain API; Edge SMS | No server mutation API |
+| Error Handling | 74 | Med | P1 | Finance create/edit/delete/transfer rollback | Classic admin still dual-writes |
+| Logging & Monitoring | 60 | High | P1 | SMObservability + rollback capture + remote sink | No default APM/alerts |
+| API Design | 68 | Med | P1 | FinanceSync domain API (CRUD + transfer) | No server mutation API |
 | Database Design | 66 | High | P0 | Migrations; soft-delete; field normalize | Blob SoR; denormalized balances |
 | Project Structure | 78 | Low | P2 | Clear folders; multi-entry Vite | Legacy root admin coexists |
 
@@ -53,18 +53,19 @@ The product is suitable for a **trusted single studio with many staff and custom
 | # | Problem | Root cause | Severity | Files |
 |---|---------|------------|----------|-------|
 | 1 | Browser-as-authority for auth & finance | Offline-first SoR choice | Critical | `auth.js`, `secure-db.js`, `db.js` |
-| 2 | Residual non-FinanceSync money writers (edits / classic) | Incremental migration | High | `accounting.js` edit path, `admin-photo-house.js` |
+| 2 | Residual classic-admin money writers | Incremental migration | High | `admin-photo-house.js` |
 | 3 | XSS surface via `innerHTML` + residual `onclick` | Vanilla string UI | High | `ui.js`, `settings.js`, `nginx.conf` |
 | 4 | Multi-device money under LWW | Sync conflict model | High | `sync/conflict.js`, denormalized banks |
 
 ---
 
-## 5. High-Priority Improvements (implemented this pass)
+## 5. High-Priority Improvements (this pass)
 
-1. **All new accounting txs with bankId → FinanceSync** (`recordDeposit` / `recordWithdrawal`)
-2. **Cheque pass → FinanceSync** with compensating rollback if cheque update fails
-3. **Cheque UI actions → `data-sm-fn`** (delegation)
-4. **Observability remote sink** (`studioInfo.observabilityUrl` or `window.__SM_OBS_URL`)
+1. **`FinanceSync.updateTransaction` / `deleteTransaction`** — bank queue + snapshot rollback
+2. **Accounting edit/delete routed through FinanceSync** — removed dead create fallback
+3. **Profile user writes → `SecureDB.update`** (CSRF path)
+4. **Nav → `data-sm-fn`**; **`#sm-content` focus** after navigate
+5. **Rollback failures → `SMObservability.captureError`** (finance + cheques)
 
 ---
 
@@ -84,7 +85,7 @@ The product is suitable for a **trusted single studio with many staff and custom
 
 ## 7. Security Findings
 
-- **Good:** PBKDF2, HMAC sessions (prod rejects unsigned), CSRF, finance RBAC, SMS proxy + secret strip, snapshot sanitize, nginx CSP/headers, classic admin quarantine.
+- **Good:** PBKDF2, HMAC sessions (prod rejects unsigned), CSRF, finance RBAC, SMS proxy + secret strip, snapshot sanitize, nginx CSP/headers, classic admin quarantine, profile updates via SecureDB.
 - **Gaps:** Client authority; CSP `unsafe-inline`; local backups retain secrets by design; XSS risk via string templates.
 - **npm audit:** 0 high+ vulnerabilities (as of audit date).
 
@@ -106,6 +107,8 @@ Application:  Auth · Access · SecureDB · FinanceSync · Cloud/SyncEngine
 Data:         IndexedDB (SoR) · Supabase entities/snapshots (optional)
 ```
 
+**Finance write contract (Pro):** all bank-linked creates, edits, deletes, transfers, and cheque passes go through `FinanceSync` (serialized bank queue + compensating rollback).
+
 Decision that is correct for the product: offline-first for Iranian studio ops with unreliable connectivity.  
 Decision that must change for SaaS: move mutation authority to the server.
 
@@ -113,24 +116,24 @@ Decision that must change for SaaS: move mutation authority to the server.
 
 ## 10. Technical Debt Analysis
 
-Primary debt is **architectural honesty vs incremental hardening**. FinanceSync, policy libs, SMS sanitize, module splits, and tests raised quality materially. Remaining tax: megafiles (`settings.js`, `accounting.js`), incomplete event delegation, classic admin writers, empty catch blocks, LWW money conflicts.
+Primary debt is **architectural honesty vs incremental hardening**. FinanceSync CRUD, policy libs, SMS sanitize, module splits, and tests raised quality materially. Remaining tax: megafiles (`settings.js`, `accounting.js`), incomplete event delegation, classic admin writers, LWW money conflicts.
 
 ---
 
 ## 11. Refactoring Roadmap
 
-### P0 — Integrity (now–weeks)
-- Finish eliminating edit-path dual writers (accounting update → FinanceSync update helper)
-- Finance Playwright: deposit / transfer / cheque pass / delete reverse
+### P0 — Integrity
+- Retire classic-admin dual finance writers or quarantine permanently
+- Finance Playwright: deposit / edit / transfer / cheque pass / delete reverse
 - Enforce SMS proxy-only in production UI (done for save)
 
-### P1 — Hardening (1–2 months)
+### P1 — Hardening
 - Complete `data-sm-fn` migration → drop CSP `unsafe-inline`
 - Wire default observability endpoint in deploy docs
 - Split `settings.js`; ES modules for finance/auth
 - IndexedDB integration tests for FinanceSync
 
-### P2 — Scale path (quarter)
+### P2 — Scale path
 - Server-authoritative finance; IDB as cache
 - Virtualization + archival
 - Stronger conflict rules or single-writer finance
@@ -144,9 +147,9 @@ Primary debt is **architectural honesty vs incremental hardening**. FinanceSync,
 ## 12. Final Recommendations
 
 1. **Ship** current branch for single-studio production with ops checklist (migrations 001–006, SMS Edge proxy, manager device as sync hub).
-2. **Do not claim** multi-tenant SaaS readiness.
+2. **Do not claim** multi-tenant SaaS readiness or vanity 10/10 scores — Security/Scalability cannot honestly exceed ~70–75 / ~55–60 while the browser is system of record.
 3. **Next strategic investment:** server mutation gateway — the only way to break Security/Scalability ceilings.
-4. Continue incremental integrity work (FinanceSync-only + e2e) every sprint until edit paths are atomic.
+4. Continue incremental integrity work (classic admin retirement + e2e) every sprint.
 
 ---
 

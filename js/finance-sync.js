@@ -111,6 +111,277 @@ const FinanceSync = {
     return this._updateContractPaid(contractId, purposeCategory, amount, { reverse: true })
   },
 
+  _logRollback(scope, err) {
+    try {
+      if (typeof SMObservability !== 'undefined') {
+        SMObservability.captureError(`finance_rollback:${scope}`, err, { rollback: true })
+      } else {
+        console.error(`[FinanceSync rollback:${scope}]`, err)
+      }
+    } catch { /* never throw from logger */ }
+  },
+
+  _findActiveTx(txId) {
+    return typeof DB.findActive === 'function'
+      ? DB.findActive('transactions', t => t.id === txId)
+      : DB.find('transactions', t => t.id === txId && !t._deleted)
+  },
+
+  _isTransferTx(tx) {
+    return !!(tx && (tx.purposeCategory === 'transfer' || tx.transferPairId))
+  },
+
+  /**
+   * ویرایش تراکنش با اصلاح موجودی بانک + paid قرارداد + فاکتور — صف بانک + rollback
+   */
+  async updateTransaction(txId, patch = {}, opts = {}) {
+    const old = this._findActiveTx(txId)
+    if (!old) return { ok: false, error: 'تراکنش یافت نشد' }
+    if (this._isTransferTx(old)) {
+      return { ok: false, error: 'ویرایش انتقال بین حساب از اینجا مجاز نیست' }
+    }
+
+    const amount = +(patch.amount != null ? patch.amount : old.amount) || 0
+    if (!amount) return { ok: false, error: 'مبلغ نامعتبر' }
+    const type = patch.type || old.type
+    const bankId = patch.bankId != null ? patch.bankId : old.bankId
+    if (!bankId) return { ok: false, error: 'انتخاب حساب بانکی الزامی است' }
+
+    const data = {
+      type,
+      amount,
+      date: patch.date != null ? patch.date : (old.date || Utils.todayJalali()),
+      periodMonth: patch.periodMonth != null ? patch.periodMonth : (old.periodMonth || ''),
+      bankId,
+      sourceType: patch.sourceType != null ? patch.sourceType : (old.sourceType || 'other'),
+      contractId: patch.contractId != null ? patch.contractId : (old.contractId || ''),
+      personnelId: patch.personnelId != null ? patch.personnelId : (old.personnelId || ''),
+      client: patch.client != null ? patch.client : (old.client || ''),
+      purposeCategory: patch.purposeCategory != null ? patch.purposeCategory : (old.purposeCategory || ''),
+      purpose: patch.purpose != null ? patch.purpose : (old.purpose || ''),
+      paymentMethod: patch.paymentMethod != null ? patch.paymentMethod : (old.paymentMethod || 'transfer'),
+      transactionRef: patch.transactionRef != null ? patch.transactionRef : (old.transactionRef || ''),
+      accountOrCard: patch.accountOrCard != null ? patch.accountOrCard : (old.accountOrCard || ''),
+      notes: patch.notes != null ? patch.notes : (old.notes || ''),
+      desc: patch.desc != null ? patch.desc : (patch.purpose || patch.notes || old.desc || ''),
+      invoiceId: old.invoiceId || '',
+      expenseId: old.expenseId || '',
+      salaryPaymentId: old.salaryPaymentId || '',
+      chequeId: old.chequeId || ''
+    }
+
+    const oldBank = old.bankId
+      ? (typeof DB.findActive === 'function'
+        ? DB.findActive('banks', b => b.id === old.bankId)
+        : DB.find('banks', b => b.id === old.bankId && !b._deleted))
+      : null
+    const newBank = typeof DB.findActive === 'function'
+      ? DB.findActive('banks', b => b.id === bankId)
+      : DB.find('banks', b => b.id === bankId && !b._deleted)
+    if (!newBank) return { ok: false, error: 'حساب بانکی یافت نشد' }
+
+    const oldBankBal = oldBank?.balance || 0
+    const newBankBal = newBank.balance || 0
+    const sameBank = old.bankId === bankId
+
+    const oldContract = old.contractId
+      ? DB.find('contracts', c => c.id === old.contractId && !c._deleted)
+      : null
+    const newContract = data.contractId
+      ? DB.find('contracts', c => c.id === data.contractId && !c._deleted)
+      : null
+    const oldPaidSnap = oldContract ? { paid: oldContract.paid || 0, balance: oldContract.balance || 0 } : null
+    const newPaidSnap = (newContract && newContract.id !== oldContract?.id)
+      ? { paid: newContract.paid || 0, balance: newContract.balance || 0 }
+      : null
+
+    const oldTxSnap = { ...old }
+    const invSnap = old.invoiceId
+      ? (() => {
+        const inv = DB.find('invoices', i => i.id === old.invoiceId)
+        return inv ? { ...inv } : null
+      })()
+      : null
+
+    const syncInvoice = opts.syncInvoice !== false || !!old.invoiceId
+
+    const run = async () => {
+      let txUpdated = false
+      let invoiceId = old.invoiceId || null
+
+      try {
+        if (old.bankId && old.amount) {
+          const revType = old.type === 'deposit' ? 'withdrawal' : 'deposit'
+          const b = typeof DB.findActive === 'function'
+            ? DB.findActive('banks', x => x.id === old.bankId)
+            : DB.find('banks', x => x.id === old.bankId && !x._deleted)
+          if (b) {
+            const next = (b.balance || 0) + (revType === 'deposit' ? old.amount : -old.amount)
+            await SecureDB.update('banks', old.bankId, { balance: next })
+          }
+        }
+
+        if (old.contractId && old.type === 'deposit') {
+          await this.reverseContractPaid(old.contractId, old.purposeCategory, old.amount)
+        }
+
+        const bCheck = typeof DB.findActive === 'function'
+          ? DB.findActive('banks', x => x.id === bankId)
+          : DB.find('banks', x => x.id === bankId && !x._deleted)
+        if (type === 'withdrawal' && opts.allowOverdraft !== true) {
+          if ((bCheck?.balance || 0) < amount) throw new Error('موجودی حساب کافی نیست')
+        }
+
+        await SecureDB.update('transactions', txId, data)
+        txUpdated = true
+
+        const bApply = typeof DB.findActive === 'function'
+          ? DB.findActive('banks', x => x.id === bankId)
+          : DB.find('banks', x => x.id === bankId && !x._deleted)
+        if (bApply) {
+          const next = (bApply.balance || 0) + (type === 'deposit' ? amount : -amount)
+          await SecureDB.update('banks', bankId, { balance: next })
+        }
+
+        if (data.contractId && type === 'deposit') {
+          await this.applyContractPaid(data.contractId, data.purposeCategory, amount)
+        }
+
+        if (syncInvoice) {
+          invoiceId = await this.createInvoiceFromTx(data, txId, old.invoiceId || null)
+          if (invoiceId) await SecureDB.update('transactions', txId, { invoiceId })
+        }
+
+        if (typeof DB.log === 'function') {
+          DB.log('finance_tx_update', `${txId} — ${amount.toLocaleString('fa-IR')}`)
+        }
+        await DB.flush?.()
+        return { ok: true, transactionId: txId, invoiceId }
+      } catch (e) {
+        try {
+          if (old.bankId) await SecureDB.update('banks', old.bankId, { balance: oldBankBal })
+          if (!sameBank) await SecureDB.update('banks', bankId, { balance: newBankBal })
+          if (txUpdated) {
+            const restore = { ...oldTxSnap }
+            delete restore.id
+            await SecureDB.update('transactions', txId, restore)
+          }
+          if (oldPaidSnap && old.contractId) {
+            await SecureDB.update('contracts', old.contractId, oldPaidSnap)
+          }
+          if (newPaidSnap && data.contractId) {
+            await SecureDB.update('contracts', data.contractId, newPaidSnap)
+          }
+          if (invSnap?.id) {
+            const invRestore = { ...invSnap }
+            delete invRestore.id
+            await SecureDB.update('invoices', invSnap.id, invRestore)
+          }
+        } catch (re) {
+          this._logRollback('updateTransaction', re)
+        }
+        return { ok: false, error: e.message || 'خطا در ویرایش تراکنش — تغییرات برگشت داده شد' }
+      }
+    }
+
+    this._bankQueue = this._bankQueue.then(run, run)
+    return this._bankQueue
+  },
+
+  /**
+   * حذف نرم تراکنش + فاکتور + برگشت موجودی/paid — صف بانک + rollback
+   */
+  async deleteTransaction(txId) {
+    const old = this._findActiveTx(txId)
+    if (!old) return { ok: false, error: 'تراکنش یافت نشد' }
+    if (this._isTransferTx(old)) {
+      return { ok: false, error: 'حذف انتقال بین حساب از اینجا مجاز نیست' }
+    }
+
+    const bank = old.bankId
+      ? (typeof DB.findActive === 'function'
+        ? DB.findActive('banks', b => b.id === old.bankId)
+        : DB.find('banks', b => b.id === old.bankId && !b._deleted))
+      : null
+    const bankBal = bank?.balance || 0
+    const contract = old.contractId
+      ? DB.find('contracts', c => c.id === old.contractId && !c._deleted)
+      : null
+    const paidSnap = contract ? { paid: contract.paid || 0, balance: contract.balance || 0 } : null
+    const oldTxSnap = { ...old }
+    const invSnap = old.invoiceId
+      ? (() => {
+        const inv = DB.find('invoices', i => i.id === old.invoiceId)
+        return inv ? { ...inv } : null
+      })()
+      : null
+
+    const run = async () => {
+      let txDeleted = false
+      let invDeleted = false
+      let bankTouched = false
+      let paidTouched = false
+
+      try {
+        // Soft-delete first, then reverse ledger — avoids orphan reverse if delete fails
+        await SecureDB.delete('transactions', txId)
+        txDeleted = true
+        if (old.invoiceId) {
+          await SecureDB.delete('invoices', old.invoiceId)
+          invDeleted = true
+        }
+
+        if (old.bankId && old.amount) {
+          const revType = old.type === 'deposit' ? 'withdrawal' : 'deposit'
+          const b = typeof DB.findActive === 'function'
+            ? DB.findActive('banks', x => x.id === old.bankId)
+            : DB.find('banks', x => x.id === old.bankId && !x._deleted)
+          if (b) {
+            const next = (b.balance || 0) + (revType === 'deposit' ? old.amount : -old.amount)
+            await SecureDB.update('banks', old.bankId, { balance: next })
+            bankTouched = true
+          }
+        }
+
+        if (old.contractId && old.type === 'deposit') {
+          await this.reverseContractPaid(old.contractId, old.purposeCategory, old.amount)
+          paidTouched = true
+        }
+
+        if (typeof DB.log === 'function') {
+          DB.log('finance_tx_delete', `${txId} — ${(old.amount || 0).toLocaleString('fa-IR')}`)
+        }
+        await DB.flush?.()
+        return { ok: true, transactionId: txId }
+      } catch (e) {
+        try {
+          if (txDeleted) {
+            const restore = { ...oldTxSnap, _deleted: false, deletedAtIso: '' }
+            delete restore.id
+            await SecureDB.update('transactions', txId, restore)
+          }
+          if (invDeleted && invSnap?.id) {
+            const invRestore = { ...invSnap, _deleted: false, deletedAtIso: '' }
+            delete invRestore.id
+            await SecureDB.update('invoices', invSnap.id, invRestore)
+          }
+          if (bankTouched && old.bankId) {
+            await SecureDB.update('banks', old.bankId, { balance: bankBal })
+          }
+          if (paidTouched && paidSnap && old.contractId) {
+            await SecureDB.update('contracts', old.contractId, paidSnap)
+          }
+        } catch (re) {
+          this._logRollback('deleteTransaction', re)
+        }
+        return { ok: false, error: e.message || 'خطا در حذف تراکنش — تغییرات برگشت داده شد' }
+      }
+    }
+
+    this._bankQueue = this._bankQueue.then(run, run)
+    return this._bankQueue
+  },
+
   /**
    * انتقال واقعی بین دو حساب — کل عملیات داخل صف بانک + rollback روی خطا
    */
@@ -197,7 +468,9 @@ const FinanceSync = {
             await SecureDB.update('banks', fromId, { balance: fromBefore })
             await SecureDB.update('banks', toId, { balance: toBefore })
           }
-        } catch { /* best-effort rollback */ }
+        } catch (re) {
+          this._logRollback('transferBetweenBanks', re)
+        }
         return { ok: false, error: e.message || 'خطا در انتقال — تغییرات برگشت داده شد' }
       }
     }
@@ -332,7 +605,9 @@ const FinanceSync = {
             depositRecordedAt: contract.depositRecordedAt || ''
           })
         }
-      } catch { /* best-effort rollback */ }
+      } catch (re) {
+        this._logRollback('recordDeposit', re)
+      }
       return { ok: false, error: e.message || 'خطا در ثبت واریز — تغییرات برگشت داده شد' }
     }
   },
@@ -398,7 +673,9 @@ const FinanceSync = {
         if (invoiceId) await SecureDB.delete('invoices', invoiceId)
         if (row?.id) await SecureDB.delete('transactions', row.id)
         if (bankTouched) await SecureDB.update('banks', opts.bankId, { balance: balBefore })
-      } catch { /* best-effort rollback */ }
+      } catch (re) {
+        this._logRollback('recordWithdrawal', re)
+      }
       return { ok: false, error: e.message || 'خطا در ثبت برداشت — تغییرات برگشت داده شد' }
     }
   },

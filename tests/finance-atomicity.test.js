@@ -38,4 +38,37 @@ describe('finance atomicity contracts', () => {
     expect(from).toBe(1000)
     expect(to).toBe(200)
   })
+
+  it('edit tx: reverse old then apply new keeps bank consistent', () => {
+    let bal = 1000
+    const oldAmt = 200
+    const newAmt = 350
+    // reverse old deposit
+    bal = bankDelta(bal, 'withdrawal', oldAmt)
+    expect(bal).toBe(800)
+    // apply new deposit
+    bal = bankDelta(bal, 'deposit', newAmt)
+    expect(bal).toBe(1150)
+  })
+
+  it('edit tx across banks: reverse source then credit target', () => {
+    let a = 500
+    let b = 100
+    const oldAmt = 150
+    const newAmt = 150
+    a = bankDelta(a, 'withdrawal', oldAmt) // undo deposit into A
+    b = bankDelta(b, 'deposit', newAmt)
+    expect(a).toBe(350)
+    expect(b).toBe(250)
+  })
+
+  it('delete deposit reverses bank and contract paid', () => {
+    let bal = 800
+    let c = { total: 2000, deposit: 500, paid: 300 }
+    const amt = 300
+    bal = bankDelta(bal, 'withdrawal', amt)
+    const rev = nextContractPaid(c, 'contract_payment', amt, { reverse: true })
+    expect(bal).toBe(500)
+    expect(rev).toEqual({ paid: 0, balance: 1500 })
+  })
 })

@@ -51,11 +51,13 @@ Local file backups (`DB.exportJSON`) intentionally retain secrets so offline res
 |-----|-----|
 | `recordDeposit` | Customer deposits / payments (atomic + rollback) |
 | `recordWithdrawal` | Expenses, payroll, outbound (atomic + rollback) |
+| `updateTransaction` | Edit existing non-transfer txs (bank queue + snapshot rollback) |
+| `deleteTransaction` | Soft-delete + reverse bank/paid (atomic + rollback) |
 | `transferBetweenBanks` | Inter-account transfers |
 | `applyBankDelta` | Only inside FinanceSync / ChequeManager with compensating rollback |
 | `applyContractPaid` / `reverseContractPaid` | Installments only (`contract_payment`) |
 
-Pro UI entry points: accounting, invoices, expenses, payroll, cheques.
+Pro UI entry points: accounting, invoices, expenses, payroll, cheques. Transfers are not edited/deleted via the single-tx form.
 
 ## Authentication
 

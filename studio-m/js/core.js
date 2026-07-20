@@ -193,6 +193,7 @@ const SM = {
         main.innerHTML = `<div class="sm-empty"><i class="fas fa-puzzle-piece"></i><div class="sm-empty-title">${this.t(route)}</div></div>`
       }
     }
+    this._focusMain(main)
     const faTitles = {
       dashboard: ['داشبورد', ''],
       crm: ['CRM', ''],
@@ -245,11 +246,22 @@ const SM = {
     else this.navigate(this.state.route)
   },
 
+  _focusMain(main = document.getElementById('sm-content')) {
+    if (!main) return
+    if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1')
+    try {
+      main.focus({ preventScroll: true })
+    } catch {
+      try { main.focus() } catch { /* older browsers */ }
+    }
+  },
+
   _renderSubView() {
     const view = this.state.viewStack[this.state.viewStack.length - 1]
     const main = document.getElementById('sm-content')
     if (!main || !view) return
     main.innerHTML = `${SMUI.backBar(view.title, 'SM.popSubView()')}${view.html}`
+    this._focusMain(main)
     this._updateHeaderBack()
     const ht = document.getElementById('sm-header-title')
     const hs = document.getElementById('sm-header-sub')
@@ -291,8 +303,11 @@ const SM = {
       navHtml += `<div class="sm-nav-group"><div class="sm-nav-label">${label}</div>`
       navHtml += items.map(r => {
         const off = this.isModuleDisabled(r.id)
+        const navAttrs = typeof SMEvents !== 'undefined'
+          ? SMEvents.attrs('SM.navigate', [r.id])
+          : `type="button" onclick="SM.navigate('${r.id}')"`
         return `
-        <button type="button" class="sm-nav-item${this.state.route === r.id ? ' active' : ''}${off ? ' sm-nav-item--off' : ''}" data-route="${r.id}" onclick="SM.navigate('${r.id}')">
+        <button ${navAttrs} class="sm-nav-item${this.state.route === r.id ? ' active' : ''}${off ? ' sm-nav-item--off' : ''}" data-route="${r.id}">
           <i class="fas ${r.icon}"></i><span>${this.t(r.id)}</span>
           ${off ? '<span class="sm-nav-soon">به‌زودی</span>' : ''}
           ${r.id === 'notifications' && unread ? `<span class="sm-nav-badge">${unread}</span>` : ''}
@@ -345,7 +360,7 @@ const SM = {
               <button type="button" class="sm-btn-icon" onclick="SM.toggleTheme()" title="${this.t('theme')}"><i class="fas fa-${this.state.theme === 'light' ? 'moon' : 'sun'}"></i></button>
             </div>
           </header>
-          <main class="sm-content" id="sm-content"></main>
+          <main class="sm-content" id="sm-content" tabindex="-1"></main>
         </div>
       </div>`
   },
@@ -361,10 +376,12 @@ const SM = {
       if (!main) return
       if (this.isModuleDisabled(route)) {
         main.innerHTML = SMUI.moduleDisabled(route)
+        this._focusMain(main)
         return
       }
       const mod = SMModules[route]
       if (mod?.render) mod.render(main)
+      this._focusMain(main)
     }
   },
 

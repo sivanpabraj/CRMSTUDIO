@@ -3,7 +3,7 @@
 Honest production scoring for the current architecture
 (vanilla JS · IndexedDB system-of-record · optional Supabase sync).
 
-Full audit: [`docs/AUDIT_REPORT.md`](./AUDIT_REPORT.md) — **Overall 73/100**.
+Full audit: [`docs/AUDIT_REPORT.md`](./AUDIT_REPORT.md) — **Overall 74/100**.
 
 ## Why not every dimension can be 100/100
 
@@ -17,20 +17,20 @@ Full audit: [`docs/AUDIT_REPORT.md`](./AUDIT_REPORT.md) — **Overall 73/100**.
 
 | Category | Score |
 |----------|------:|
-| Architecture | 71 |
-| Code Quality | 76 |
-| Maintainability | 72 |
+| Architecture | 72 |
+| Code Quality | 77 |
+| Maintainability | 73 |
 | Scalability | 55 |
 | Performance | 72 |
 | Security | 70 |
 | UI/UX | 73 |
-| Accessibility | 58 |
-| Testing | 76 |
+| Accessibility | 60 |
+| Testing | 77 |
 | Documentation | 86 |
 | DevOps | 76 |
-| Error Handling | 70 |
-| Logging & Monitoring | 58 |
-| API Design | 66 |
+| Error Handling | 74 |
+| Logging & Monitoring | 60 |
+| API Design | 68 |
 | Database Design | 66 |
 | Project Structure | 78 |
-| **Overall** | **73** |
+| **Overall** | **74** |
