@@ -5,7 +5,7 @@ SMModules.packages = {
     if (typeof PackageCatalog !== 'undefined') PackageCatalog.ensureDefaults()
     const pkgs = DB.active('packages')
     el.innerHTML = `
-      ${SMUI.sectionHead('پکیج قیمت', 'سیلور، گلد، VIP و CBI — قابل ویرایش', `<button class="sm-btn sm-btn-primary" onclick="SMModules.packages.add()"><i class="fas fa-plus"></i> پکیج جدید</button>`)}
+      ${SMUI.sectionHead('پکیج قیمت', 'سیلور، گلد، VIP و CBI — قابل ویرایش', `<button class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMModules.packages.add')}><i class="fas fa-plus"></i> پکیج جدید</button>`)}
       <div class="sm-pkg-grid">
         ${pkgs.length ? pkgs.map(p => this._card(p)).join('') : SMUI.empty('fa-box-open', 'پکیجی تعریف نشده')}
       </div>`
@@ -30,8 +30,8 @@ SMModules.packages = {
         <p class="sm-pkg-desc">${SM.esc(p.description || '')}</p>
         <ul class="sm-pkg-features">${features.map(f => `<li>${SM.esc(f)}</li>`).join('')}</ul>
         <div class="sm-pkg-actions">
-          <button class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMModules.packages.edit('${p.id}')"><i class="fas fa-pen"></i> ویرایش</button>
-          <button class="sm-btn sm-btn-sm sm-btn-danger sm-btn-outline" onclick="SMH.remove('packages','${p.id}','packages')"><i class="fas fa-trash"></i></button>
+          <button class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMModules.packages.edit', [p.id])}><i class="fas fa-pen"></i> ویرایش</button>
+          <button class="sm-btn sm-btn-sm sm-btn-danger sm-btn-outline" ${SMEvents.attrs('SMH.remove', ['packages', p.id, 'packages'])}><i class="fas fa-trash"></i></button>
         </div>
       </div>
     </div>`
@@ -65,11 +65,11 @@ SMModules.packages = {
   _lineRow(id, icon, title, enabled, price, note, extraHtml) {
     return `<div class="sm-pkg-line${enabled ? '' : ' is-off'}" data-line="${id}">
       <div class="sm-pkg-line-head">
-        <label class="sm-pkg-line-toggle"><input type="checkbox" id="pl-en-${id}" ${enabled ? 'checked' : ''} onchange="SMModules.packages._toggleRow('${id}')"/><span>${icon} ${title}</span></label>
-        <input type="number" id="pl-pr-${id}" class="sm-input ltr sm-pkg-line-price" dir="ltr" placeholder="قیمت (تومان)" value="${price || ''}" oninput="SMModules.packages._refreshEditorPreview()"/>
+        <label class="sm-pkg-line-toggle"><input type="checkbox" id="pl-en-${id}" ${enabled ? 'checked' : ''} data-sm-change-fn="SMModules.packages._toggleRow" data-sm-args='${JSON.stringify([id]).replace(/'/g, '&#39;')}'/><span>${icon} ${title}</span></label>
+        <input type="number" id="pl-pr-${id}" class="sm-input ltr sm-pkg-line-price" dir="ltr" placeholder="قیمت (تومان)" value="${price || ''}" data-sm-input-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'/>
       </div>
       ${extraHtml || ''}
-      <textarea id="pl-note-${id}" class="sm-textarea sm-pkg-line-note" rows="2" placeholder="توضیح این آیتم (اختیاری)" oninput="SMModules.packages._refreshEditorPreview()">${SM.esc(note || '')}</textarea>
+      <textarea id="pl-note-${id}" class="sm-textarea sm-pkg-line-note" rows="2" placeholder="توضیح این آیتم (اختیاری)" data-sm-input-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'>${SM.esc(note || '')}</textarea>
     </div>`
   },
 
@@ -92,9 +92,9 @@ SMModules.packages = {
 
     const customRows = (p.customItems?.length ? p.customItems : [{ label: '', desc: '', price: '' }]).map((c, i) => `
       <div class="sm-pkg-custom-row" data-idx="${i}">
-        <input type="text" class="sm-input pkg-custom-label" placeholder="عنوان (مثلاً تدوین ویژه)" value="${SM.esc(c.label || '')}" oninput="SMModules.packages._refreshEditorPreview()"/>
-        <input type="number" class="sm-input ltr pkg-custom-price" dir="ltr" placeholder="قیمت" value="${c.price || ''}" oninput="SMModules.packages._refreshEditorPreview()"/>
-        <textarea class="sm-textarea pkg-custom-desc" rows="2" placeholder="توضیح" oninput="SMModules.packages._refreshEditorPreview()">${SM.esc(c.desc || c.note || '')}</textarea>
+        <input type="text" class="sm-input pkg-custom-label" placeholder="عنوان (مثلاً تدوین ویژه)" value="${SM.esc(c.label || '')}" data-sm-input-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'/>
+        <input type="number" class="sm-input ltr pkg-custom-price" dir="ltr" placeholder="قیمت" value="${c.price || ''}" data-sm-input-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'/>
+        <textarea class="sm-textarea pkg-custom-desc" rows="2" placeholder="توضیح" data-sm-input-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'>${SM.esc(c.desc || c.note || '')}</textarea>
       </div>`).join('')
 
     return `
@@ -105,7 +105,7 @@ SMModules.packages = {
               <span class="sm-pkg-tier-icon">${tier.icon}</span>
               <div>
                 <div id="pkg-preview-tier" class="sm-pkg-tier-label">${tier.icon} ${tier.label}</div>
-                <input id="pkg-name" class="sm-pkg-name-input" placeholder="نام پکیج" value="${SM.esc(p.name || '')}" oninput="SMModules.packages._refreshEditorPreview()"/>
+                <input id="pkg-name" class="sm-pkg-name-input" placeholder="نام پکیج" value="${SM.esc(p.name || '')}" data-sm-input-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'/>
               </div>
             </div>
             <div class="sm-pkg-card-body">
@@ -122,22 +122,22 @@ SMModules.packages = {
           <div class="sm-pkg-line is-always-on" data-line="video">
             <div class="sm-pkg-line-head">
               <span class="sm-pkg-line-title">🎬 پکیج فیلم</span>
-              <input type="number" id="pl-pr-video" class="sm-input ltr sm-pkg-line-price" dir="ltr" placeholder="قیمت پایه" value="${v.price || ''}" oninput="SMModules.packages._refreshEditorPreview()"/>
+              <input type="number" id="pl-pr-video" class="sm-input ltr sm-pkg-line-price" dir="ltr" placeholder="قیمت پایه" value="${v.price || ''}" data-sm-input-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'/>
             </div>
             <div class="sm-pkg-line-grid">
               <label class="sm-label">تعداد دوربین</label>
-              <select id="pl-cameras" class="sm-input" onchange="SMModules.packages._refreshEditorPreview()">
+              <select id="pl-cameras" class="sm-input" data-sm-change-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'>
                 ${[1, 2, 3, 4, 5].map(n => `<option value="${n}"${+v.cameras === n ? ' selected' : ''}>${n} دوربین</option>`).join('')}
               </select>
               <label class="sm-label">کیفیت</label>
-              <select id="pl-quality" class="sm-input" onchange="SMModules.packages._refreshEditorPreview()">
+              <select id="pl-quality" class="sm-input" data-sm-change-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'>
                 <option value="fullhd"${v.quality === 'fullhd' ? ' selected' : ''}>Full HD</option>
                 <option value="4k"${v.quality !== 'fullhd' ? ' selected' : ''}>4K UHD</option>
               </select>
               <label class="sm-label">مکمل 4K</label>
-              <input type="number" id="pl-price4k" class="sm-input ltr" dir="ltr" placeholder="اگر جدا" value="${v.price4k || ''}" oninput="SMModules.packages._refreshEditorPreview()"/>
+              <input type="number" id="pl-price4k" class="sm-input ltr" dir="ltr" placeholder="اگر جدا" value="${v.price4k || ''}" data-sm-input-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'/>
             </div>
-            <label class="sm-check-row"><input type="checkbox" id="pl-clip" ${v.clip !== false ? 'checked' : ''} onchange="SMModules.packages._refreshEditorPreview()"/> شامل کلیپ</label>
+            <label class="sm-check-row"><input type="checkbox" id="pl-clip" ${v.clip !== false ? 'checked' : ''} data-sm-change-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'/> شامل کلیپ</label>
             <textarea id="pl-note-video" class="sm-textarea sm-pkg-line-note" rows="2" placeholder="توضیح فیلمبرداری">${SM.esc(v.note || '')}</textarea>
           </div>
 
@@ -162,7 +162,7 @@ SMModules.packages = {
 
           <h4 class="sm-pkg-section-title">➕ آیتم‌های سفارشی</h4>
           <div id="pkg-custom-rows">${customRows}</div>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMModules.packages.addCustomRow()">+ ردیف سفارشی</button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMModules.packages.addCustomRow')}>+ ردیف سفارشی</button>
         </div>
       </div>`
   },
@@ -171,9 +171,9 @@ SMModules.packages = {
     const wrap = document.getElementById('pkg-custom-rows')
     if (!wrap) return
     wrap.insertAdjacentHTML('beforeend', `<div class="sm-pkg-custom-row">
-      <input type="text" class="sm-input pkg-custom-label" placeholder="عنوان" oninput="SMModules.packages._refreshEditorPreview()"/>
-      <input type="number" class="sm-input ltr pkg-custom-price" dir="ltr" placeholder="قیمت" oninput="SMModules.packages._refreshEditorPreview()"/>
-      <textarea class="sm-textarea pkg-custom-desc" rows="2" placeholder="توضیح" oninput="SMModules.packages._refreshEditorPreview()"></textarea>
+      <input type="text" class="sm-input pkg-custom-label" placeholder="عنوان" data-sm-input-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'/>
+      <input type="number" class="sm-input ltr pkg-custom-price" dir="ltr" placeholder="قیمت" data-sm-input-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'/>
+      <textarea class="sm-textarea pkg-custom-desc" rows="2" placeholder="توضیح" data-sm-input-fn="SMModules.packages._refreshEditorPreview" data-sm-args='[]'></textarea>
     </div>`)
   },
 

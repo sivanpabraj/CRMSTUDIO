@@ -70,7 +70,7 @@ const SMCustody = {
 
     el.innerHTML = `
       ${SMUI.sectionHead('امانات مشتری', 'ورود و خروج فلش، هارد، تبدیل و…', `
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMCustody.add()"><i class="fas fa-plus"></i> ثبت ورود</button>`)}
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMCustody.add')}><i class="fas fa-plus"></i> ثبت ورود</button>`)}
       ${SMUI.statCards([
         { label: 'در استودیو', value: SM.fmt(active.length), color: 'var(--sm-warning)' },
         { label: 'سررسید گذشته', value: SM.fmt(overdue.length), color: 'var(--sm-danger)' },
@@ -78,9 +78,9 @@ const SMCustody = {
         { label: 'کل ثبت', value: SM.fmt(this._items().length), color: 'var(--sm-accent)' }
       ])}
       ${SMUI.tabs([
-        { id: 'active', fa: 'در استودیو', en: 'Active', icon: 'fa-inbox', onclick: "SMCustody.setTab('active')" },
-        { id: 'returned', fa: 'تحویل‌شده', en: 'Returned', icon: 'fa-check', onclick: "SMCustody.setTab('returned')" },
-        { id: 'all', fa: 'همه', en: 'All', icon: 'fa-list', onclick: "SMCustody.setTab('all')" }
+        { id: 'active', fa: 'در استودیو', en: 'Active', icon: 'fa-inbox', fn: 'SMCustody.setTab', args: ['active'] },
+        { id: 'returned', fa: 'تحویل‌شده', en: 'Returned', icon: 'fa-check', fn: 'SMCustody.setTab', args: ['returned'] },
+        { id: 'all', fa: 'همه', en: 'All', icon: 'fa-list', fn: 'SMCustody.setTab', args: ['all'] }
       ], this._tab)}
       ${SMUI.moduleSearch('custody', 'جستجو — نام مشتری، فلش، هارد، رنگ…')}
       <div style="margin-top:16px">${items.length ? `<div class="sm-cust-list">${items.map(i => this._card(i)).join('')}</div>` :
@@ -90,7 +90,7 @@ const SMCustody = {
   _card(item) {
     const type = this.ITEM_TYPES[item.itemType] || this.ITEM_TYPES.other
     const desc = [item.itemDesc, item.color, item.capacity].filter(Boolean).join(' · ')
-    return `<div class="sm-cust-card" style="--cust-color:${type.color}" onclick="SMCustody.view('${item.id}')">
+    return `<div class="sm-cust-card" style="--cust-color:${type.color}" ${SMEvents.attrs('SMCustody.view', [item.id])}>
       <div class="sm-cust-icon"><i class="fas ${type.icon}"></i></div>
       <div class="sm-cust-body">
         <div class="sm-cust-title">${SM.esc(item.customerName || '—')} — ${SM.esc(type.label)}</div>
@@ -103,7 +103,7 @@ const SMCustody = {
       </div>
       <div class="sm-cust-side">
         ${this._statusBadge(item)}
-        ${this._statusOf(item) !== 'returned' ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="event.stopPropagation();SMCustody.markReturned('${item.id}')">تحویل</button>` : ''}
+        ${this._statusOf(item) !== 'returned' ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMCustody.markReturned', [item.id])} data-sm-stop="1">تحویل</button>` : ''}
       </div>
     </div>`
   },
@@ -115,7 +115,7 @@ const SMCustody = {
     SM.pushSubView(item.customerName || 'امانت', () => `
       <div class="sm-card"><div class="sm-card-head">
         <div class="sm-card-title">${SM.esc(item.customerName)} — ${SM.esc(type.label)}</div>
-        <button class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMCustody.edit('${item.id}')"><i class="fas fa-pen"></i></button>
+        <button class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMCustody.edit', [item.id])}><i class="fas fa-pen"></i></button>
       </div><div class="sm-card-body">
         <p><strong>شرح:</strong> ${SM.esc(item.itemDesc || '—')}</p>
         ${item.color ? `<p style="margin-top:8px"><strong>رنگ:</strong> ${SM.esc(item.color)}</p>` : ''}
@@ -128,7 +128,7 @@ const SMCustody = {
         ${item.returnedAt ? `<p style="margin-top:8px"><strong>تحویل داده شد:</strong> ${SM.esc(item.returnedAt)} ${SM.esc(item.returnedTime || '')}</p>` : ''}
         <p style="margin-top:8px"><strong>وضعیت:</strong> ${this._statusBadge(item)}</p>
         ${item.notes ? `<p style="margin-top:8px"><strong>یادداشت:</strong> ${SM.esc(item.notes)}</p>` : ''}
-        ${this._statusOf(item) !== 'returned' ? `<button type="button" class="sm-btn sm-btn-primary" style="margin-top:14px" onclick="SMCustody.markReturned('${item.id}')"><i class="fas fa-hand-holding"></i> ثبت تحویل به مشتری</button>` : ''}
+        ${this._statusOf(item) !== 'returned' ? `<button type="button" class="sm-btn sm-btn-primary" style="margin-top:14px" ${SMEvents.attrs('SMCustody.markReturned', [item.id])}><i class="fas fa-hand-holding"></i> ثبت تحویل به مشتری</button>` : ''}
       </div></div>`)
   },
 

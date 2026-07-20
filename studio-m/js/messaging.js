@@ -29,14 +29,14 @@ const SMMessaging = {
 
     el.innerHTML = `
       ${SMUI.sectionHead('پیام‌رسانی', 'SMS، ایمیل، واتساپ و فضای مجازی — یادآوری مراسم زوج‌به‌زوج', `
-        <button type="button" class="sm-btn sm-btn-ghost" onclick="SMMessaging.runToday()"><i class="fas fa-bolt"></i> ارسال امروز (${due.length})</button>
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMMessaging.sendManual()"><i class="fas fa-paper-plane"></i> ارسال دستی</button>`)}
+        <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMMessaging.runToday')}><i class="fas fa-bolt"></i> ارسال امروز (${due.length})</button>
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMMessaging.sendManual')}><i class="fas fa-paper-plane"></i> ارسال دستی</button>`)}
 
       <div class="sm-msg-channels">
         ${Object.entries(MessagingShared.CHANNELS).map(([id, ch]) => {
           const st = MessagingShared.channelStatus(id)
           const cnt = counts[id] || 0
-          return `<div class="sm-msg-channel sm-msg-channel--${id} ${st.configured ? 'is-on' : ''}" onclick="SMMessaging.setChannelFilter('${id === this._channelFilter ? 'all' : id}')">
+          return `<div class="sm-msg-channel sm-msg-channel--${id} ${st.configured ? 'is-on' : ''}" ${SMEvents.attrs('SMMessaging.setChannelFilter', [id === this._channelFilter ? 'all' : id])}>
             <div class="sm-msg-channel-icon"><i class="fas ${ch.icon}"></i></div>
             <div class="sm-msg-channel-body">
               <strong>${SM.esc(ch.label)}</strong>
@@ -47,7 +47,7 @@ const SMMessaging = {
         }).join('')}
       </div>
 
-      ${!smsOk ? `<div class="sm-msg-alert"><i class="fas fa-info-circle"></i> برای ارسال واقعی SMS، از <a href="#settings" onclick="SM.navigate('settings');return false">تنظیمات → پیامک</a> API را وصل کنید. بدون API، پیام‌ها در لاگ «در صف» ثبت می‌شوند.</div>` : ''}
+      ${!smsOk ? `<div class="sm-msg-alert"><i class="fas fa-info-circle"></i> برای ارسال واقعی SMS، از <a href="#settings" ${SMEvents.elAttrs('SM.openSettingsTab', ['sms'])}>تنظیمات → پیامک</a> API را وصل کنید. بدون API، پیام‌ها در لاگ «در صف» ثبت می‌شوند.</div>` : ''}
 
       ${SMUI.statCards([
         { label: 'قالب فعال', value: SM.fmt(templates.filter(t => t.enabled !== false).length), color: 'var(--sm-accent)' },
@@ -57,9 +57,9 @@ const SMMessaging = {
       ])}
 
       ${SMUI.tabs([
-        { id: 'templates', fa: 'قالب‌ها و زمان‌بندی', en: 'Templates', icon: 'fa-list', onclick: "SMMessaging.setTab('templates')" },
-        { id: 'schedule', fa: 'صف امروز', en: 'Today', icon: 'fa-calendar-day', onclick: "SMMessaging.setTab('schedule')" },
-        { id: 'sent', fa: 'ارسال‌شده به مشتری', en: 'Sent log', icon: 'fa-check-double', onclick: "SMMessaging.setTab('sent')" }
+        { id: 'templates', fa: 'قالب‌ها و زمان‌بندی', en: 'Templates', icon: 'fa-list', fn: 'SMMessaging.setTab', args: ['templates'] },
+        { id: 'schedule', fa: 'صف امروز', en: 'Today', icon: 'fa-calendar-day', fn: 'SMMessaging.setTab', args: ['schedule'] },
+        { id: 'sent', fa: 'ارسال‌شده به مشتری', en: 'Sent log', icon: 'fa-check-double', fn: 'SMMessaging.setTab', args: ['sent'] }
       ], this._tab)}
 
       <div style="margin-top:16px">${this._tabBody(due, logs, templates)}</div>`
@@ -89,8 +89,8 @@ const SMMessaging = {
       </div>`
     }).join('')
     const footer = `<div class="sm-msg-tpl-footer">
-        <button type="button" class="sm-btn sm-btn-ghost" onclick="SMMessaging.resetTemplates()"><i class="fas fa-rotate"></i> بازنشانی قالب‌ها</button>
-        <button type="button" class="sm-btn sm-btn-ghost" onclick="SMMessaging.editTemplate()"><i class="fas fa-plus"></i> قالب جدید</button>
+        <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMMessaging.resetTemplates')}><i class="fas fa-rotate"></i> بازنشانی قالب‌ها</button>
+        <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMMessaging.editTemplate')}><i class="fas fa-plus"></i> قالب جدید</button>
       </div>`
     return (body || SMUI.empty('fa-comment-dots', 'قالبی نیست', '«بازنشانی قالب‌ها» را بزنید')) + footer
   },
@@ -108,7 +108,7 @@ const SMMessaging = {
             : '—'
     return `<div class="sm-msg-tpl ${t.enabled === false ? 'is-off' : ''}">
       <div class="sm-msg-tpl-head">
-        <label class="sm-check-row"><input type="checkbox" ${t.enabled !== false ? 'checked' : ''} onchange="SMMessaging.toggleTemplate('${t.id}', this.checked)"/>
+        <label class="sm-check-row"><input type="checkbox" ${t.enabled !== false ? 'checked' : ''} data-sm-change-fn="SMMessaging.onToggleTemplate" data-sm-args='${JSON.stringify([t.id]).replace(/'/g, '&#39;')}'/>
           <strong>${SM.esc(t.name || '—')}</strong>
         </label>
         <div class="sm-msg-tpl-badges">
@@ -119,8 +119,8 @@ const SMMessaging = {
       </div>
       <p class="sm-msg-tpl-text">${SM.esc(t.text || '')}</p>
       <div class="sm-msg-tpl-actions">
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="ویرایش" onclick="SMMessaging.editTemplate('${t.id}')"><i class="fas fa-pen"></i> ویرایش</button>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="حذف" onclick="SMMessaging.deleteTemplate('${t.id}')"><i class="fas fa-trash"></i> حذف</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="ویرایش" ${SMEvents.attrs('SMMessaging.editTemplate', [t.id])}><i class="fas fa-pen"></i> ویرایش</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="حذف" ${SMEvents.attrs('SMMessaging.deleteTemplate', [t.id])}><i class="fas fa-trash"></i> حذف</button>
       </div>
     </div>`
   },
@@ -130,7 +130,7 @@ const SMMessaging = {
       return SMUI.empty('fa-calendar-check', 'امروز پیامی در صف نیست', 'قالب‌های فعال برای قراردادهای با تاریخ مراسم، خودکار اینجا نمایش داده می‌شوند')
     }
     return `<div class="sm-msg-schedule-actions">
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMMessaging.runToday()"><i class="fas fa-paper-plane"></i> ارسال همه (${due.length})</button>
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMMessaging.runToday')}><i class="fas fa-paper-plane"></i> ارسال همه (${due.length})</button>
       </div>
       ${due.map(item => {
         const t = item.template
@@ -143,7 +143,7 @@ const SMMessaging = {
           </div>
           <div class="sm-msg-queue-meta">قرارداد ${SM.esc(c.contractNum || '—')} · ${SM.esc(c.eventDate || c.date || '')} · ${item.phones.map(p => SM.esc(p)).join('، ')}</div>
           <p>${SM.esc(item.text)}</p>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMMessaging.sendOne('${t.id}','${c.id}')">ارسال این مورد</button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMMessaging.sendOne', [t.id, c.id])}>ارسال این مورد</button>
         </div>`
       }).join('')}`
   },
@@ -160,17 +160,17 @@ const SMMessaging = {
       ${SMUI.moduleSearch('messaging', 'جستجو — نام زوج، موبایل، متن، قالب...')}
       <div class="sm-msg-log-filters" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
         ${chTabs.map(c =>
-          `<button type="button" class="sm-btn sm-btn-sm ${this._channelFilter === c.id ? 'sm-btn-primary' : 'sm-btn-ghost'}" onclick="SMMessaging.setChannelFilter('${c.id}')">${c.label}</button>`
+          `<button type="button" class="sm-btn sm-btn-sm ${this._channelFilter === c.id ? 'sm-btn-primary' : 'sm-btn-ghost'}" ${SMEvents.attrs('SMMessaging.setChannelFilter', [c.id])}>${c.label}</button>`
         ).join('')}
-        ${logs.length ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" style="margin-right:auto" onclick="SMMessaging.clearLogs()"><i class="fas fa-trash"></i> پاک‌سازی لاگ</button>` : ''}
+        ${logs.length ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" style="margin-right:auto" ${SMEvents.attrs('SMMessaging.clearLogs')}><i class="fas fa-trash"></i> پاک‌سازی لاگ</button>` : ''}
       </div>
       ${logs.length ? SMUI.table(
         ['عملیات', 'وضعیت', 'کانال', 'مشتری / زوج', 'گیرنده', 'قالب', 'پیام', 'تاریخ'],
         logs.slice(0, 100).map(l => `<tr>
           <td style="white-space:nowrap;min-width:120px">
-            <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" title="ارسال دوباره" onclick="event.stopPropagation();SMMessaging.resendLog('${l.id}')"><i class="fas fa-redo"></i></button>
-            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="ویرایش" onclick="event.stopPropagation();SMMessaging.editLog('${l.id}')"><i class="fas fa-pen"></i></button>
-            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="حذف" onclick="event.stopPropagation();SMMessaging.deleteLog('${l.id}')"><i class="fas fa-trash"></i></button>
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" title="ارسال دوباره" ${SMEvents.attrs('SMMessaging.resendLog', [l.id])} data-sm-stop="1"><i class="fas fa-redo"></i></button>
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="ویرایش" ${SMEvents.attrs('SMMessaging.editLog', [l.id])} data-sm-stop="1"><i class="fas fa-pen"></i></button>
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="حذف" ${SMEvents.attrs('SMMessaging.deleteLog', [l.id])} data-sm-stop="1"><i class="fas fa-trash"></i></button>
           </td>
           <td>${SMUI.badge(l.status === 'sent' ? 'ارسال شد' : l.status === 'queued' ? 'در صف' : 'ناموفق', l.status === 'sent' ? 'success' : l.status === 'queued' ? 'warning' : 'danger')}${l.error ? `<div style="font-size:.68rem;color:var(--sm-danger);margin-top:4px;max-width:160px">${SM.esc(l.error)}</div>` : ''}</td>
           <td>${SMUI.badge((l.channel || 'sms').toUpperCase(), 'info')}</td>
@@ -181,6 +181,11 @@ const SMMessaging = {
           <td style="font-size:.72rem;white-space:nowrap">${SM.esc(l.sendDate || '—')}<br>${SM.esc(l.sendTime || '')}</td>
         </tr>`)
       ) : SMUI.empty('fa-inbox', 'هنوز پیامی ثبت نشده', 'با «ارسال امروز» یا ارسال دستی، اینجا مطمئن می‌شوید پیام برای مشتری رفته')}`
+  },
+
+  onToggleTemplate(id, _value, el) {
+    const enabled = el ? !!el.checked : !!_value
+    this.toggleTemplate(id, enabled)
   },
 
   toggleTemplate(id, enabled) {

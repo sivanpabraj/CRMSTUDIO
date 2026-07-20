@@ -32,8 +32,8 @@ const SMPortalMgmt = {
 
     el.innerHTML = `
       ${SMUI.sectionHead('مدیریت پرتال', 'ادمین و پرسنل — بدون ثبت‌نام · دعوت با SMS', `
-        <button type="button" class="sm-btn sm-btn-ghost" onclick="SMPortalMgmt.inviteAdmin()"><i class="fas fa-user-shield"></i> + ادمین</button>
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMPortalMgmt.inviteStaff()"><i class="fas fa-user-tie"></i> + پرسنل</button>`)}
+        <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMPortalMgmt.inviteAdmin')}><i class="fas fa-user-shield"></i> + ادمین</button>
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMPortalMgmt.inviteStaff')}><i class="fas fa-user-tie"></i> + پرسنل</button>`)}
 
       <div class="sm-portal-note">
         <i class="fas fa-info-circle"></i>
@@ -50,9 +50,9 @@ const SMPortalMgmt = {
       ])}
 
       ${SMUI.tabs([
-        { id: 'all', fa: 'همه', en: 'All', icon: 'fa-users', onclick: "SMPortalMgmt.setTab('all')" },
-        { id: 'admin', fa: 'ادمین', en: 'Admin', icon: 'fa-user-shield', onclick: "SMPortalMgmt.setTab('admin')" },
-        { id: 'staff', fa: 'پرسنل', en: 'Staff', icon: 'fa-user-tie', onclick: "SMPortalMgmt.setTab('staff')" }
+        { id: 'all', fa: 'همه', en: 'All', icon: 'fa-users', fn: 'SMPortalMgmt.setTab', args: ['all'] },
+        { id: 'admin', fa: 'ادمین', en: 'Admin', icon: 'fa-user-shield', fn: 'SMPortalMgmt.setTab', args: ['admin'] },
+        { id: 'staff', fa: 'پرسنل', en: 'Staff', icon: 'fa-user-tie', fn: 'SMPortalMgmt.setTab', args: ['staff'] }
       ], this._tab)}
 
       ${SMUI.moduleSearch('portal', 'جستجو — نام، موبایل...')}
@@ -82,10 +82,10 @@ const SMPortalMgmt = {
           </div>
         </div>
         <div class="sm-portal-user-actions">
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMPortalMgmt.resend('${u.id}')" title="ارسال مجدد کد"><i class="fas fa-sms"></i></button>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMPortalMgmt.editUser('${u.id}')" title="ویرایش"><i class="fas fa-pen"></i></button>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMPortalMgmt.copyLink('${u.id}')" title="کپی لینک"><i class="fas fa-link"></i></button>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMPortalMgmt.deleteUser('${u.id}')" title="حذف"><i class="fas fa-trash"></i></button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMPortalMgmt.resend', [u.id])} title="ارسال مجدد کد"><i class="fas fa-sms"></i></button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMPortalMgmt.editUser', [u.id])} title="ویرایش"><i class="fas fa-pen"></i></button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMPortalMgmt.copyLink', [u.id])} title="کپی لینک"><i class="fas fa-link"></i></button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMPortalMgmt.deleteUser', [u.id])} title="حذف"><i class="fas fa-trash"></i></button>
         </div>
       </div>
       <div class="sm-portal-user-roles">${SM.esc(roles || '—')}</div>

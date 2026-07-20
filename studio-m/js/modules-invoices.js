@@ -48,7 +48,7 @@ SMModules.invoices = {
     ]
     return `<div class="sm-inv-cats">${tabs.map(t => `
       <button type="button" class="sm-inv-cat ${t.cls}${this._tab === t.id ? ' active' : ''}"
-        onclick="SMModules.invoices.setTab('${t.id}')">
+        ${SMEvents.attrs('SMModules.invoices.setTab', [t.id])}>
         <i class="fas ${t.icon}"></i> ${t.label}
       </button>`).join('')}</div>`
   },
@@ -143,7 +143,7 @@ SMModules.invoices = {
 
     el.innerHTML = `
       ${SMUI.sectionHead('فاکتورها', 'واریزی سبز · برداشت قرمز · قبض · پرسنل · بیعانه', `
-        <button class="sm-btn sm-btn-primary" onclick="SMModules.invoices.add()"><i class="fas fa-plus"></i> ثبت فاکتور</button>`)}
+        <button class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMModules.invoices.add')}><i class="fas fa-plus"></i> ثبت فاکتور</button>`)}
       ${SMUI.moduleSearch('invoices', 'جستجو در فاکتورها — مشتری، مبلغ، بابت، شماره...')}
       <div class="sm-inv-stats">
         <div class="sm-inv-stat in"><span>واریزی</span><strong>${SM.fmt(totalIn)} <small>تومان</small></strong></div>
@@ -191,15 +191,15 @@ SMModules.invoices = {
           ${i.accountOrCard ? `<span dir="ltr">💳 ${SM.esc(i.accountOrCard)}</span>` : ''}
         </div>
       </div>
-      <button type="button" class="sm-inv-heart${pinned ? ' is-on' : ''}" onclick="SMModules.invoices.togglePin('${i.id}')" title="${pinned ? 'حذف از ویژه' : 'افزودن به ویژه'}"><i class="fas fa-heart"></i></button>
+      <button type="button" class="sm-inv-heart${pinned ? ' is-on' : ''}" ${SMEvents.attrs('SMModules.invoices.togglePin', [i.id])} title="${pinned ? 'حذف از ویژه' : 'افزودن به ویژه'}"><i class="fas fa-heart"></i></button>
       <div class="sm-inv-side">
         <div class="sm-inv-amt ${isIn ? 'in' : 'out'}">${isIn ? '+' : '−'} ${SM.fmt(i.amount || 0)} <small>تومان</small></div>
         <div class="sm-inv-date">${SM.esc(i.date || '—')}</div>
         <div class="sm-inv-actions">
-          ${i.contractId ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMModules.contracts.view('${i.contractId}')" title="قرارداد"><i class="fas fa-file-contract"></i></button>` : ''}
-          ${i._virtual ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMModules.invoices.registerVirtual('${i.id}')" title="ثبت فاکتور رسمی"><i class="fas fa-file-circle-plus"></i></button>` : ''}
-          ${canEdit ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMModules.invoices.edit('${i.id}')"><i class="fas fa-pen"></i></button>` : ''}
-          ${canEdit ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMModules.invoices.view('${i.id}')"><i class="fas fa-eye"></i></button>` : ''}
+          ${i.contractId ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMModules.contracts.view', [i.contractId])} title="قرارداد"><i class="fas fa-file-contract"></i></button>` : ''}
+          ${i._virtual ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMModules.invoices.registerVirtual', [i.id])} title="ثبت فاکتور رسمی"><i class="fas fa-file-circle-plus"></i></button>` : ''}
+          ${canEdit ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMModules.invoices.edit', [i.id])}><i class="fas fa-pen"></i></button>` : ''}
+          ${canEdit ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMModules.invoices.view', [i.id])}><i class="fas fa-eye"></i></button>` : ''}
         </div>
       </div>
     </div>`

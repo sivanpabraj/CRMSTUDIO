@@ -144,11 +144,11 @@ const SMReports = {
     el.innerHTML = `
       ${SMUI.sectionHead('گزارش‌ها', `خلاصه صفر تا صد استودیو — ${data.generatedAt}`, `
         <div class="sm-rep-export-btns">
-          <button type="button" class="sm-btn sm-btn-primary" onclick="SMReports.exportPDF()"><i class="fas fa-file-pdf"></i> خروجی PDF</button>
-          <button type="button" class="sm-btn sm-btn-ghost" onclick="SMReports.exportJPG()"><i class="fas fa-image"></i> خروجی JPG</button>
+          <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMReports.exportPDF')}><i class="fas fa-file-pdf"></i> خروجی PDF</button>
+          <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMReports.exportJPG')}><i class="fas fa-image"></i> خروجی JPG</button>
         </div>`)}
       <p class="sm-rep-intro">گزارش لحظه‌ای از همه بخش‌های برنامه: رزرو، تقویم، قرارداد، پکیج، فاکتور، حسابداری، پرسنل، مشتری و چاپ.
-      برای ذخیرهٔ فایل داده (پشتیبان) به <button type="button" class="sm-link-btn" onclick="SM.navigate('settings');SMSettings.setTab('backup')">تنظیمات → پشتیبان</button> بروید.</p>
+      برای ذخیرهٔ فایل داده (پشتیبان) به <button type="button" class="sm-link-btn" ${SMEvents.attrs('SM.openSettingsTab', ['backup'])}>تنظیمات → پشتیبان</button> بروید.</p>
       <div id="sm-report-screen">${this._screenHtml(data)}</div>
       <div id="sm-report-doc-wrap" class="sm-rep-doc-hidden" aria-hidden="true">${this._docHtml(data)}</div>`
   },

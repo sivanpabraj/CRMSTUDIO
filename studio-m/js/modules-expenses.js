@@ -33,14 +33,14 @@ SMModules.expenses = {
 
     el.innerHTML = `
       ${SMUI.sectionHead('هزینه‌های جاری', 'ثبت سریع — خرید جزء، تبلیغ، اجاره و هزینه‌های روزمره استودیو', `
-        <button class="sm-btn sm-btn-primary" onclick="SMModules.expenses.add()"><i class="fas fa-plus"></i> ثبت هزینه</button>`)}
+        <button class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMModules.expenses.add')}><i class="fas fa-plus"></i> ثبت هزینه</button>`)}
       <div class="sm-exp-info">
         <i class="fas fa-circle-info"></i>
         <div>
           <strong>این بخش برای چیست؟</strong>
           <p>ثبت <em>سریع و ساده</em> هزینه‌های روزمره استودیو — بدون فرم طولانی.
           برای برداشت با جزئیات کامل (مشتری، قرارداد، پرسنل، PDF و فاکتور) از
-          <button type="button" class="sm-link-btn" onclick="SM.navigate('accounting')">حسابداری → واریز و برداشت</button> استفاده کنید.</p>
+          <button type="button" class="sm-link-btn" ${SMEvents.attrs('SM.navigate', ["accounting"])}>حسابداری → واریز و برداشت</button> استفاده کنید.</p>
         </div>
       </div>
       ${SMUI.moduleSearch('expenses', 'جستجو — عنوان، دسته، مبلغ، ماه...')}
@@ -70,7 +70,7 @@ SMModules.expenses = {
       </div>
       <div class="sm-exp-row-side">
         <div class="sm-exp-amt">− ${SM.fmt(e.amount || 0)} <small>تومان</small></div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMModules.expenses.edit('${e.id}')"><i class="fas fa-pen"></i></button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMModules.expenses.edit', [e.id])}><i class="fas fa-pen"></i></button>
       </div>
     </div>`
   },

@@ -260,7 +260,7 @@ const SM = {
     const view = this.state.viewStack[this.state.viewStack.length - 1]
     const main = document.getElementById('sm-content')
     if (!main || !view) return
-    main.innerHTML = `${SMUI.backBar(view.title, 'SM.popSubView()')}${view.html}`
+    main.innerHTML = `${SMUI.backBar(view.title)}${view.html}`
     this._focusMain(main)
     this._updateHeaderBack()
     const ht = document.getElementById('sm-header-title')
@@ -303,9 +303,7 @@ const SM = {
       navHtml += `<div class="sm-nav-group"><div class="sm-nav-label">${label}</div>`
       navHtml += items.map(r => {
         const off = this.isModuleDisabled(r.id)
-        const navAttrs = typeof SMEvents !== 'undefined'
-          ? SMEvents.attrs('SM.navigate', [r.id])
-          : `type="button" onclick="SM.navigate('${r.id}')"`
+        const navAttrs = SMEvents.attrs('SM.navigate', [r.id])
         return `
         <button ${navAttrs} class="sm-nav-item${this.state.route === r.id ? ' active' : ''}${off ? ' sm-nav-item--off' : ''}" data-route="${r.id}">
           <i class="fas ${r.icon}"></i><span>${this.t(r.id)}</span>
@@ -320,7 +318,7 @@ const SM = {
 
     document.getElementById('sm-root').innerHTML = `
       <div class="sm-shell">
-        <div class="sm-sidebar-overlay" id="sm-sidebar-overlay" onclick="SM.closeSidebar()" aria-hidden="true"></div>
+        <div class="sm-sidebar-overlay" id="sm-sidebar-overlay" ${SMEvents.elAttrs('SM.closeSidebar')} aria-hidden="true"></div>
         <aside class="sm-sidebar" id="sm-sidebar">
           <div class="sm-sidebar-head">
             <div class="sm-brand">
@@ -335,7 +333,7 @@ const SM = {
           </div>
           <nav class="sm-nav">${navHtml}</nav>
           <div class="sm-sidebar-foot">
-            <button type="button" class="sm-sidebar-foot-btn" onclick="SM.openProfile()" title="پروفایل و تنظیمات">
+            <button type="button" class="sm-sidebar-foot-btn" ${SMEvents.attrs('SM.openProfile')} title="پروفایل و تنظیمات">
               <div class="sm-user-avatar">${studio.logo
                 ? (Utils.safeImgHtml(studio.logo, 'class="sm-user-avatar-img"') || this.esc((user?.name || '?').charAt(0)))
                 : this.esc((user?.name || '?').charAt(0))}</div>
@@ -345,19 +343,19 @@ const SM = {
               </div>
               <i class="fas fa-chevron-left sm-user-chevron"></i>
             </button>
-            <button type="button" class="sm-btn-icon" onclick="SM.logout()" title="${this.t('logout')}"><i class="fas fa-right-from-bracket"></i></button>
+            <button type="button" class="sm-btn-icon" ${SMEvents.attrs('SM.logout')} title="${this.t('logout')}"><i class="fas fa-right-from-bracket"></i></button>
           </div>
         </aside>
         <div class="sm-main">
           <header class="sm-header">
-            <button type="button" class="sm-btn-icon sm-menu-toggle" onclick="SM.toggleSidebar()" aria-label="${this.t('menu')}"><i class="fas fa-bars"></i></button>
-            <button type="button" class="sm-btn-icon sm-header-back" id="sm-header-back" hidden onclick="SM.goBack()" title="${this.t('back')}"><i class="fas fa-arrow-right"></i></button>
+            <button type="button" class="sm-btn-icon sm-menu-toggle" ${SMEvents.attrs('SM.toggleSidebar')} aria-label="${this.t('menu')}"><i class="fas fa-bars"></i></button>
+            <button type="button" class="sm-btn-icon sm-header-back" id="sm-header-back" hidden ${SMEvents.attrs('SM.goBack')} title="${this.t('back')}"><i class="fas fa-arrow-right"></i></button>
             <div class="sm-header-titles">
               <div class="sm-header-title" id="sm-header-title">${this.t('dashboard')}</div>
               <div class="sm-header-sub" id="sm-header-sub" hidden></div>
             </div>
             <div class="sm-header-actions">
-              <button type="button" class="sm-btn-icon" onclick="SM.toggleTheme()" title="${this.t('theme')}"><i class="fas fa-${this.state.theme === 'light' ? 'moon' : 'sun'}"></i></button>
+              <button type="button" class="sm-btn-icon" ${SMEvents.attrs('SM.toggleTheme')} title="${this.t('theme')}"><i class="fas fa-${this.state.theme === 'light' ? 'moon' : 'sun'}"></i></button>
             </div>
           </header>
           <main class="sm-content" id="sm-content" tabindex="-1"></main>
@@ -399,6 +397,11 @@ const SM = {
       SMSettings.setTab('profile')
       return
     }
+    SM.navigate('settings')
+  },
+
+  openSettingsTab(tab) {
+    if (typeof SMSettings !== 'undefined' && tab) SMSettings.setTab(tab)
     SM.navigate('settings')
   },
 

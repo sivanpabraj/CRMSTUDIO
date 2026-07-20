@@ -44,12 +44,12 @@ const SMEmployees = {
     if (SM.state.viewStack.length) return
     el.innerHTML = `
       ${SMUI.sectionHead('پرسنل', 'چند نقش · حقوق ماهانه و پروژه‌ای · تأیید قرارداد', `
-        <button class="sm-btn sm-btn-primary" onclick="SMEmployees.add()"><i class="fas fa-plus"></i> افزودن پرسنل</button>`)}
+        <button class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMEmployees.add')}><i class="fas fa-plus"></i> افزودن پرسنل</button>`)}
       ${this._tab === 'list' ? SMUI.moduleSearch('employees', 'جستجو — نام، موبایل، نقش...') : ''}
       ${SMUI.tabs([
-        { id: 'list', fa: 'لیست پرسنل', en: 'List', icon: 'fa-list', onclick: "SMEmployees.setTab('list')" },
-        { id: 'approvals', fa: 'تأیید قراردادها', en: 'Approvals', icon: 'fa-file-signature', onclick: "SMEmployees.setTab('approvals')" },
-        { id: 'stats', fa: 'آمار', en: 'Stats', icon: 'fa-chart-pie', onclick: "SMEmployees.setTab('stats')" }
+        { id: 'list', fa: 'لیست پرسنل', en: 'List', icon: 'fa-list', fn: 'SMEmployees.setTab', args: ['list'] },
+        { id: 'approvals', fa: 'تأیید قراردادها', en: 'Approvals', icon: 'fa-file-signature', fn: 'SMEmployees.setTab', args: ['approvals'] },
+        { id: 'stats', fa: 'آمار', en: 'Stats', icon: 'fa-chart-pie', fn: 'SMEmployees.setTab', args: ['stats'] }
       ], this._tab)}
       <div style="margin-top:16px">${this._renderTab()}</div>`
   },
@@ -76,7 +76,7 @@ const SMEmployees = {
       : contract?.status === 'pending' || contract?.status === 'sms_sent'
         ? SMUI.badge('در انتظار تأیید', 'warning') : ''
 
-    return `<div class="sm-emp-card" style="--emp-color:${color}" onclick="SMEmployees.view('${p.id}')">
+    return `<div class="sm-emp-card" style="--emp-color:${color}" ${SMEvents.attrs('SMEmployees.view', [p.id])}>
       <div class="sm-emp-stripe"></div>
       <div class="sm-emp-avatar" style="background:color-mix(in srgb, ${color} 18%, transparent);color:${color}">${SM.esc((p.name || '?').charAt(0))}</div>
       <div class="sm-emp-body">
@@ -90,7 +90,7 @@ const SMEmployees = {
       <div class="sm-emp-side">
         ${contractBadge}
         ${SMUI.badge(p.status === 'active' ? 'فعال' : 'غیرفعال', p.status === 'active' ? 'success' : 'muted')}
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="event.stopPropagation();SMEmployees.edit('${p.id}')"><i class="fas fa-pen"></i></button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMEmployees.edit', [p.id])} data-sm-stop="1"><i class="fas fa-pen"></i></button>
       </div>
     </div>`
   },
@@ -163,7 +163,7 @@ const SMEmployees = {
       <div class="sm-grid-2">
         <div class="sm-card"><div class="sm-card-head">
           <div class="sm-card-title">اطلاعات و پرداخت</div>
-          <button class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMEmployees.edit('${p.id}')"><i class="fas fa-pen"></i></button>
+          <button class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMEmployees.edit', [p.id])}><i class="fas fa-pen"></i></button>
         </div><div class="sm-card-body">
           <p><strong>موبایل:</strong> <span dir="ltr">${SM.esc(p.phone || '—')}</span></p>
           <p style="margin-top:8px"><strong>نحوه پرداخت:</strong> ${SM.esc(this._paySummary(p))}</p>
@@ -178,7 +178,7 @@ const SMEmployees = {
               <p style="margin-top:8px;font-size:.85rem;color:var(--sm-text-muted)">${SM.esc(contract.paySummary || '')}</p>
               <p style="margin-top:8px;font-size:.82rem">ارسال: ${SM.esc(contract.sentAt || '—')}</p>
             ` : '<p class="sm-emp-meta">هنوز قرارداد همکاری ارسال نشده</p>'}
-            <button type="button" class="sm-btn sm-btn-primary sm-btn-sm" style="margin-top:12px" onclick="SMEmployees.sendContract('${p.id}')">
+            <button type="button" class="sm-btn sm-btn-primary sm-btn-sm" style="margin-top:12px" ${SMEvents.attrs('SMEmployees.sendContract', [p.id])}>
               <i class="fas fa-paper-plane"></i> ${contract?.status === 'verified' ? 'ارسال مجدد قرارداد' : 'ارسال قرارداد به پنل پرسنل'}
             </button>
           </div></div>

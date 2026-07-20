@@ -73,8 +73,8 @@ const SMH = {
     return SMUI.sectionHead(SMH.lbl(titleFa, titleEn), desc, actionHtml)
   },
 
-  addBtn(onclick) {
-    return `<button type="button" class="sm-btn sm-btn-primary" onclick="${onclick}"><i class="fas fa-plus"></i> ${SM.t('add')}</button>`
+  addBtn(fnPath, args = []) {
+    return `<button ${SMEvents.attrs(fnPath, args)} class="sm-btn sm-btn-primary"><i class="fas fa-plus"></i> ${SM.t('add')}</button>`
   },
 
   deleteInModal(collection, id, route) {
@@ -95,7 +95,7 @@ const SMH = {
   },
 
   modalDeleteBtn(collection, id, route) {
-    return `<button type="button" class="sm-btn sm-btn-danger" onclick="SMH.deleteInModal('${collection}','${id}','${route}')"><i class="fas fa-trash"></i> ${SM.t('delete')}</button>`
+    return `<button type="button" class="sm-btn sm-btn-danger" ${SMEvents.attrs('SMH.deleteInModal', [collection, id, route])}><i class="fas fa-trash"></i> ${SM.t('delete')}</button>`
   },
 
   tabModule(mod, el, tabs, renderTab) {
@@ -106,7 +106,8 @@ const SMH = {
         id: t.id,
         label: SMH.lbl(t.fa, t.en),
         icon: t.icon,
-        onclick: `${mod._tabHandler}('${t.id}')`
+        fn: mod._tabHandler,
+        args: [t.id]
       })), mod._tab || tabs[0].id)}
       <div style="margin-top:16px">${renderTab(mod._tab || tabs[0].id)}</div>`
   },

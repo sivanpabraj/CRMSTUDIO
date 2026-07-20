@@ -75,8 +75,9 @@ supabase/migrations/006_contracts_manager_rls.sql
 
 - Session محلی client-only است (بدون HMAC سرور-side) — در production نشست بدون `sig` در مسیر sync هم رد می‌شود
 - E2E smoke در CI فعال است؛ سناریوی مالی authenticated هنوز اختیاری (`E2E_LOGIN_*`)
-- CSP هنوز `'unsafe-inline'` دارد (به‌خاطر handlerهای UI)؛ با `data-sm-fn` در حال کاهش است
+- CSP: Pro shell (`studio-m/js`) has **zero** inline handlers (CI-guarded). Global nginx still has `script-src 'unsafe-inline'` for classic `admin.html` until that surface is retired.
 - سقف امتیاز واقعی: [`docs/QUALITY_SCORES.md`](./QUALITY_SCORES.md)
+- مسیر بعدی امنیت: Edge Function `studio-mutate` + migration `007_studio_mutation_audit.sql`
 
 ## Migration 002
 

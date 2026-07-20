@@ -42,10 +42,10 @@ const SMInbox = {
         { label: 'تأیید‌شده', value: SM.fmt(all.filter(r => r.status === 'sent_to_editing').length), color: 'var(--sm-success)' }
       ])}
       ${SMUI.tabs([
-        { id: 'all', fa: 'همه', en: 'All', icon: 'fa-inbox', onclick: "SMInbox.setTab('all')" },
-        { id: 'pending', fa: 'منتظر تأیید', en: 'Pending', icon: 'fa-clock', onclick: "SMInbox.setTab('pending')" },
-        { id: 'done', fa: 'تأییدشده', en: 'Approved', icon: 'fa-check', onclick: "SMInbox.setTab('done')" },
-        { id: 'rejected', fa: 'رد شده', en: 'Rejected', icon: 'fa-times', onclick: "SMInbox.setTab('rejected')" }
+        { id: 'all', fa: 'همه', en: 'All', icon: 'fa-inbox', fn: 'SMInbox.setTab', args: ['all'] },
+        { id: 'pending', fa: 'منتظر تأیید', en: 'Pending', icon: 'fa-clock', fn: 'SMInbox.setTab', args: ['pending'] },
+        { id: 'done', fa: 'تأییدشده', en: 'Approved', icon: 'fa-check', fn: 'SMInbox.setTab', args: ['done'] },
+        { id: 'rejected', fa: 'رد شده', en: 'Rejected', icon: 'fa-times', fn: 'SMInbox.setTab', args: ['rejected'] }
       ], this._tab)}
       ${SMUI.moduleSearch('inbox', 'جستجو — نام زوج، قرارداد، متن...')}
       <div style="margin-top:16px">${groups.length ? groups.map(g => this._coupleCard(g)).join('') :
@@ -58,7 +58,7 @@ const SMInbox = {
     const type = InboxShared.typeInfo(latest?.type)
     const when = InboxShared.formatWhen(latest?.createdAt, latest?.createdTime)
 
-    return `<div class="sm-inbox-couple" onclick="SMInbox.viewCouple('${g.contractId || g.key}')">
+    return `<div class="sm-inbox-couple" ${SMEvents.attrs('SMInbox.viewCouple', [g.contractId || g.key])}>
       <div class="sm-inbox-couple-head">
         <div>
           <div class="sm-inbox-couple-name">${SM.esc(g.couple)}</div>
@@ -121,9 +121,9 @@ const SMInbox = {
       </div>
       ${canManage ? `<div class="sm-inbox-actions">
         ${r.status === 'pending' ? `
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMInbox.approve('${r.id}')">تأیید → تدوین</button>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMInbox.reject('${r.id}')">رد</button>` : ''}
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMInbox.reply('${r.id}')"><i class="fas fa-reply"></i> پاسخ مدیر</button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMInbox.approve', [r.id])}>تأیید → تدوین</button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMInbox.reject', [r.id])}>رد</button>` : ''}
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMInbox.reply', [r.id])}><i class="fas fa-reply"></i> پاسخ مدیر</button>
       </div>` : ''}
     </div>`
   },

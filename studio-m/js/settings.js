@@ -45,7 +45,7 @@ const SMSettings = {
     if (matches.length) {
       hits.hidden = false
       hits.innerHTML = matches.map(t => `
-        <button type="button" class="sm-settings-hit" onclick="SMSettings.setTab('${t.id}')">
+        <button type="button" class="sm-settings-hit" ${SMEvents.attrs('SMSettings.setTab', [t.id])}>
           <i class="fas ${t.icon}"></i> ${SM.esc(t.title)}
         </button>`).join('')
     } else {
@@ -63,7 +63,7 @@ const SMSettings = {
       <div class="sm-settings-search">
         <i class="fas fa-search"></i>
         <input type="search" id="sm-settings-q" placeholder="جستجو در تنظیمات — رمز، پشتیبان، ویجت..."
-          value="${SM.esc(this._search)}" autocomplete="off" oninput="SMSettings.onSearch(this.value)"/>
+          value="${SM.esc(this._search)}" autocomplete="off" ${SMEvents.inputAttrs('SMSettings.onSearch')} aria-label="جستجو در تنظیمات"/>
       </div>
       <div id="sm-settings-hits" class="sm-settings-hits" hidden></div>
     </div>`
@@ -78,7 +78,8 @@ const SMSettings = {
         id: t.id,
         label: t.title,
         icon: t.icon,
-        onclick: `SMSettings.setTab('${t.id}')`
+        fn: 'SMSettings.setTab',
+        args: [t.id]
       })), this._tab)}
       <div id="sm-settings-panel" style="margin-top:16px">${this._renderTab(info)}</div>`
     if (this._tab === 'backup') setTimeout(() => this._loadBackupList(), 0)
@@ -105,7 +106,7 @@ const SMSettings = {
     return `<div class="sm-settings-grid">
       <div class="sm-card">
         <div class="sm-card-head"><div class="sm-card-title">پروفایل مدیر</div>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveProfile()"><i class="fas fa-save"></i> ذخیره</button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMSettings.saveProfile')}><i class="fas fa-save"></i> ذخیره</button>
         </div>
         <div class="sm-card-body">
           ${mustChange ? `<div class="sm-settings-alert"><i class="fas fa-shield-halved"></i> برای امنیت، لطفاً رمز پیش‌فرض را در بخش پایین عوض کنید.</div>` : ''}
@@ -131,10 +132,10 @@ const SMSettings = {
           <div class="sm-logo-preview" id="sm-logo-preview">${logo
             ? (Utils.safeImgHtml(logo, 'alt="لوگو"') || '<span class="sm-logo-placeholder"><i class="fas fa-camera-retro"></i></span>')
             : '<span class="sm-logo-placeholder"><i class="fas fa-camera-retro"></i></span>'}</div>
-          <input type="file" id="prof-logo-file" accept="image/*" hidden onchange="SMSettings.onLogoPick(this)"/>
+          <input type="file" id="prof-logo-file" accept="image/*" hidden data-sm-change-fn="SMSettings.onLogoPick" data-sm-args='[]'/>
           <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-            <button type="button" class="sm-btn sm-btn-ghost" onclick="document.getElementById('prof-logo-file').click()"><i class="fas fa-upload"></i> انتخاب تصویر</button>
-            ${logo ? `<button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.removeLogo()"><i class="fas fa-trash"></i> حذف</button>` : ''}
+            <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.pickLogoFile')}><i class="fas fa-upload"></i> انتخاب تصویر</button>
+            ${logo ? `<button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.removeLogo')}><i class="fas fa-trash"></i> حذف</button>` : ''}
           </div>
           ${SMUI.formField('نام استودیو', 'prof-studio-name', { value: info.name || '' })}
           ${SMUI.formField('نام مدیر (روی قرارداد)', 'prof-manager', { value: info.manager || user?.name || '' })}
@@ -150,7 +151,7 @@ const SMSettings = {
           ${SMUI.formField('رمز فعلی', 'prof-pw-old', { type: 'password', dir: 'ltr', placeholder: 'رمز الان' })}
           ${SMUI.formField('رمز جدید', 'prof-pw-new', { type: 'password', dir: 'ltr', placeholder: `حداقل ${minPw} کاراکتر` })}
           ${SMUI.formField('تکرار رمز جدید', 'prof-pw2', { type: 'password', dir: 'ltr' })}
-          <button type="button" class="sm-btn sm-btn-primary" onclick="SMSettings.changePassword()"><i class="fas fa-key"></i> ذخیره رمز جدید</button>
+          <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMSettings.changePassword')}><i class="fas fa-key"></i> ذخیره رمز جدید</button>
         </div>
       </div>
     </div>`
@@ -173,14 +174,14 @@ const SMSettings = {
             <div style="font-size:.75rem;color:var(--sm-text-muted)">کد عضویت</div>
             <div dir="ltr" style="font-size:1.8rem;font-weight:800;letter-spacing:4px;margin:8px 0;font-family:ui-monospace,monospace">${SM.esc(formatted || '—')}</div>
             <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-              <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.copyJoinCode()"><i class="fas fa-copy"></i> کپی کد</button>
-              <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMSettings.regenJoinCode()"><i class="fas fa-sync"></i> تولید مجدد</button>
+              <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMSettings.copyJoinCode')}><i class="fas fa-copy"></i> کپی کد</button>
+              <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMSettings.regenJoinCode')}><i class="fas fa-sync"></i> تولید مجدد</button>
             </div>
           </div>
         </div>
       </div>
       <div class="sm-card"><div class="sm-card-head"><div class="sm-card-title">اطلاعات استودیو</div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveStudio()"><i class="fas fa-save"></i> ذخیره</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMSettings.saveStudio')}><i class="fas fa-save"></i> ذخیره</button>
       </div>
       <div class="sm-card-body">
         ${SMUI.formField('نام استودیو', 'set-name', { value: live.name || '' })}
@@ -227,8 +228,8 @@ const SMSettings = {
           </span>
         </label>
         <div class="sm-widget-order">
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="بالا" onclick="SMSettings.moveWidget('${id}',-1)"${idx === 0 ? ' disabled' : ''}><i class="fas fa-chevron-up"></i></button>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="پایین" onclick="SMSettings.moveWidget('${id}',1)"${idx === cfg.order.length - 1 ? ' disabled' : ''}><i class="fas fa-chevron-down"></i></button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="بالا" ${SMEvents.attrs('SMSettings.moveWidget', [id, -1])}${idx === 0 ? ' disabled' : ''}><i class="fas fa-chevron-up"></i></button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="پایین" ${SMEvents.attrs('SMSettings.moveWidget', [id, 1])}${idx === cfg.order.length - 1 ? ' disabled' : ''}><i class="fas fa-chevron-down"></i></button>
         </div>
       </div>`
     }).join('')
@@ -236,7 +237,7 @@ const SMSettings = {
     return `<div class="sm-card sm-settings-full">
       <div class="sm-card-head">
         <div class="sm-card-title"><i class="fas fa-gauge-high"></i> ویجت‌های داشبورد</div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveWidgets()"><i class="fas fa-save"></i> ذخیره</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMSettings.saveWidgets')}><i class="fas fa-save"></i> ذخیره</button>
       </div>
       <div class="sm-card-body">
         <p style="font-size:.82rem;color:var(--sm-text-muted);line-height:1.7;margin:0 0 16px">
@@ -244,8 +245,8 @@ const SMSettings = {
         </p>
         <div class="sm-widget-list">${rows}</div>
         <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
-          <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.resetWidgets()"><i class="fas fa-rotate-left"></i> پیش‌فرض</button>
-          <button type="button" class="sm-btn sm-btn-ghost" onclick="SM.navigate('dashboard')"><i class="fas fa-eye"></i> مشاهده داشبورد</button>
+          <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.resetWidgets')}><i class="fas fa-rotate-left"></i> پیش‌فرض</button>
+          <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SM.navigate', ["dashboard"])}><i class="fas fa-eye"></i> مشاهده داشبورد</button>
         </div>
       </div>
     </div>`
@@ -286,7 +287,7 @@ const SMSettings = {
     return `<div class="sm-settings-grid">
       <div class="sm-card sm-settings-full">
         <div class="sm-card-head"><div class="sm-card-title">اتصال به سایت شما</div>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveSite()"><i class="fas fa-save"></i> ذخیره</button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMSettings.saveSite')}><i class="fas fa-save"></i> ذخیره</button>
         </div>
         <div class="sm-card-body">
           <p style="font-size:.82rem;color:var(--sm-text-muted);line-height:1.7;margin:0 0 14px">
@@ -307,7 +308,7 @@ const SMSettings = {
       </div>
       <div class="sm-card sm-settings-full">
         <div class="sm-card-head"><div class="sm-card-title">کد HTML برای سایت</div>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMSettings.copyEmbed()"><i class="fas fa-copy"></i> کپی</button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMSettings.copyEmbed')}><i class="fas fa-copy"></i> کپی</button>
         </div>
         <div class="sm-card-body">
           <pre class="sm-embed-code" id="site-embed-code">${SM.esc(embed)}</pre>
@@ -343,7 +344,7 @@ const SMSettings = {
   _smsTab(info) {
     const configured = typeof SmsProvider !== 'undefined' && SmsProvider.isConfigured()
     return `<div class="sm-card"><div class="sm-card-head"><div class="sm-card-title">تنظیمات پیامک (SMS)</div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveSms()"><i class="fas fa-save"></i> ذخیره</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMSettings.saveSms')}><i class="fas fa-save"></i> ذخیره</button>
       </div>
       <div class="sm-card-body">
         <p style="font-size:.85rem;color:var(--sm-text-muted);margin-bottom:14px">برای production از <strong>URL پراکسی</strong> (Edge Function) استفاده کنید — کلید API در سرور بماند.</p>
@@ -373,7 +374,7 @@ const SMSettings = {
     return `<div class="sm-settings-grid">
       <div class="sm-card">
         <div class="sm-card-head"><div class="sm-card-title"><i class="fas fa-clock"></i> پشتیبان‌گیری خودکار</div>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveBackupSettings()"><i class="fas fa-save"></i> ذخیره</button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMSettings.saveBackupSettings')}><i class="fas fa-save"></i> ذخیره</button>
         </div>
         <div class="sm-card-body">
           <label class="sm-check-row sm-check-row--block"><input type="checkbox" id="set-autobackup" ${info.autoBackup ? 'checked' : ''}/> <strong>پشتیبان‌گیری خودکار فعال</strong></label>
@@ -383,7 +384,7 @@ const SMSettings = {
           <div class="sm-backup-folder-row">
             <label class="sm-label">پوشهٔ ذخیره (یادداشت شخصی)</label>
             <div class="sm-backup-folder-pick">
-              <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.pickBackupFolder()"><i class="fas fa-folder-open"></i> انتخاب پوشه</button>
+              <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.pickBackupFolder')}><i class="fas fa-folder-open"></i> انتخاب پوشه</button>
               <input type="text" class="sm-input" id="set-backup-path" value="${SM.esc(info.backupPathNote || '')}" placeholder="مثلاً: Backup روی Desktop"/>
             </div>
             <p class="sm-backup-hint">فایل‌ها با نام شمسی ذخیره می‌شوند — نمونه: <code dir="ltr">${SM.esc(sampleName)}</code></p>
@@ -397,13 +398,13 @@ const SMSettings = {
       <div class="sm-card">
         <div class="sm-card-head"><div class="sm-card-title"><i class="fas fa-database"></i> دستی · بازیابی</div></div>
         <div class="sm-card-body">
-          <button type="button" class="sm-btn sm-btn-primary sm-btn-block" onclick="SMSettings.backupNow()"><i class="fas fa-cloud-upload-alt"></i> پشتیبان بگیر الان</button>
-          <div class="sm-backup-drop" id="sm-backup-drop" onclick="document.getElementById('sm-restore-input').click()">
+          <button type="button" class="sm-btn sm-btn-primary sm-btn-block" ${SMEvents.attrs('SMSettings.backupNow')}><i class="fas fa-cloud-upload-alt"></i> پشتیبان بگیر الان</button>
+          <div class="sm-backup-drop" id="sm-backup-drop" ${SMEvents.elAttrs('SMSettings.pickRestoreFile')} role="button" tabindex="0">
             <i class="fas fa-folder-open"></i>
             <strong>باز کردن فایل پشتیبان</strong>
             <span>کلیک کنید یا فایل JSON را اینجا بکشید و رها کنید</span>
           </div>
-          <input type="file" id="sm-restore-input" accept=".json,application/json" hidden onchange="SMSettings.restore(this)"/>
+          <input type="file" id="sm-restore-input" accept=".json,application/json" hidden data-sm-change-fn="SMSettings.restore" data-sm-args='[]'/>
           <div id="sm-backup-list" class="sm-backup-list"></div>
         </div>
       </div>
@@ -459,7 +460,7 @@ const SMSettings = {
               <i class="fas fa-file-code"></i>
               <div><strong>${SM.esc(when)}</strong><code dir="ltr">${SM.esc(String(k).slice(-12))}</code></div>
             </div>
-            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMSettings.downloadBackup(${JSON.stringify(String(k))})"><i class="fas fa-download"></i></button>
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMSettings.downloadBackup', [k])}><i class="fas fa-download"></i></button>
           </div>`
         }).join('')}`
       : '<p class="sm-backup-list-empty">هنوز پشتیبان محلی ثبت نشده — «پشتیبان بگیر الان» را بزنید</p>'
@@ -496,7 +497,7 @@ const SMSettings = {
           <label class="sm-check-row"><input type="checkbox" id="cloud-enabled" ${info.cloudEnabled ? 'checked' : ''}/> فعال‌سازی همگام‌سازی ابر</label>
           <label class="sm-check-row"><input type="checkbox" id="cloud-unify-pw" ${info.cloudUnifyPassword ? 'checked' : ''}/> یکسان‌سازی رمز محلی با Supabase (هنگام تغییر رمز)</label>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-            <button type="button" class="sm-btn sm-btn-primary" onclick="SMSettings.saveCloudConfig()"><i class="fas fa-save"></i> ذخیره تنظیمات</button>
+            <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMSettings.saveCloudConfig')}><i class="fas fa-save"></i> ذخیره تنظیمات</button>
           </div>
         </div>
       </div>
@@ -508,9 +509,9 @@ const SMSettings = {
           <p style="font-size:.72rem;color:var(--sm-text-muted);margin:0 0 10px;line-height:1.6">Supabase Dashboard → Authentication → URL Configuration:<br/>Site URL = <code dir="ltr">http://localhost:5173/studio-m/auth-callback.html</code><br/>Redirect URLs = <code dir="ltr">http://localhost:5173/**</code></p>
           ${SMUI.formField('رمز Supabase', 'cloud-pw', { type: 'password', dir: 'ltr', placeholder: 'رمز حساب ابری' })}
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-            <button type="button" class="sm-btn sm-btn-primary" onclick="SMSettings.cloudSignIn()"><i class="fas fa-sign-in-alt"></i> ورود</button>
-            <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.cloudSignUp()"><i class="fas fa-user-plus"></i> ثبت‌نام + ساخت استودیو</button>
-            <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.cloudSignOut()"><i class="fas fa-sign-out-alt"></i> خروج</button>
+            <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMSettings.cloudSignIn')}><i class="fas fa-sign-in-alt"></i> ورود</button>
+            <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.cloudSignUp')}><i class="fas fa-user-plus"></i> ثبت‌نام + ساخت استودیو</button>
+            <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.cloudSignOut')}><i class="fas fa-sign-out-alt"></i> خروج</button>
           </div>
         </div>
       </div>
@@ -520,9 +521,9 @@ const SMSettings = {
           <p style="font-size:.78rem;color:var(--sm-text-muted);margin:0 0 10px">آخرین entity sync: ${SM.esc(lastEntity)} · snapshot: ${SM.esc(last)}</p>
           <p style="font-size:.72rem;color:var(--sm-text-muted);margin:0 0 12px">Studio ID: <code dir="ltr">${SM.esc(info.supabaseStudioId || '—')}</code></p>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button type="button" class="sm-btn sm-btn-primary" onclick="SMSettings.cloudPush()"><i class="fas fa-cloud-upload-alt"></i> ارسال کامل</button>
-            <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.cloudPull()"><i class="fas fa-cloud-download-alt"></i> دریافت کامل</button>
-            <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.cloudPushEntities()"><i class="fas fa-table"></i> فقط entity</button>
+            <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMSettings.cloudPush')}><i class="fas fa-cloud-upload-alt"></i> ارسال کامل</button>
+            <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.cloudPull')}><i class="fas fa-cloud-download-alt"></i> دریافت کامل</button>
+            <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.cloudPushEntities')}><i class="fas fa-table"></i> فقط entity</button>
           </div>
         </div>
       </div>
@@ -538,8 +539,8 @@ const SMSettings = {
               <strong>${SM.esc(c.entityType)} · ${SM.esc(c.localId)}</strong>
               <div style="font-size:.72rem;color:var(--sm-text-muted);margin:6px 0">${SM.esc(c.detectedAt || '')}</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-                <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.resolveSyncConflict(${JSON.stringify(String(c.entityType))},${JSON.stringify(String(c.localId))},'local')">نگه‌داشتن محلی</button>
-                <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMSettings.resolveSyncConflict(${JSON.stringify(String(c.entityType))},${JSON.stringify(String(c.localId))},'remote')">نگه‌داشتن ابری</button>
+                <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMSettings.resolveSyncConflict', [String(c.entityType), String(c.localId), 'local'])}>نگه‌داشتن محلی</button>
+                <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMSettings.resolveSyncConflict', [String(c.entityType), String(c.localId), 'remote'])}>نگه‌داشتن ابری</button>
               </div>
             </div>`).join('')}
         </div>
@@ -719,14 +720,14 @@ const SMSettings = {
             <div class="sm-danger-box">
               <h4><i class="fas fa-broom"></i> پاکسازی داده‌های کاری</h4>
               <p>قرارداد، مشتری، مالی، پیام‌ها و لاگ‌ها پاک می‌شود. <strong>نام استودیو، لوگو، مدیر و تنظیمات</strong> می‌ماند.</p>
-              <button type="button" class="sm-btn sm-btn-warning" onclick="SMSettings.wipeOperational()">
+              <button type="button" class="sm-btn sm-btn-warning" ${SMEvents.attrs('SMSettings.wipeOperational')}>
                 <i class="fas fa-broom"></i> پاکسازی داده‌های کاری
               </button>
             </div>
             <div class="sm-danger-box sm-danger-box--full">
               <h4><i class="fas fa-trash-restore"></i> بازنشانی کامل</h4>
               <p>همه چیز صفر می‌شود و مدیر پیش‌فرض از نو ساخته می‌شود.</p>
-              <button type="button" class="sm-btn sm-btn-danger" onclick="SMSettings.factoryReset()">
+              <button type="button" class="sm-btn sm-btn-danger" ${SMEvents.attrs('SMSettings.factoryReset')}>
                 <i class="fas fa-trash-restore"></i> بازنشانی کامل سیستم
               </button>
             </div>
@@ -734,7 +735,7 @@ const SMSettings = {
           <div class="sm-danger-box" style="margin-top:12px">
             <h4><i class="fas fa-clock-rotate-left"></i> پنل کلاسیک (منسوخ)</h4>
             <p>فقط برای بازیابی اضطراری. بعد از فعال‌سازی موقت، <code>?classic=1</code> روی admin.html کار می‌کند.</p>
-            <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.enableClassicAdmin()">
+            <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.enableClassicAdmin')}>
               <i class="fas fa-unlock"></i> فعال‌سازی موقت پنل کلاسیک
             </button>
           </div>
@@ -807,8 +808,9 @@ const SMSettings = {
     }
   },
 
-  onLogoPick(input) {
-    const file = input.files?.[0]
+  onLogoPick(a, b) {
+    const input = (b && b.files !== undefined) ? b : a
+    const file = input?.files?.[0]
     if (!file || !file.type.startsWith('image/')) return SM.toast('فقط تصویر', 'error')
     if (file.size > 800000) return SM.toast('حداکثر ۸۰۰KB', 'error')
     const reader = new FileReader()
@@ -823,6 +825,14 @@ const SMSettings = {
     }
     reader.readAsDataURL(file)
     input.value = ''
+  },
+
+  pickLogoFile() {
+    document.getElementById('prof-logo-file')?.click()
+  },
+
+  pickRestoreFile() {
+    document.getElementById('sm-restore-input')?.click()
   },
 
   removeLogo() {
@@ -970,8 +980,9 @@ const SMSettings = {
     a.click()
   },
 
-  async restore(input) {
-    const file = input.files?.[0]
+  async restore(a, b) {
+    const input = (b && b.files !== undefined) ? b : a
+    const file = input?.files?.[0]
     if (!file) return
     try {
       if (typeof Access !== 'undefined' && !Access.canManageStudioOps?.(SM.user())) {

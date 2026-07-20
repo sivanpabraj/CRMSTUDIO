@@ -54,7 +54,11 @@ const SMObservability = {
       fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...entry, app: 'studio-m', v: '6.0.0' }),
+        body: JSON.stringify({
+          ...entry,
+          app: 'studio-m',
+          v: (typeof AppConfig !== 'undefined' && AppConfig.APP_VERSION) || '6.0.0'
+        }),
         keepalive: true,
         mode: 'cors'
       }).catch(() => {})

@@ -124,8 +124,8 @@ const SMWorkflow = {
 
     el.innerHTML = `
       ${SMUI.sectionHead(SM.t('workflow'), SMH.lbl('خط تولید تدوین و تحویل', 'Editing & delivery pipeline'), `
-        <button type="button" class="sm-btn sm-btn-ghost" onclick="SMWorkflow.addFromContract()"><i class="fas fa-file-signature"></i> ${SMH.lbl('از قرارداد', 'From contract')}</button>
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMWorkflow.add()"><i class="fas fa-plus"></i> ${SM.t('add')}</button>`)}
+        <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMWorkflow.addFromContract')}><i class="fas fa-file-signature"></i> ${SMH.lbl('از قرارداد', 'From contract')}</button>
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMWorkflow.add')}><i class="fas fa-plus"></i> ${SM.t('add')}</button>`)}
       ${SMUI.statCards([
         { label: SMH.lbl('در جریان', 'Active'), value: SM.fmt(active.length), color: 'var(--sm-accent)' },
         { label: SMH.lbl('سررسید گذشته', 'Overdue'), value: SM.fmt(overdue.length), color: 'var(--sm-danger)' },
@@ -160,10 +160,10 @@ const SMWorkflow = {
             ${SMUI.badge(this._lbl(pr, w.priority || 'normal'), pr.badge)}
             ${overdue ? SMUI.badge(SMH.lbl('تأخیر', 'Late'), 'danger') : ''}
             ${SMUI.badge(this._lbl(st, this._statusOf(w)), st.badge)}
-            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMWorkflow.edit('${w.id}')"><i class="fas fa-pen"></i></button>
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMWorkflow.edit', [w.id])}><i class="fas fa-pen"></i></button>
             ${this._statusOf(w) === 'active' ? `
-              <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMWorkflow.revert('${w.id}')" title="${SMH.lbl('مرحله قبل', 'Previous')}"><i class="fas fa-arrow-right"></i></button>
-              <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMWorkflow.advance('${w.id}')">${SMH.lbl('مرحله بعد', 'Next')}</button>
+              <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMWorkflow.revert', [w.id])} title="${SMH.lbl('مرحله قبل', 'Previous')}"><i class="fas fa-arrow-right"></i></button>
+              <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMWorkflow.advance', [w.id])}>${SMH.lbl('مرحله بعد', 'Next')}</button>
             ` : ''}
           </div>
         </div>

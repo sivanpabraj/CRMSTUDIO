@@ -4,22 +4,23 @@ const SMUI = {
     const root = document.getElementById('sm-modal-root')
     const overlay = document.createElement('div')
     overlay.className = 'sm-modal-overlay'
+    const titleId = 'sm-modal-title-' + Date.now().toString(36)
     overlay.innerHTML = `
-      <div class="sm-modal" style="${width ? `max-width:${width}px` : ''}" role="dialog" aria-modal="true">
+      <div class="sm-modal"${width ? ` style="max-width:${Number(width) || 520}px"` : ''} role="dialog" aria-modal="true" aria-labelledby="${titleId}">
         <div class="sm-modal-head">
-          <button type="button" class="sm-btn-icon sm-modal-back" onclick="SMUI._modalBack()" title="${SM.t('back')}"><i class="fas fa-arrow-right"></i></button>
-          <div class="sm-modal-title">${SM.esc(title)}</div>
-          <button type="button" class="sm-btn-icon" onclick="SMUI.closeModal()" title="${SM.t('close')}"><i class="fas fa-times"></i></button>
+          <button type="button" class="sm-btn-icon sm-modal-back" ${SMEvents.attrs('SMUI._modalBack')} aria-label="${SM.t('back')}" title="${SM.t('back')}"><i class="fas fa-arrow-right"></i></button>
+          <div class="sm-modal-title" id="${titleId}">${SM.esc(title)}</div>
+          <button type="button" class="sm-btn-icon" ${SMEvents.attrs('SMUI.closeModal')} aria-label="${SM.t('close')}" title="${SM.t('close')}"><i class="fas fa-times"></i></button>
         </div>
         <div class="sm-modal-body">${bodyHtml}</div>
         ${onSave ? `<div class="sm-modal-foot sm-modal-foot-split">
           ${onDelete ? `<button type="button" class="sm-btn sm-btn-danger" id="sm-modal-delete"><i class="fas fa-trash"></i> ${SM.t('delete')}</button>` : '<span></span>'}
           <div class="sm-modal-foot-actions">
-            <button type="button" class="sm-btn sm-btn-ghost" onclick="SMUI._modalBack()"><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
+            <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMUI._modalBack')}><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
             <button type="button" class="sm-btn sm-btn-primary" id="sm-modal-save">${SM.esc(saveLabel || SM.t('save'))}</button>
           </div>
         </div>` : `<div class="sm-modal-foot">
-          <button type="button" class="sm-btn sm-btn-ghost" onclick="SMUI._modalBack()"><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
+          <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMUI._modalBack')}><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
         </div>`}
       </div>`
     root.innerHTML = ''
@@ -104,27 +105,34 @@ const SMUI = {
     SMUI._modalPrevFocus = null
   },
 
-  backBar(title, onclick = 'SM.popSubView()') {
+  backBar(title, fnPath = 'SM.popSubView', args = []) {
+    const attrs = typeof fnPath === 'string' && !fnPath.includes('(')
+      ? SMEvents.attrs(fnPath, args)
+      : SMEvents.attrs('SM.popSubView')
     return `<div class="sm-back-bar">
-      <button type="button" class="sm-btn sm-btn-ghost sm-back-btn" onclick="${onclick}"><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
+      <button ${attrs} class="sm-btn sm-btn-ghost sm-back-btn"><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
       <div class="sm-back-title">${SM.esc(title)}</div>
     </div>`
   },
 
   tabs(items, activeId, attr = 'data-sm-tab') {
-    return `<div class="sm-tabs" role="tablist">${items.map(t => `
-      <button type="button" class="sm-tab${t.id === activeId ? ' active' : ''}" role="tab"
-        ${attr}="${t.id}" onclick="${t.onclick || ''}" aria-selected="${t.id === activeId}">
+    return `<div class="sm-tabs" role="tablist">${items.map(t => {
+      const action = t.fn
+        ? SMEvents.attrs(t.fn, t.args || [])
+        : (t.attrs || 'type="button"')
+      return `
+      <button ${action} class="sm-tab${t.id === activeId ? ' active' : ''}" role="tab"
+        ${attr}="${t.id}" aria-selected="${t.id === activeId}" id="sm-tab-${t.id}">
         ${t.icon ? `<i class="fas ${t.icon}"></i>` : ''}${SM.esc(t.label)}
-      </button>`).join('')}</div>`
+      </button>`
+    }).join('')}</div>`
   },
 
   rowActions(buttons) {
     return `<div class="sm-row-actions">${buttons.map(b => {
-      if (b.attrs) {
-        return `<button ${b.attrs} class="sm-btn sm-btn-sm ${b.className || 'sm-btn-ghost'}" title="${SM.esc(b.label)}">${b.icon ? `<i class="fas ${b.icon}"></i>` : SM.esc(b.label)}</button>`
-      }
-      return `<button type="button" class="sm-btn sm-btn-sm ${b.className || 'sm-btn-ghost'}" onclick="${b.onclick}">${b.icon ? `<i class="fas ${b.icon}"></i> ` : ''}${SM.esc(b.label)}</button>`
+      const attrs = b.attrs || (b.fn ? SMEvents.attrs(b.fn, b.args || []) : null)
+      if (!attrs) return ''
+      return `<button ${attrs} class="sm-btn sm-btn-sm ${b.className || 'sm-btn-ghost'}" title="${SM.esc(b.label)}" aria-label="${SM.esc(b.label)}">${b.icon ? `<i class="fas ${b.icon}"></i>` : SM.esc(b.label)}</button>`
     }).join('')}</div>`
   },
 
@@ -154,7 +162,7 @@ const SMUI = {
 
   statCards(items) {
     return `<div class="sm-stats">${items.map((s, i) => {
-      const route = s.route ? ` onclick="SM.navigate('${s.route}')" role="button" tabindex="0"` : ''
+      const route = s.route ? ` ${SMEvents.elAttrs('SM.navigate', [s.route])} role="button" tabindex="0"` : ''
       const cls = s.route ? ' sm-stat--click' : ''
       return `
       <div class="sm-stat${cls}" style="--stat-color:${s.color || 'var(--sm-accent)'};animation-delay:${i * 0.05}s"${route}>
@@ -178,8 +186,8 @@ const SMUI = {
     return `<div class="sm-module-search">
       <i class="fas fa-search" aria-hidden="true"></i>
       <input type="search" id="sm-search-${route}" placeholder="${SM.esc(placeholder)}" value="${SM.esc(val)}"
-        autocomplete="off" oninput="SM.setModuleSearch('${route}', this.value)"/>
-      ${val ? `<button type="button" class="sm-search-clear" onclick="SM.setModuleSearch('${route}','')" title="پاک کردن"><i class="fas fa-times"></i></button>` : ''}
+        autocomplete="off" ${SMEvents.inputAttrs('SM.setModuleSearch', [route])} aria-label="${SM.esc(placeholder)}"/>
+      ${val ? `<button ${SMEvents.attrs('SM.setModuleSearch', [route, ''])} class="sm-search-clear" title="پاک کردن" aria-label="پاک کردن"><i class="fas fa-times"></i></button>` : ''}
     </div>`
   },
 
@@ -194,7 +202,7 @@ const SMUI = {
       <h2>${SM.esc(title)}</h2>
       <p class="sm-module-disabled-lead">این بخش فعلاً غیرفعال است.</p>
       <p>در حال ارتقا و به‌روزرسانی هستیم — به‌زودی با امکانات کامل در دسترس قرار می‌گیرد.</p>
-      <button type="button" class="sm-btn sm-btn-primary" onclick="SM.navigate('dashboard')"><i class="fas fa-home"></i> بازگشت به داشبورد</button>
+      <button ${SMEvents.attrs('SM.navigate', ['dashboard'])} class="sm-btn sm-btn-primary"><i class="fas fa-home"></i> بازگشت به داشبورد</button>
     </div>`
   },
 
@@ -206,15 +214,12 @@ const SMUI = {
   },
 
   tableActionsCell(viewOnclick, editOnclick, extra = '') {
-    // Prefer data-sm-fn when callers pass { fn, args }; keep onclick strings for compat
     const toBtn = (spec, label, icon) => {
       if (!spec) return null
       if (typeof spec === 'object' && spec.fn) {
-        return { label, icon, attrs: (typeof SMEvents !== 'undefined' && SMEvents.attrs)
-          ? SMEvents.attrs(spec.fn, spec.args || [])
-          : `type="button" onclick="${spec.fn}(${(spec.args || []).map(a => JSON.stringify(a)).join(',')})"` }
+        return { label, icon, attrs: SMEvents.attrs(spec.fn, spec.args || []) }
       }
-      return { label, icon, onclick: spec }
+      return null
     }
     return `<td>${SMUI.rowActions([
       toBtn(viewOnclick, SM.t('view'), 'fa-eye'),

@@ -154,46 +154,10 @@ const SMAccounting = {
   async _syncInvoice(txData, txId, existingInvoiceId) {
     if (!document.getElementById('tx-sync-inv')?.checked && !existingInvoiceId) return null
     if (txData.purposeCategory === 'transfer') return null
-    if (typeof FinanceSync !== 'undefined') {
-      return FinanceSync.createInvoiceFromTx(txData, txId, existingInvoiceId)
+    if (typeof FinanceSync === 'undefined') {
+      throw new Error('ماژول مالی در دسترس نیست')
     }
-    const bank = DB.find('banks', b => b.id === txData.bankId)
-    const contract = txData.contractId ? DB.find('contracts', c => c.id === txData.contractId) : null
-    const cats = txData.type === 'deposit' ? this.DEPOSIT_CATS : this.WITHDRAWAL_CATS
-    const catLabel = cats[txData.purposeCategory] || ''
-    let client = txData.client || ''
-    if (txData.personnelId) client = this._personName(txData.personnelId)
-    else if (contract && !client) client = this._couple(contract)
-
-    const invPayload = {
-      type: this._mapInvoiceType(txData),
-      direction: txData.type === 'deposit' ? 'in' : 'out',
-      title: txData.purpose || `${catLabel}${client ? ' — ' + client : ''}`,
-      client,
-      contractId: txData.contractId || '',
-      personnelId: txData.personnelId || '',
-      amount: txData.amount,
-      date: txData.date,
-      purpose: txData.purpose || catLabel,
-      periodMonth: txData.periodMonth || '',
-      bankId: txData.bankId || '',
-      bankName: bank ? (bank.name || bank.bank || '') : '',
-      accountOrCard: txData.accountOrCard || '',
-      paymentMethod: txData.paymentMethod || 'transfer',
-      description: txData.notes || '',
-      status: 'paid',
-      transactionId: txId,
-      syncLedger: false
-    }
-
-    if (existingInvoiceId) {
-      const ex = DB.find('invoices', i => i.id === existingInvoiceId)
-      if (ex) await SecureDB.update('invoices', existingInvoiceId, { ...invPayload, number: ex.number })
-      return existingInvoiceId
-    }
-    const num = this._genInvoiceNumber()
-    const inv = await SecureDB.insert('invoices', { ...invPayload, number: num, createdAt: Utils.todayJalali() })
-    return inv.id
+    return FinanceSync.createInvoiceFromTx(txData, txId, existingInvoiceId)
   },
 
   render(el) {
@@ -213,20 +177,20 @@ const SMAccounting = {
         { label: 'چک فعال', value: SM.fmt(cheques.filter(c => c.status !== 'passed' && c.status !== 'cancelled').length), icon: 'fa-money-check', color: 'var(--sm-warning)' }
       ])}
       ${SMUI.tabs([
-        { id: 'banks', fa: 'بانک', en: 'Banks', icon: 'fa-building-columns', onclick: "SMAccounting.setTab('banks')" },
-        { id: 'ledger', fa: 'رفت‌وبرگشت', en: 'Ledger', icon: 'fa-book', onclick: "SMAccounting.setTab('ledger')" },
-        { id: 'cheques', fa: 'چک', en: 'Cheques', icon: 'fa-money-check-alt', onclick: "SMAccounting.setTab('cheques')" }
+        { id: 'banks', label: 'بانک', icon: 'fa-building-columns', fn: 'SMAccounting.setTab', args: ['banks'] },
+        { id: 'ledger', label: 'رفت‌وبرگشت', icon: 'fa-book', fn: 'SMAccounting.setTab', args: ['ledger'] },
+        { id: 'cheques', label: 'چک', icon: 'fa-money-check-alt', fn: 'SMAccounting.setTab', args: ['cheques'] }
       ], this._tab)}
       <div class="sm-acc-body">${this._renderTab(q)}</div>`
   },
 
   _headActions() {
-    const flow = `<button type="button" class="sm-btn sm-btn-primary" onclick="SMAccounting.openFlowMenu()"><i class="fas fa-right-left"></i> واریز و برداشت</button>`
+    const flow = `<button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMAccounting.openFlowMenu')}><i class="fas fa-right-left"></i> واریز و برداشت</button>`
     let extra = ''
     if (this._tab === 'banks') {
-      extra = `<button type="button" class="sm-btn sm-btn-ghost" onclick="SMAccounting.addBank()"><i class="fas fa-plus"></i> افزودن بانک</button>`
+      extra = `<button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMAccounting.addBank')}><i class="fas fa-plus"></i> افزودن بانک</button>`
     } else if (this._tab === 'cheques') {
-      extra = `<button type="button" class="sm-btn sm-btn-ghost" onclick="SMAccounting.addCheque()"><i class="fas fa-plus"></i> ثبت چک</button>`
+      extra = `<button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMAccounting.addCheque')}><i class="fas fa-plus"></i> ثبت چک</button>`
     }
     return `<div class="sm-acc-head-actions">${flow}${extra}</div>`
   },
@@ -235,20 +199,24 @@ const SMAccounting = {
     SMUI.modal('واریز و برداشت', `
       <p class="sm-acc-flow-hint">نوع تراکنش را انتخاب کنید — جزئیات در فرم بعدی ثبت می‌شود و در فاکتورها هم می‌آید.</p>
       <div class="sm-acc-flow-pick">
-        <button type="button" class="sm-acc-flow-btn is-in" onclick="SMUI.closeModal();SMAccounting.addDeposit()">
+        <button type="button" class="sm-acc-flow-btn is-in" ${SMEvents.attrs('SMAccounting.flowDeposit')}>
           <i class="fas fa-arrow-down"></i>
           <div><strong>ثبت واریز</strong><span>مشتری، بیعانه، قرارداد، درآمد</span></div>
         </button>
-        <button type="button" class="sm-acc-flow-btn is-out" onclick="SMUI.closeModal();SMAccounting.addWithdrawal()">
+        <button type="button" class="sm-acc-flow-btn is-out" ${SMEvents.attrs('SMAccounting.flowWithdrawal')}>
           <i class="fas fa-arrow-up"></i>
           <div><strong>ثبت برداشت</strong><span>کنسلی، پرسنل، اجاره، هزینه</span></div>
         </button>
-        <button type="button" class="sm-acc-flow-btn" onclick="SMUI.closeModal();SMAccounting.addTransfer()">
+        <button type="button" class="sm-acc-flow-btn" ${SMEvents.attrs('SMAccounting.flowTransfer')}>
           <i class="fas fa-exchange-alt"></i>
           <div><strong>انتقال بین حساب</strong><span>از یک بانک/صندوق به دیگری</span></div>
         </button>
       </div>`, { width: 440 })
   },
+
+  flowDeposit() { SMUI.closeModal(); this.addDeposit() },
+  flowWithdrawal() { SMUI.closeModal(); this.addWithdrawal() },
+  flowTransfer() { SMUI.closeModal(); this.addTransfer() },
 
   _renderTab(q) {
     if (this._tab === 'banks') return this._banksView(q)
@@ -265,7 +233,7 @@ const SMAccounting = {
     }
     if (!banks.length) {
       return `${SMUI.empty('fa-building-columns', q ? 'بانکی یافت نشد' : 'هنوز حساب بانکی ثبت نشده', 'نام بانک، کارت، شبا و حساب را اضافه کنید')}
-        ${!q ? `<div style="text-align:center;margin-top:12px"><button type="button" class="sm-btn sm-btn-primary" onclick="SMAccounting.addBank()"><i class="fas fa-plus"></i> اولین بانک</button></div>` : ''}`
+        ${!q ? `<div style="text-align:center;margin-top:12px"><button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMAccounting.addBank')}><i class="fas fa-plus"></i> اولین بانک</button></div>` : ''}`
     }
     return `<div class="sm-acc-bank-grid">${banks.map((b, i) => this._bankCard(b, i)).join('')}</div>`
   },
@@ -281,7 +249,7 @@ const SMAccounting = {
           <strong>${SM.esc(b.name || b.bank || 'حساب بانکی')}</strong>
           <span>${SM.esc(b.bank || '')}${b.holder ? ` · ${SM.esc(b.holder)}` : ''}</span>
         </div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.editBank('${b.id}')" title="ویرایش"><i class="fas fa-pen"></i></button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMAccounting.editBank', [b.id])} title="ویرایش"><i class="fas fa-pen"></i></button>
       </div>
       <div class="sm-acc-bank-balance">${SM.fmt(b.balance || 0)} <small>تومان</small></div>
       <div class="sm-acc-bank-fields">
@@ -323,17 +291,17 @@ const SMAccounting = {
       <div class="sm-inv-cats">
         ${filters.map(f => `
           <button type="button" class="sm-inv-cat ${f.cls || ''}${this._flowFilter === f.id ? ' active' : ''}"
-            ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.setFlowFilter', [f.id]) : `onclick="SMAccounting.setFlowFilter('${f.id}')"`}>${f.label}</button>`).join('')}
+            ${SMEvents.attrs('SMAccounting.setFlowFilter', [f.id])}>${f.label}</button>`).join('')}
       </div>
       <div class="sm-acc-tx-list">
         ${page.items.length ? page.items.map(t => this._txRow(t)).join('') : SMUI.empty('fa-book', q ? 'تراکنشی یافت نشد' : 'تراکنشی ثبت نشده — از دکمه «واریز و برداشت» بالا استفاده کنید')}
       </div>
       ${page.pages > 1 ? `<div class="sm-pager" style="display:flex;gap:8px;justify-content:center;margin-top:12px;align-items:center">
         <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${page.hasPrev ? '' : 'disabled '}
-          ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.setLedgerPage', [page.page - 1]) : `onclick="SMAccounting.setLedgerPage(${page.page - 1})"`}>قبلی</button>
+          ${SMEvents.attrs('SMAccounting.setLedgerPage', [page.page - 1])}>قبلی</button>
         <span style="font-size:.85rem;color:var(--sm-text-muted)">${(page.page + 1).toLocaleString('fa-IR')} / ${page.pages.toLocaleString('fa-IR')} — ${page.total.toLocaleString('fa-IR')} مورد</span>
         <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${page.hasNext ? '' : 'disabled '}
-          ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.setLedgerPage', [page.page + 1]) : `onclick="SMAccounting.setLedgerPage(${page.page + 1})"`}>بعدی</button>
+          ${SMEvents.attrs('SMAccounting.setLedgerPage', [page.page + 1])}>بعدی</button>
       </div>` : ''}`
   },
 
@@ -370,9 +338,9 @@ const SMAccounting = {
         <div class="sm-acc-tx-amt">${isIn ? '+' : '−'} ${SM.fmt(t.amount || 0)} <small>تومان</small></div>
         <div class="sm-acc-tx-btns">
           <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="PDF"
-            ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.printReceipt', [t.id]) : `onclick="SMAccounting.printReceipt('${t.id}')"`}><i class="fas fa-file-pdf"></i></button>
+            ${SMEvents.attrs('SMAccounting.printReceipt', [t.id])}><i class="fas fa-file-pdf"></i></button>
           ${!isTransfer ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost"
-            ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.editTx', [t.id]) : `onclick="SMAccounting.editTx('${t.id}')"`}><i class="fas fa-pen"></i></button>` : ''}
+            ${SMEvents.attrs('SMAccounting.editTx', [t.id])}><i class="fas fa-pen"></i></button>` : ''}
         </div>
       </div>
     </div>`
@@ -413,7 +381,7 @@ const SMAccounting = {
       <div class="sm-inv-cats">
         ${filters.map(f => `
           <button type="button" class="sm-inv-cat ${f.cls || ''}${this._chequeFilter === f.id ? ' active' : ''}"
-            onclick="SMAccounting.setChequeFilter('${f.id}')">${f.label}</button>`).join('')}
+            ${SMEvents.attrs('SMAccounting.setChequeFilter', [f.id])}>${f.label}</button>`).join('')}
       </div>
       <div class="sm-acc-tx-list">
         ${cheques.length ? cheques.map(c => this._chequeRow(c)).join('') : SMUI.empty('fa-money-check', q ? 'چکی یافت نشد' : 'چکی ثبت نشده')}
@@ -429,20 +397,20 @@ const SMAccounting = {
     const num = this._chequeNumber(c)
 
     let actions = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="ویرایش"
-      ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.editCheque', [c.id]) : `onclick="SMAccounting.editCheque('${c.id}')"`}><i class="fas fa-pen"></i></button>`
+      ${SMEvents.attrs('SMAccounting.editCheque', [c.id])}><i class="fas fa-pen"></i></button>`
     if (status === 'pending') {
       actions = `
         <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" title="وصول / پاس"
-          ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.passCheque', [c.id]) : `onclick="SMAccounting.passCheque('${c.id}')"`}><i class="fas fa-check"></i></button>
+          ${SMEvents.attrs('SMAccounting.passCheque', [c.id])}><i class="fas fa-check"></i></button>
         <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="برگشتی"
-          ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.bounceCheque', [c.id]) : `onclick="SMAccounting.bounceCheque('${c.id}')"`}><i class="fas fa-undo"></i></button>
+          ${SMEvents.attrs('SMAccounting.bounceCheque', [c.id])}><i class="fas fa-undo"></i></button>
         <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="ابطال"
-          ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.cancelCheque', [c.id]) : `onclick="SMAccounting.cancelCheque('${c.id}')"`}><i class="fas fa-ban"></i></button>
+          ${SMEvents.attrs('SMAccounting.cancelCheque', [c.id])}><i class="fas fa-ban"></i></button>
         ${actions}`
     } else if (status === 'passed') {
       actions = `
         <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="لغو پاس"
-          ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.revertPassCheque', [c.id]) : `onclick="SMAccounting.revertPassCheque('${c.id}')"`}><i class="fas fa-rotate-left"></i></button>
+          ${SMEvents.attrs('SMAccounting.revertPassCheque', [c.id])}><i class="fas fa-rotate-left"></i></button>
         ${actions}`
     }
 
@@ -794,11 +762,8 @@ const SMAccounting = {
   },
 
   async _applyBankDelta(bankId, type, amount) {
-    if (typeof FinanceSync !== 'undefined') return FinanceSync.applyBankDelta(bankId, type, amount)
-    if (!bankId || !amount) return
-    const b = DB.find('banks', x => x.id === bankId)
-    if (!b) return
-    await SecureDB.update('banks', bankId, { balance: (b.balance || 0) + (type === 'deposit' ? amount : -amount) })
+    if (typeof FinanceSync === 'undefined') throw new Error('ماژول مالی در دسترس نیست')
+    return FinanceSync.applyBankDelta(bankId, type, amount)
   },
 
   async _adjustBankBalance(oldItem, newItem) {

@@ -11,7 +11,7 @@ SMModules.bookings = {
   render(el) {
     const bookings = SMH.filterBySearch(DB.active('bookings'), ['title', 'client', 'date'])
     el.innerHTML = `
-      ${SMUI.sectionHead('رزرو و مشاوره', '', SMH.addBtn('SMModules.bookings.add()'))}
+      ${SMUI.sectionHead('رزرو و مشاوره', '', SMH.addBtn('SMModules.bookings.add'))}
       ${SMUI.moduleSearch('bookings', 'جستجو در رزروها — مشتری، عنوان، تاریخ...')}
       ${SMUI.table(
         ['عنوان', 'تاریخ', 'ساعت', 'مشتری', 'وضعیت', SM.t('actions')],
@@ -34,7 +34,7 @@ SMModules.bookings = {
         <p style="margin-top:8px"><strong>مشتری:</strong> ${SM.esc(b.client || '—')}</p>
         <p style="margin-top:8px"><strong>وضعیت:</strong> ${SMUI.badge(this._statusLabel(b.status), 'info')}</p>
         <div style="margin-top:16px;display:flex;gap:8px">
-          <button class="sm-btn sm-btn-primary" onclick="SMModules.bookings.edit('${b.id}')">${SM.t('edit')}</button>
+          <button class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMModules.bookings.edit', [b.id])}>${SM.t('edit')}</button>
         </div>
       </div></div>`)
   },
@@ -78,7 +78,7 @@ SMModules.timeline = {
       })
     }
     el.innerHTML = `
-      ${SMUI.sectionHead('تایم‌لاین عروسی', 'برنامه روز مراسم', `<button class="sm-btn sm-btn-primary" onclick="SMModules.timeline.add()"><i class="fas fa-plus"></i> ${SM.t('add')}</button>`)}
+      ${SMUI.sectionHead('تایم‌لاین عروسی', 'برنامه روز مراسم', `<button class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMModules.timeline.add')}><i class="fas fa-plus"></i> ${SM.t('add')}</button>`)}
       ${SMUI.moduleSearch('timeline', 'جستجو در تایم‌لاین — زوج، رویداد...')}
       <div class="sm-grid-2">${timelines.length ? timelines.map(t => {
         const contract = contracts.find(c => c.id === t.contractId)
@@ -86,7 +86,7 @@ SMModules.timeline = {
         return `<div class="sm-card">
           <div class="sm-card-head">
             <div class="sm-card-title">${SM.esc(t.title || contract?.couple || 'تایم‌لاین')}</div>
-            <button class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMModules.timeline.edit('${t.id}')">${SM.t('edit')}</button>
+            <button class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMModules.timeline.edit', [t.id])}>${SM.t('edit')}</button>
           </div>
           <div class="sm-card-body">
             <div class="sm-timeline">${events.map(ev => `

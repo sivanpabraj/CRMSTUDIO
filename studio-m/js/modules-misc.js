@@ -5,8 +5,8 @@ SMModules.files = {
     const files = (typeof DB.active === 'function' ? DB.active('fileAssets') : (DB.get('fileAssets') || []).filter(f => !f._deleted))
     const cloud = typeof FileStorage !== 'undefined' && FileStorage.isAvailable?.()
     el.innerHTML = `
-      ${SMUI.sectionHead(SM.t('files'), cloud ? 'ابر Supabase Storage' : 'محلی — برای ابر فعال کنید', `<button class="sm-btn sm-btn-primary" onclick="document.getElementById('sm-file-input').click()"><i class="fas fa-upload"></i> ${SM.state.locale === 'fa' ? 'آپلود' : 'Upload'}</button>`)}
-      <input type="file" id="sm-file-input" hidden onchange="SMModules.files.upload(this)"/>
+      ${SMUI.sectionHead(SM.t('files'), cloud ? 'ابر Supabase Storage' : 'محلی — برای ابر فعال کنید', `<button class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMModules.files.pickUpload')}><i class="fas fa-upload"></i> ${SM.state.locale === 'fa' ? 'آپلود' : 'Upload'}</button>`)}
+      <input type="file" id="sm-file-input" hidden data-sm-change-fn="SMModules.files.upload" data-sm-args='[]'/>
       ${files.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">${files.map(f => `
         <div class="sm-card">
           <div class="sm-card-body" style="text-align:center">
@@ -14,12 +14,16 @@ SMModules.files = {
             <div style="font-weight:700;font-size:.85rem;word-break:break-all">${SM.esc(f.name)}</div>
             <div style="font-size:.72rem;color:var(--sm-text-muted)">${SM.esc(f.size || '')} — ${SM.esc(f.createdAt || '')}</div>
             ${f.storagePath ? SMUI.badge('ابر', 'success') : ''}
-            <button class="sm-btn sm-btn-sm sm-btn-danger" style="margin-top:8px" onclick="SMModules.files.remove(${JSON.stringify(String(f.id))})">${SM.t('delete')}</button>
+            <button class="sm-btn sm-btn-sm sm-btn-danger" style="margin-top:8px" ${SMEvents.attrs('SMModules.files.remove', [f.id])}>${SM.t('delete')}</button>
           </div>
         </div>`).join('')}</div>` : SMUI.empty('fa-folder-open', SM.t('no_data'))}`
   },
-  async upload(input) {
-    const file = input.files?.[0]
+  pickUpload() {
+    document.getElementById('sm-file-input')?.click()
+  },
+  async upload(a, b) {
+    const input = (b && b.files !== undefined) ? b : a
+    const file = input?.files?.[0]
     if (!file) return
     if (file.size > 5 * 1024 * 1024) return SM.toast(SM.state.locale === 'fa' ? 'حداکثر ۵ مگابایت' : 'Max 5MB', 'error')
     const assetId = crypto.randomUUID?.() || `${Date.now()}`
@@ -82,7 +86,7 @@ SMModules.media = {
   render(el) {
     const galleries = DB.active('galleries')
     el.innerHTML = `
-      ${SMUI.sectionHead('کتابخانه رسانه', 'عکس، ویدیو و فایل‌های پروژه', `<button class="sm-btn sm-btn-primary" onclick="SMModules.media.add()"><i class="fas fa-plus"></i> ${SM.t('add')}</button>`)}
+      ${SMUI.sectionHead('کتابخانه رسانه', 'عکس، ویدیو و فایل‌های پروژه', `<button class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMModules.media.add')}><i class="fas fa-plus"></i> ${SM.t('add')}</button>`)}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">
         ${galleries.length ? galleries.map(g => `
           <div class="sm-card">
@@ -93,9 +97,9 @@ SMModules.media = {
                 <span class="sm-badge sm-badge-info">${g.photoCount || 0} فایل</span>
                 ${g.downloadEnabled ? SMUI.badge('دانلود فعال', 'success') : ''}
               </div>
-              <button class="sm-btn sm-btn-sm sm-btn-primary" style="margin-top:12px" onclick="SMModules.media.deliver('${g.id}')">تحویل به مشتری</button>
-              <button class="sm-btn sm-btn-sm sm-btn-ghost" style="margin-top:8px" onclick="SMModules.media.edit('${g.id}')">${SM.t('edit')}</button>
-              <button class="sm-btn sm-btn-sm sm-btn-danger" style="margin-top:8px" onclick="SMH.remove('galleries','${g.id}','media')">${SM.t('delete')}</button>
+              <button class="sm-btn sm-btn-sm sm-btn-primary" style="margin-top:12px" ${SMEvents.attrs('SMModules.media.deliver', [g.id])}>تحویل به مشتری</button>
+              <button class="sm-btn sm-btn-sm sm-btn-ghost" style="margin-top:8px" ${SMEvents.attrs('SMModules.media.edit', [g.id])}>${SM.t('edit')}</button>
+              <button class="sm-btn sm-btn-sm sm-btn-danger" style="margin-top:8px" ${SMEvents.attrs('SMH.remove', ['galleries', g.id, 'media'])}>${SM.t('delete')}</button>
             </div>
           </div>`).join('') : SMUI.empty('fa-photo-film', 'رسانه‌ای ثبت نشده')}
       </div>`
@@ -145,7 +149,7 @@ SMModules.notifications = {
   render(el) {
     const notifs = DB.active('notifications').slice().reverse()
     el.innerHTML = `
-      ${SMUI.sectionHead(SM.t('notifications'), '', `<button class="sm-btn sm-btn-ghost" onclick="SMModules.notifications.markAll()">${SM.state.locale === 'fa' ? 'خواندن همه' : 'Mark all read'}</button>`)}
+      ${SMUI.sectionHead(SM.t('notifications'), '', `<button class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMModules.notifications.markAll')}>${SM.state.locale === 'fa' ? 'خواندن همه' : 'Mark all read'}</button>`)}
       ${notifs.length ? notifs.map(n => `
         <div class="sm-card" style="margin-bottom:8px;${n.read ? 'opacity:.65' : ''}">
           <div class="sm-card-body" style="display:flex;gap:12px;align-items:flex-start">
@@ -155,7 +159,7 @@ SMModules.notifications = {
               <div style="font-size:.85rem;color:var(--sm-text-muted);margin-top:4px">${SM.esc(n.text || '')}</div>
               <div style="font-size:.72rem;color:var(--sm-text-muted);margin-top:6px">${SM.esc(n.createdAt || '')}</div>
             </div>
-            ${!n.read ? `<button class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMModules.notifications.read('${n.id}')">✓</button>` : ''}
+            ${!n.read ? `<button class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMModules.notifications.read', [n.id])}>✓</button>` : ''}
           </div>
         </div>`).join('') : SMUI.empty('fa-bell', SM.t('no_data'))}`
   },
@@ -203,7 +207,7 @@ SMModules.api = {
   render(el) {
     const keys = DB.get('apiKeys').filter(k => !k._deleted)
     el.innerHTML = `
-      ${SMUI.sectionHead('API', SM.state.locale === 'fa' ? 'لایه یکپارچه‌سازی' : 'Integration layer', `<button class="sm-btn sm-btn-primary" onclick="SMModules.api.generateKey()"><i class="fas fa-key"></i> ${SM.state.locale === 'fa' ? 'کلید جدید' : 'New Key'}</button>`)}
+      ${SMUI.sectionHead('API', SM.state.locale === 'fa' ? 'لایه یکپارچه‌سازی' : 'Integration layer', `<button class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMModules.api.generateKey')}><i class="fas fa-key"></i> ${SM.state.locale === 'fa' ? 'کلید جدید' : 'New Key'}</button>`)}
       <div class="sm-card" style="margin-bottom:20px">
         <div class="sm-card-head"><div class="sm-card-title">${SM.state.locale === 'fa' ? 'نقاط پایانی' : 'Endpoints'}</div></div>
         <div class="sm-card-body">
@@ -221,7 +225,7 @@ SMModules.api = {
         keys.map(k => `<tr>
           <td>${SM.esc(k.name)}</td><td dir="ltr" style="font-family:monospace;font-size:.78rem">${SM.esc(k.key?.slice(0, 12) + '...')}</td>
           <td>${SM.esc(k.createdAt || '—')}</td>
-          <td><button class="sm-btn sm-btn-sm sm-btn-danger" onclick="SMModules.api.revoke('${k.id}')">${SM.t('delete')}</button></td>
+          <td><button class="sm-btn sm-btn-sm sm-btn-danger" ${SMEvents.attrs('SMModules.api.revoke', [k.id])}>${SM.t('delete')}</button></td>
         </tr>`)
       ) : SMUI.empty('fa-key', SM.state.locale === 'fa' ? 'کلید API بسازید' : 'Generate API keys')}`
   },

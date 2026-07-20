@@ -85,7 +85,7 @@ const SMPayroll = {
 
     el.innerHTML = `
       ${SMUI.sectionHead('حقوق', 'محاسبه از پروژه و حقوق ماهانه · پرداخت از بانک', `
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMPayroll.add()"><i class="fas fa-plus"></i> افزودن پرداخت</button>`)}
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMPayroll.add')}><i class="fas fa-plus"></i> افزودن پرداخت</button>`)}
       ${SMUI.statCards([
         { label: 'پرداخت‌ها', value: SM.fmt(payments.length), color: 'var(--sm-accent)' },
         { label: 'مجموع پرداختی', value: SM.fmt(totalPaid), color: 'var(--sm-success)' },

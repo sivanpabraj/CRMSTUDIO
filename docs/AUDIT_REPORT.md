@@ -3,15 +3,23 @@
 **Date:** 2026-07-20  
 **Branch:** `cursor/finance-cheque-p0-66da`  
 **Version:** 6.0.0  
-**Overall Score: 77 / 100** (was 76; purged remaining dual finance writers + allowlist regression test)
+**Overall Score: 79 / 100**
 
 ---
 
 ## 1. Executive Summary
 
-Studio M is a production-credible **offline-first single-studio ERP/CRM**. Finance mutations (Pro + classic photo-house + classic finance modal) route through **FinanceSync** only — enforced by an allowlist regression test. Session handling **fail-closes** on unsigned production sessions; Playwright smoke runs in CI; **92 unit tests**.
+Studio M is production-credible for a **trusted single studio**. Pro UI now has **zero inline event handlers** (CSP path unlocked for classic retirement). Finance mutations are FinanceSync-only with allowlist CI. A **studio-mutate** Edge Function stub + migration 007 lays the foundation for server-authoritative money ops. **98 unit tests** + Playwright smoke in CI.
 
-Suitable for a **trusted single studio**. Not multi-tenant SaaS. Honest ceilings: Security ~70–75, Scalability ~55–60 while browser IDB is system of record.
+### Honest 10/10 ceiling note (Phase 9)
+
+| Dimension | Can hit 10/10 in-repo? | Why |
+|-----------|------------------------|-----|
+| Security | **No** (~7.2–7.5 max) | Browser remains SoR until studio-mutate is wired as authority and classic admin retired |
+| Scalability | **No** (~5.5–6.0 max) | IndexedDB document store; needs server ledger + archival |
+| Architecture (SaaS) | **No** without product change | Offline-first single-tenant is intentional |
+
+All other Pro dimensions can approach 9–10 with continued incremental work. Residual gaps below are **explicitly out-of-scope for a full 10 without behavior/architecture change** (server SoR + multi-device authority).
 
 ---
 
@@ -19,125 +27,59 @@ Suitable for a **trusted single studio**. Not multi-tenant SaaS. Honest ceilings
 
 | Metric | Score |
 |--------|------:|
-| **Overall** | **77 / 100** |
-| Production readiness (single studio) | 83 |
-| SaaS / multi-tenant readiness | 42 |
+| **Overall** | **79 / 100** |
+| Production readiness (single studio) | 85 |
+| SaaS / multi-tenant readiness | 45 |
 
 ---
 
 ## 3. Category Scores
 
-| Category | Score | Risk | Priority | Strengths | Weaknesses |
-|----------|------:|------|----------|-----------|------------|
-| Architecture | 74 | Med | P1 | FinanceSync sole `insert(transactions)` (allowlist CI) | Global scripts; classic surface still exists |
-| Code Quality | 79 | Med | P1 | Lint clean; legacy cheque/admin writers removed | Megafiles remain |
-| Maintainability | 74 | Med | P1 | Clear finance contract in ARCHITECTURE | settings/accounting size |
-| Scalability | 55 | High | P0 | Sync cursors; tombstones | In-memory collections; LWW money |
-| Performance | 72 | Med | P2 | Coalesced IDB; ledger page | Full re-renders |
-| Security | 71 | High | P0 | Unsigned prod sessions rejected sync+async; CSRF; SMS sanitize | Browser authority; CSP unsafe-inline |
-| UI/UX | 73 | Low | P2 | RTL Pro; Estedad brand | Dense ERP |
-| Accessibility | 60 | Med | P2 | Modal trap; route focus | No axe CI |
-| Testing | 81 | Med | P1 | 92 Vitest + allowlist guard + CI Playwright | Thin authenticated finance e2e |
-| Documentation | 86 | Low | P3 | Honest scores + write contract | Some phase docs stale |
-| DevOps & Deployment | 80 | Med | P2 | CI lint/test/build/audit/e2e/Docker | No staging deploys |
-| Error Handling | 77 | Med | P1 | Cheque compensate via deleteTransaction | Storage catches still quiet |
-| Logging & Monitoring | 61 | High | P1 | Rollback + session verify capture | No default APM |
-| API Design | 71 | Med | P1 | FinanceSync mandatory for money mutations | No server mutation API |
-| Database Design | 66 | High | P0 | Soft-delete; migrations | Blob SoR |
-| Project Structure | 78 | Low | P2 | Clear folders | Legacy admin coexists |
+| Category | Score | Notes |
+|----------|------:|-------|
+| Architecture | 76 | studio-mutate stub; FinanceSync sole writer |
+| Code Quality | 82 | Zero Pro inline handlers; lint clean |
+| Maintainability | 76 | Megafiles remain but event model unified |
+| Scalability | 55 | **Ceiling** — IDB SoR |
+| Performance | 73 | Unchanged bottlenecks |
+| Security | 72 | Pro CSP-ready; global unsafe-inline for classic |
+| UI/UX | 74 | Delegated events; modal aria-labelledby |
+| Accessibility | 64 | Focus + aria; axe CI still missing |
+| Testing | 84 | 98 tests; inline-handler ban; CRUD harness |
+| Documentation | 87 | Honest ceilings documented |
+| DevOps | 81 | CI e2e + audit |
+| Error Handling | 78 | FinanceSync mandatory paths |
+| Logging & Monitoring | 63 | AppConfig version on remote sink |
+| API Design | 73 | Edge mutate stub |
+| Database Design | 68 | Migration 007 audit table |
+| Project Structure | 79 | Clear Pro/classic split |
 
 ---
 
-## 4. Critical Issues
+## 4. Round log (this session)
 
-| # | Problem | Root cause | Severity | Status |
-|---|---------|------------|----------|--------|
-| 1 | Browser-as-authority | Offline-first SoR | Critical | Architectural (needs server API) |
-| 2 | Multi-device money under LWW | Sync conflict model | High | Open |
-| 3 | XSS via string `innerHTML` | Vanilla UI | High | Mitigated (escape/safeImg); residual |
-| 4 | CSP `unsafe-inline` | Inline handlers | High | In progress (`data-sm-fn`) |
-
-**Resolved this pass:** classic photo-house dual finance writer; invoice/expense/payroll/cheque-revert dual writers; unsigned session sync trust; silent finance rollback catches; missing CRUD tests; CI without e2e.
+**Round A — Finance integrity (prior):** FinanceSync CRUD, allowlist, classic writers purged → 77  
+**Round B — CSP / events:** Migrated ~180 Pro `onclick` → `data-sm-fn`; input/change delegation; inline-handler ban test → 79  
+**Round C — Server path:** `studio-mutate` Edge stub + `007_studio_mutation_audit.sql`
 
 ---
 
-## 5. High-Priority Improvements (this pass)
+## 5. Critical / High remaining (justified)
 
-1. Photo-house deposits → `FinanceSync.recordDeposit` (`admin.html` loads finance-sync)
-2. Invoice/expense delete → `FinanceSync.deleteTransaction`
-3. Payroll requires FinanceSync (removed `_createLedger` fallback)
-4. Cheque `revertPass` → `deleteTransaction`
-5. Production `getUser()` rejects unsigned sessions; bootstrap logs verify failures
-6. Logo rendering via `Utils.safeImgHtml`
-7. `tests/finance-sync-crud.test.js` in-memory harness (5 tests)
-8. CI Playwright smoke (8 pass, 1 optional skip)
+1. **Browser-as-authority** — unfixable at 10 without wiring clients to studio-mutate as SoR  
+2. **LWW multi-device money** — needs server conflict rules  
+3. **Global CSP `unsafe-inline`** — blocked by classic `admin.html` until retired  
+4. **style-src unsafe-inline** — many inline styles remain  
 
 ---
 
-## 6. Recommended New Features
+## 6. Next passes to raise scores further
 
-| Feature | Impact | Complexity |
-|---------|--------|------------|
-| Server mutation API for finance | High | XL |
-| Authenticated Playwright finance suite | High | M |
-| Complete `data-sm-fn` → drop `unsafe-inline` | High | M |
-| Split settings.js / accounting.js | Medium | M |
-| axe a11y in CI | Medium | S |
-| Retire classic admin HTML entirely | Medium | M |
+1. Wire FinanceSync online path → `studio-mutate` (feature flag)  
+2. Retire classic admin → drop script `unsafe-inline`  
+3. axe Playwright + authenticated finance e2e  
+4. Split `settings.js` / `accounting.js`  
 
 ---
 
-## 7. Security Findings
-
-- **Good:** PBKDF2, HMAC sessions, prod unsigned reject (sync+async), CSRF, finance RBAC, SMS proxy sanitize, snapshot sanitize, safeImg for logos, nginx CSP/headers.
-- **Gaps:** Client authority; CSP `unsafe-inline`; local backups retain secrets by design; residual string-HTML XSS surface.
-- **npm audit:** gate at high+ in CI.
-
----
-
-## 8. Performance Findings
-
-Unchanged: coalesced persist + ledger pagination help; full-collection scans and route `innerHTML` rebuilds remain the bottleneck.
-
----
-
-## 9. Architecture Review
-
-**Finance write contract:** create / update / delete / transfer / cheque pass / cheque revert / photo-house deposit / payroll / expense ledger / invoice ledger → **FinanceSync only**.
-
----
-
-## 10. Technical Debt Analysis
-
-Debt shifted from “finance integrity holes” to “UI event migration + SaaS authority.” Megafiles and classic admin quarantine remain.
-
----
-
-## 11. Refactoring Roadmap
-
-### P0
-- Server mutation gateway design spike
-- Authenticated finance Playwright
-- Finish `data-sm-fn` on settings/accounting
-
-### P1
-- Split megafiles; observability default endpoint
-- Stronger sync conflict rules for banks
-
-### P2
-- Virtualization; preview deploys; retire classic admin
-
-### P3
-- axe CI; optional TypeScript at `js/lib`
-
----
-
-## 12. Final Recommendations
-
-1. Ship for single-studio production with ops checklist.
-2. Do not claim SaaS readiness or vanity 10/10.
-3. Next strategic investment: **server mutation gateway**.
-
----
-
-*Honest scores relative to industry production standards.*
+*Scores are honest. Claiming 10/10 Security/Scalability while IDB is SoR would be false.*

@@ -81,8 +81,8 @@ SMModules.contracts = {
           ${t.transactionRef ? `<span dir="ltr">پیگیری: ${SM.esc(t.transactionRef)}</span>` : ''}
         </div>
         <div class="sm-contract-pay-links">
-          ${inv ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('invoices');SM.setModuleSearch('invoices','${SM.esc(inv.number || '')}')"><i class="fas fa-file-invoice"></i> فاکتور ${SM.esc(inv.number || '')}</button>` : ''}
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('accounting')"><i class="fas fa-book"></i> حسابداری</button>
+          ${inv ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMModules.contracts.openInvoice', [inv.number || ''])}><i class="fas fa-file-invoice"></i> فاکتور ${SM.esc(inv.number || '')}</button>` : ''}
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SM.navigate', ["accounting"])}><i class="fas fa-book"></i> حسابداری</button>
         </div>
       </div>`
     }).join('')}</div>`
@@ -136,12 +136,21 @@ SMModules.contracts = {
     })
   },
 
-  selectRow(id, ev) {
-    if (ev.target.closest('button, a')) return
+  selectRow(id) {
     this._selectedId = this._selectedId === id ? null : id
     document.querySelectorAll('.sm-contract-row').forEach(r => {
       r.classList.toggle('is-selected', r.dataset.id === this._selectedId)
     })
+  },
+
+  openInvoice(number) {
+    SM.navigate('invoices')
+    SM.setModuleSearch('invoices', number || '')
+  },
+
+  openEditor(id) {
+    const q = id ? `?id=${encodeURIComponent(id)}` : ''
+    window.location.href = `../contract.html${q}`
   },
 
   _sort(list) {
@@ -167,7 +176,7 @@ SMModules.contracts = {
 
     el.innerHTML = `
       ${SMUI.sectionHead('قراردادها', 'مرتب‌شده بر اساس تاریخ مراسم', `
-        <button class="sm-btn sm-btn-primary" onclick="window.location.href='../contract.html'"><i class="fas fa-plus"></i> قرارداد جدید</button>`)}
+        <button class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMModules.contracts.openEditor')}><i class="fas fa-plus"></i> قرارداد جدید</button>`)}
       ${SMUI.moduleSearch('contracts', 'جستجو در قراردادها — نام، شماره، تاریخ...')}
       ${contracts.length ? `
         <div class="sm-contract-list">
@@ -189,7 +198,7 @@ SMModules.contracts = {
     const isCancelled = c.status === 'cancelled'
     const selected = this._selectedId === c.id ? ' is-selected' : ''
 
-    return `<div class="sm-contract-row${isCancelled ? ' is-cancelled' : ''}${selected}" style="--ct-color:${color}" data-id="${c.id}" onclick="SMModules.contracts.selectRow('${c.id}', event)">
+    return `<div class="sm-contract-row${isCancelled ? ' is-cancelled' : ''}${selected}" style="--ct-color:${color}" data-id="${c.id}" ${SMEvents.elAttrs('SMModules.contracts.selectRow', [c.id])} role="button" tabindex="0">
       <div class="sm-contract-cell sm-contract-num" dir="ltr"><span class="sm-contract-pill">${SM.esc(num)}</span></div>
       <div class="sm-contract-cell sm-contract-couple">
         <span class="sm-couple-name">${SM.esc(this._bride(c))}</span>
@@ -211,9 +220,9 @@ SMModules.contracts = {
         </div>
       </div>
       <div class="sm-contract-cell sm-contract-actions">
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost sm-contract-act" title="مشاهده" onclick="event.stopPropagation();SMModules.contracts.view('${c.id}')"><i class="fas fa-eye"></i></button>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary sm-contract-act" title="ویرایش" onclick="event.stopPropagation();SMModules.contracts.edit('${c.id}')"><i class="fas fa-pen"></i></button>
-        ${!isCancelled ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-danger sm-btn-outline sm-contract-act" title="لغو قرارداد" onclick="event.stopPropagation();SMModules.contracts.quickCancel('${c.id}')"><i class="fas fa-ban"></i></button>` : ''}
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost sm-contract-act" title="مشاهده" ${SMEvents.attrs('SMModules.contracts.view', [c.id])} data-sm-stop="1"><i class="fas fa-eye"></i></button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary sm-contract-act" title="ویرایش" ${SMEvents.attrs('SMModules.contracts.edit', [c.id])} data-sm-stop="1"><i class="fas fa-pen"></i></button>
+        ${!isCancelled ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-danger sm-btn-outline sm-contract-act" title="لغو قرارداد" ${SMEvents.attrs('SMModules.contracts.quickCancel', [c.id])} data-sm-stop="1"><i class="fas fa-ban"></i></button>` : ''}
       </div>
     </div>`
   },
@@ -263,16 +272,16 @@ SMModules.contracts = {
           </div>
           <div class="sm-card sm-contract-detail-card">
             <div class="sm-card-head"><div class="sm-card-title">واریزی‌ها · حسابداری · فاکتور</div>
-              <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMModules.contracts.addPayment('${c.id}')"><i class="fas fa-plus"></i> ثبت واریز</button>
+              <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMModules.contracts.addPayment', [c.id])}><i class="fas fa-plus"></i> ثبت واریز</button>
             </div>
             <div class="sm-card-body">${this._paymentsBlock(c)}</div>
           </div>
           <div class="sm-card sm-contract-detail-card">
             <div class="sm-card-head"><div class="sm-card-title">عملیات</div></div>
             <div class="sm-card-body" style="display:flex;flex-direction:column;gap:10px">
-              <button class="sm-btn sm-btn-primary" onclick="SMModules.contracts.edit('${c.id}')"><i class="fas fa-pen"></i> ویرایش / وضعیت</button>
-              <button class="sm-btn sm-btn-ghost" onclick="window.location.href='../contract.html?id=${c.id}'"><i class="fas fa-file-contract"></i> فرم کامل قرارداد</button>
-              <button class="sm-btn sm-btn-ghost" onclick="SM.navigate('timeline')"><i class="fas fa-clock"></i> تایم‌لاین</button>
+              <button class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMModules.contracts.edit', [c.id])}><i class="fas fa-pen"></i> ویرایش / وضعیت</button>
+              <button class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMModules.contracts.openEditor', [c.id])}><i class="fas fa-file-contract"></i> فرم کامل قرارداد</button>
+              <button class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SM.navigate', ["timeline"])}><i class="fas fa-clock"></i> تایم‌لاین</button>
             </div>
           </div>
         </div>
