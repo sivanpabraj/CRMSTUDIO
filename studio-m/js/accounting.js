@@ -428,16 +428,21 @@ const SMAccounting = {
     const party = this._chequeParty(c)
     const num = this._chequeNumber(c)
 
-    let actions = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.editCheque('${c.id}')" title="ویرایش"><i class="fas fa-pen"></i></button>`
+    let actions = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="ویرایش"
+      ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.editCheque', [c.id]) : `onclick="SMAccounting.editCheque('${c.id}')"`}><i class="fas fa-pen"></i></button>`
     if (status === 'pending') {
       actions = `
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMAccounting.passCheque('${c.id}')" title="وصول / پاس"><i class="fas fa-check"></i></button>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.bounceCheque('${c.id}')" title="برگشتی"><i class="fas fa-undo"></i></button>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.cancelCheque('${c.id}')" title="ابطال"><i class="fas fa-ban"></i></button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" title="وصول / پاس"
+          ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.passCheque', [c.id]) : `onclick="SMAccounting.passCheque('${c.id}')"`}><i class="fas fa-check"></i></button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="برگشتی"
+          ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.bounceCheque', [c.id]) : `onclick="SMAccounting.bounceCheque('${c.id}')"`}><i class="fas fa-undo"></i></button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="ابطال"
+          ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.cancelCheque', [c.id]) : `onclick="SMAccounting.cancelCheque('${c.id}')"`}><i class="fas fa-ban"></i></button>
         ${actions}`
     } else if (status === 'passed') {
       actions = `
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.revertPassCheque('${c.id}')" title="لغو پاس"><i class="fas fa-rotate-left"></i></button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="لغو پاس"
+          ${typeof SMEvents !== 'undefined' ? SMEvents.attrs('SMAccounting.revertPassCheque', [c.id]) : `onclick="SMAccounting.revertPassCheque('${c.id}')"`}><i class="fas fa-rotate-left"></i></button>
         ${actions}`
     }
 
@@ -733,7 +738,26 @@ const SMAccounting = {
         const contractLinked = isIn && data.contractId &&
           (data.purposeCategory === 'contract_payment' || data.purposeCategory === 'contract_deposit')
 
-        // New contract deposits/payments go through FinanceSync (bank + invoice + paid)
+        // All NEW txs with a bank go through FinanceSync (atomic + rollback)
+        if (!item && data.bankId && typeof FinanceSync !== 'undefined') {
+          const res = isIn
+            ? await FinanceSync.recordDeposit({
+              ...data,
+              syncInvoice: syncInv,
+              sourceType: data.sourceType
+            })
+            : await FinanceSync.recordWithdrawal({
+              ...data,
+              syncInvoice: syncInv,
+              allowOverdraft: true
+            })
+          if (!res.ok) return SM.toast(res.error || 'خطا در ثبت', 'error')
+          SM.toast(res.invoiceId ? 'ثبت شد و در فاکتورها قرار گرفت' : 'تراکنش ثبت شد', 'success')
+          SMH.refresh('accounting')
+          return
+        }
+
+        // Legacy edit path (or create without bank) — keep compensate for contract paid
         if (!item && contractLinked && typeof FinanceSync !== 'undefined') {
           const res = await FinanceSync.recordDeposit({ ...data, syncInvoice: syncInv })
           if (!res.ok) return SM.toast(res.error || 'خطا در ثبت', 'error')

@@ -8,7 +8,7 @@
 npm install
 npm run dev      # http://localhost:5173/site.html (LAN: 0.0.0.0)
 npm run build    # خروجی در dist/
-npm run test     # Vitest unit tests (70+)
+npm run test     # Vitest unit tests (83+)
 npm run lint     # ESLint (zero warnings policy)
 npm run test:e2e # Playwright smoke (نیاز به build)
 ```
@@ -20,7 +20,7 @@ docker build -t studio-m .
 docker run -p 8080:80 studio-m
 ```
 
-مستندات: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) · [docs/SECURITY.md](docs/SECURITY.md) · [docs/QUALITY_SCORES.md](docs/QUALITY_SCORES.md)
+مستندات: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) · [docs/SECURITY.md](docs/SECURITY.md) · [docs/QUALITY_SCORES.md](docs/QUALITY_SCORES.md) · [docs/AUDIT_REPORT.md](docs/AUDIT_REPORT.md)
 
 ## ساختار
 

@@ -28,6 +28,7 @@ const SMObservability = {
         }
       } catch { /* */ }
     }
+    this._maybeRemote(entry)
     return entry
   },
 
@@ -35,11 +36,29 @@ const SMObservability = {
     const entry = { ts: new Date().toISOString(), level: 'info', scope: name, meta }
     this._buf.push(entry)
     if (this._buf.length > this._max) this._buf = this._buf.slice(-this._max)
+    this._maybeRemote(entry)
     return entry
   },
 
   recent(n = 20) {
     return this._buf.slice(-n)
+  },
+
+  /** Optional remote sink: studioInfo.observabilityUrl or window.__SM_OBS_URL */
+  _maybeRemote(entry) {
+    try {
+      const url = (typeof DB !== 'undefined' && DB.get?.('studioInfo')?.observabilityUrl) ||
+        (typeof window !== 'undefined' && window.__SM_OBS_URL) || ''
+      if (!url || typeof fetch !== 'function') return
+      // Fire-and-forget; never block UI
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...entry, app: 'studio-m', v: '6.0.0' }),
+        keepalive: true,
+        mode: 'cors'
+      }).catch(() => {})
+    } catch { /* */ }
   }
 }
 

@@ -172,6 +172,63 @@ const ChequeManager = {
 
     const txType = dir === 'incoming' ? 'deposit' : 'withdrawal'
     const purpose = dir === 'incoming' ? 'دریافت چک' : (ch.purpose || ch.category || 'پرداخت چک')
+
+    // Prefer FinanceSync atomic writers when available
+    if (typeof FinanceSync !== 'undefined') {
+      const ledgerOpts = {
+        amount,
+        bankId: ch.bankId,
+        date: Utils.todayJalali(),
+        contractId: ch.contractId || '',
+        client: this.partyOf(ch),
+        purposeCategory: dir === 'incoming'
+          ? (ch.contractId ? 'contract_payment' : 'other_income')
+          : 'other',
+        purpose,
+        paymentMethod: 'cheque',
+        transactionRef: this.numberOf(ch),
+        notes: ch.notes || '',
+        desc: `پاس چک ${this.numberOf(ch)}${ch.purpose ? ' — ' + ch.purpose : ''}`,
+        syncInvoice: true,
+        allowOverdraft: dir !== 'outgoing'
+      }
+      const res = dir === 'incoming'
+        ? await FinanceSync.recordDeposit(ledgerOpts)
+        : await FinanceSync.recordWithdrawal(ledgerOpts)
+      if (!res.ok) return { ok: false, msg: res.error || 'خطا در پاس چک' }
+
+      try {
+        await SecureDB.update('transactions', res.transactionId, { chequeId: ch.id })
+        await SecureDB.update('cheques', id, {
+          status: 'passed',
+          passDate: Utils.todayJalali(),
+          transactionId: res.transactionId,
+          type: dir,
+          direction: dir,
+          number: this.numberOf(ch),
+          chequeNumber: this.numberOf(ch),
+          client: this.partyOf(ch),
+          party: this.partyOf(ch)
+        })
+      } catch (e) {
+        // Compensating: reverse ledger if cheque update fails
+        try {
+          if (res.transactionId) await SecureDB.delete('transactions', res.transactionId)
+          if (res.invoiceId) await SecureDB.delete('invoices', res.invoiceId)
+          const rev = dir === 'incoming' ? 'withdrawal' : 'deposit'
+          await FinanceSync.applyBankDelta(ch.bankId, rev, amount)
+          if (dir === 'incoming' && ch.contractId) {
+            await FinanceSync.reverseContractPaid(ch.contractId, 'contract_payment', amount)
+          }
+        } catch { /* best-effort */ }
+        return { ok: false, msg: e.message || 'خطا در پاس چک — تغییرات برگشت داده شد' }
+      }
+
+      DB.log('cheque_pass', { id, amount, direction: dir, bankId: ch.bankId })
+      await this.syncNotifications()
+      return { ok: true, transactionId: res.transactionId }
+    }
+
     const balBefore = bank.balance || 0
     let tx = null
     let bankTouched = false
