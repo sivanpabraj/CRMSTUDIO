@@ -214,7 +214,10 @@ const SMReports = {
   exportPDF() {
     const el = this._getDocEl()
     const fname = `گزارش-استودیو-${Utils.todayJalali().replace(/\//g, '')}.pdf`
-    if (typeof html2pdf !== 'undefined') {
+    const run = () => {
+      if (typeof html2pdf === 'undefined') {
+        return SM.toast('ابزار PDF بارگذاری نشد', 'error')
+      }
       html2pdf().set({
         margin: [10, 10, 10, 10],
         filename: fname,
@@ -223,9 +226,10 @@ const SMReports = {
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       }).from(el).save().then(() => SM.toast('PDF ذخیره شد', 'success'))
         .catch(() => SM.toast('خطا در ساخت PDF', 'error'))
-    } else {
-      SM.toast('ابزار PDF بارگذاری نشده — صفحه را رفرش کنید', 'error')
     }
+    if (typeof SMExport !== 'undefined' && SMExport.ensurePdfLibs) {
+      SMExport.ensurePdfLibs().then(run).catch(() => SM.toast('بارگذاری ابزار PDF ناموفق بود', 'error'))
+    } else run()
   },
 
   exportJPG() {
@@ -238,16 +242,21 @@ const SMReports = {
       a.click()
       SM.toast('عکس JPG ذخیره شد', 'success')
     }
-    if (typeof html2canvas !== 'undefined') {
-      html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }).then(save)
-        .catch(() => SM.toast('خطا در ساخت تصویر', 'error'))
-    } else if (typeof html2pdf !== 'undefined') {
-      html2pdf().set({ html2canvas: { scale: 2, backgroundColor: '#fff' } }).from(el).toCanvas()
-        .then(canvas => save(canvas))
-        .catch(() => SM.toast('خطا در ساخت تصویر', 'error'))
-    } else {
-      SM.toast('ابزار تصویر بارگذاری نشده', 'error')
+    const run = () => {
+      if (typeof html2canvas !== 'undefined') {
+        html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }).then(save)
+          .catch(() => SM.toast('خطا در ساخت تصویر', 'error'))
+      } else if (typeof html2pdf !== 'undefined') {
+        html2pdf().set({ html2canvas: { scale: 2, backgroundColor: '#fff' } }).from(el).toCanvas()
+          .then(canvas => save(canvas))
+          .catch(() => SM.toast('خطا در ساخت تصویر', 'error'))
+      } else {
+        SM.toast('ابزار تصویر بارگذاری نشد', 'error')
+      }
     }
+    if (typeof SMExport !== 'undefined' && SMExport.ensurePdfLibs) {
+      SMExport.ensurePdfLibs().then(run).catch(() => SM.toast('بارگذاری ابزار تصویر ناموفق بود', 'error'))
+    } else run()
   }
 }
 

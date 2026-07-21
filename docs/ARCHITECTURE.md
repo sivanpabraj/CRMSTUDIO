@@ -59,7 +59,12 @@ Local file backups (`DB.exportJSON`) intentionally retain secrets so offline res
 
 Pro UI entry points: accounting, invoices, expenses, payroll, cheques.  
 Classic photo-house deposits also call `recordDeposit` (admin.html loads `finance-sync.js`).  
-Transfers are not edited/deleted via the single-tx form.
+Transfers are not edited/deleted via the single-tx form.  
+Bank **metadata** edits must not overwrite `balance` (ledger-owned); opening balance only on create.
+
+### Optional online audit path
+
+When `studioInfo.mutateEnabled` or `window.__SM_MUTATE_ENABLED` is set, FinanceSync fire-and-forgets ops to Edge Function `studio-mutate` (`js/lib/studio-mutate-client.js`). Local IDB remains SoR until server ledger is authoritative.
 
 ## Authentication
 

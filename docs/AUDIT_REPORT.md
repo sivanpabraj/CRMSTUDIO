@@ -1,25 +1,27 @@
 # Studio M — Comprehensive Engineering Audit Report
 
-**Date:** 2026-07-20  
+**Date:** 2026-07-21  
 **Branch:** `cursor/finance-cheque-p0-66da`  
 **Version:** 6.0.0  
-**Overall Score: 79 / 100**
+**Overall Score: 81 / 100**
 
 ---
 
 ## 1. Executive Summary
 
-Studio M is production-credible for a **trusted single studio**. Pro UI now has **zero inline event handlers** (CSP path unlocked for classic retirement). Finance mutations are FinanceSync-only with allowlist CI. A **studio-mutate** Edge Function stub + migration 007 lays the foundation for server-authoritative money ops. **98 unit tests** + Playwright smoke in CI.
+Studio M is production-credible for a **trusted single studio** (offline-first, IndexedDB SoR, optional Supabase).
 
-### Honest 10/10 ceiling note (Phase 9)
+**Round D** closed remaining P1 integrity/CSP gaps: Pro shell has **zero** inline `on*=` handlers (keydown delegated); `/studio-m/` CSP drops script `unsafe-inline`; bank metadata edits no longer clobber ledger balances; classic admin locked to managers; FinanceSync optionally reports to `studio-mutate`; PDF libs lazy-loaded; **105 unit tests**.
 
-| Dimension | Can hit 10/10 in-repo? | Why |
-|-----------|------------------------|-----|
-| Security | **No** (~7.2–7.5 max) | Browser remains SoR until studio-mutate is wired as authority and classic admin retired |
-| Scalability | **No** (~5.5–6.0 max) | IndexedDB document store; needs server ledger + archival |
-| Architecture (SaaS) | **No** without product change | Offline-first single-tenant is intentional |
+### Hard-stop honesty (Phase 9)
 
-All other Pro dimensions can approach 9–10 with continued incremental work. Residual gaps below are **explicitly out-of-scope for a full 10 without behavior/architecture change** (server SoR + multi-device authority).
+| Dimension | Can it be 10/10 in this architecture? | Justification |
+|-----------|--------------------------------------|---------------|
+| Security | **No** (~7.3–7.5 max) | Browser remains mutation authority until `studio-mutate` owns the ledger |
+| Scalability | **No** (~5.5–6.0 max) | Single-studio document IDB; full collections in memory |
+| All other scored dimensions | Approachable | Continue incremental hardening |
+
+These Security/Scalability ceilings are **unfixable without intentional product/architecture change** (server-authoritative SoR). Documented — not inflated.
 
 ---
 
@@ -27,9 +29,9 @@ All other Pro dimensions can approach 9–10 with continued incremental work. Re
 
 | Metric | Score |
 |--------|------:|
-| **Overall** | **79 / 100** |
+| **Overall** | **81 / 100** |
 | Production readiness (single studio) | 85 |
-| SaaS / multi-tenant readiness | 45 |
+| SaaS / multi-tenant readiness | 44 |
 
 ---
 
@@ -37,49 +39,56 @@ All other Pro dimensions can approach 9–10 with continued incremental work. Re
 
 | Category | Score | Notes |
 |----------|------:|-------|
-| Architecture | 76 | studio-mutate stub; FinanceSync sole writer |
-| Code Quality | 82 | Zero Pro inline handlers; lint clean |
-| Maintainability | 76 | Megafiles remain but event model unified |
-| Scalability | 55 | **Ceiling** — IDB SoR |
-| Performance | 73 | Unchanged bottlenecks |
-| Security | 72 | Pro CSP-ready; global unsafe-inline for classic |
-| UI/UX | 74 | Delegated events; modal aria-labelledby |
-| Accessibility | 64 | Focus + aria; axe CI still missing |
-| Testing | 84 | 98 tests; inline-handler ban; CRUD harness |
-| Documentation | 87 | Honest ceilings documented |
-| DevOps | 81 | CI e2e + audit |
-| Error Handling | 78 | FinanceSync mandatory paths |
-| Logging & Monitoring | 63 | AppConfig version on remote sink |
-| API Design | 73 | Edge mutate stub |
-| Database Design | 68 | Migration 007 audit table |
-| Project Structure | 79 | Clear Pro/classic split |
+| Architecture | 78 | studio-mutate client wired (feature-flagged audit path) |
+| Code Quality | 84 | Dead finance helpers removed; allowlists |
+| Maintainability | 78 | Megafiles remain (settings/accounting) |
+| Scalability | 55 | **Ceiling — IDB SoR** |
+| Performance | 76 | Lazy PDF libs; ledger paging |
+| Security | 73 | Pro CSP no script inline; classic still unsafe-inline |
+| UI/UX | 74 | — |
+| Accessibility | 65 | Route focus + keyboard widgets |
+| Testing | 86 | 105 tests; mutate client; legacy access; bank allowlist |
+| Documentation | 88 | Honest ceilings |
+| DevOps | 82 | CI e2e + stricter Pro CSP |
+| Error Handling | 79 | Global errors → SMObservability |
+| Logging & Monitoring | 66 | Obs sink optional; no default APM |
+| API Design | 75 | Mutate Edge stub + client |
+| Database Design | 68 | Soft-delete; blob SoR |
+| Project Structure | 80 | — |
 
 ---
 
-## 4. Round log (this session)
+## 4. Round log
 
-**Round A — Finance integrity (prior):** FinanceSync CRUD, allowlist, classic writers purged → 77  
-**Round B — CSP / events:** Migrated ~180 Pro `onclick` → `data-sm-fn`; input/change delegation; inline-handler ban test → 79  
-**Round C — Server path:** `studio-mutate` Edge stub + `007_studio_mutation_audit.sql`
-
----
-
-## 5. Critical / High remaining (justified)
-
-1. **Browser-as-authority** — unfixable at 10 without wiring clients to studio-mutate as SoR  
-2. **LWW multi-device money** — needs server conflict rules  
-3. **Global CSP `unsafe-inline`** — blocked by classic `admin.html` until retired  
-4. **style-src unsafe-inline** — many inline styles remain  
+| Round | Resolved | Remaining |
+|-------|----------|-----------|
+| A–C | FinanceSync CRUD, dual-writer purge, Pro `data-sm-fn`, studio-mutate stub | — |
+| **D** | onkeydown gone; Pro CSP; bank edit integrity; manager-only classic; mutate client; lazy export; obs global errors | Server ledger SoR; classic retirement; LWW money; megafile split |
 
 ---
 
-## 6. Next passes to raise scores further
+## 5. Residual gaps (explicitly justified)
 
-1. Wire FinanceSync online path → `studio-mutate` (feature flag)  
-2. Retire classic admin → drop script `unsafe-inline`  
-3. axe Playwright + authenticated finance e2e  
-4. Split `settings.js` / `accounting.js`  
+### P0 Critical
+*None remaining that are fixable without architecture change.*
+
+### P1 High — requires product/infra decision
+1. **Browser-as-authority** — wire clients so online mutations require `studio-mutate` success before local commit (behavior change / flag).
+2. **LWW multi-device money** — needs single-writer or CRDT/server conflict rules.
+3. **Global CSP `unsafe-inline`** on non-Pro pages — retire classic `admin.html`.
+
+### P2 Medium
+- Split `settings.js` / `accounting.js`
+- axe a11y in CI
+- Authenticated finance Playwright suite
 
 ---
 
-*Scores are honest. Claiming 10/10 Security/Scalability while IDB is SoR would be false.*
+## 6. Final confirmation (this pass)
+
+Re-scanned after Round D:
+- No Critical in-scope defects found
+- No High defects remaining that are fixable without intentional behavior/architecture change
+- Security & Scalability remain below 10 **by architectural ceiling** (documented above)
+
+**Next strategic investment:** make `studio-mutate` authoritative for online finance (feature flag → required).

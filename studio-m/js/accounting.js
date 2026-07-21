@@ -129,37 +129,6 @@ const SMAccounting = {
     return parts.join(' — ') || t.desc || '—'
   },
 
-  _genInvoiceNumber() {
-    const t = Utils.todayJalali().replace(/\//g, '')
-    const n = (typeof DB.active === 'function' ? DB.active('invoices') : DB.get('invoices')).length + 1
-    return `F-${t}-${String(n).padStart(3, '0')}`
-  },
-
-  _mapInvoiceType(tx) {
-    if (tx.type === 'deposit') {
-      if (tx.purposeCategory === 'contract_deposit') return 'customer_deposit'
-      if (tx.purposeCategory === 'contract_payment') return 'customer_payment'
-      if (tx.purposeCategory === 'transfer') return 'transfer'
-      return 'other'
-    }
-    if (tx.purposeCategory === 'personnel') return 'personnel'
-    if (tx.purposeCategory === 'utility') return 'utility_electric'
-    if (tx.purposeCategory === 'print') return 'expense'
-    if (tx.purposeCategory === 'equipment') return 'expense'
-    if (tx.purposeCategory === 'cancellation_refund') return 'transfer'
-    if (tx.purposeCategory === 'transfer') return 'transfer'
-    return 'expense'
-  },
-
-  async _syncInvoice(txData, txId, existingInvoiceId) {
-    if (!document.getElementById('tx-sync-inv')?.checked && !existingInvoiceId) return null
-    if (txData.purposeCategory === 'transfer') return null
-    if (typeof FinanceSync === 'undefined') {
-      throw new Error('ماژول مالی در دسترس نیست')
-    }
-    return FinanceSync.createInvoiceFromTx(txData, txId, existingInvoiceId)
-  },
-
   render(el) {
     const q = SM.getModuleSearch('accounting')
     const allTx = (typeof DB.active === 'function' ? DB.active('transactions') : (DB.get('transactions') || []).filter(t => !t._deleted))
@@ -480,28 +449,38 @@ const SMAccounting = {
 
     const done = () => { wrap.remove() }
 
-    if (typeof html2pdf !== 'undefined') {
-      html2pdf().set({
-        margin: 12,
-        filename: fname,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a5', orientation: 'portrait' }
-      }).from(el).save().then(done).catch(() => { window.print(); done() })
-    } else {
+    const runPdf = () => {
+      if (typeof html2pdf !== 'undefined') {
+        html2pdf().set({
+          margin: 12,
+          filename: fname,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: 'mm', format: 'a5', orientation: 'portrait' }
+        }).from(el).save().then(done).catch(() => { window.print(); done() })
+        return
+      }
       const w = window.open('', '_blank')
       if (w) {
-        w.document.write(`<html dir="rtl"><head><title>${fname}</title><style>
+        w.document.write(`<html dir="rtl"><head><title></title><style>
           body{font-family:Vazirmatn,Tahoma,sans-serif;padding:24px;color:#111}
           .sm-receipt-amt{font-size:28px;font-weight:800;margin:16px 0}
           .sm-receipt-amt.in{color:#34C759}.sm-receipt-amt.out{color:#FF3B30}
           table{width:100%;border-collapse:collapse} td{padding:8px;border-bottom:1px solid #eee;font-size:13px}
           td:first-child{color:#666;width:35%;font-weight:600}
-        </style></head><body>${html}</body></html>`)
+        </style></head><body></body></html>`)
         w.document.close()
+        w.document.title = fname
+        w.document.body.innerHTML = html
         w.print()
       }
       done()
+    }
+
+    if (typeof SMExport !== 'undefined' && SMExport.ensurePdfLibs) {
+      SMExport.ensurePdfLibs().then(runPdf).catch(runPdf)
+    } else {
+      runPdf()
     }
   },
 
@@ -517,7 +496,10 @@ const SMAccounting = {
       ${SMUI.formField('شماره کارت', 'ab-card', { value: item?.card || '', dir: 'ltr', placeholder: '6037…' })}
       ${SMUI.formField('شماره حساب', 'ab-account', { value: this._bankAccount(item) || '', dir: 'ltr' })}
       ${SMUI.formField('شماره شبا', 'ab-iban', { value: this._bankIban(item) || '', dir: 'ltr', placeholder: 'IR…' })}
-      ${SMUI.formField('موجودی فعلی (تومان)', 'ab-balance', { type: 'number', value: item?.balance ?? '', dir: 'ltr' })}`, {
+      ${item
+        ? `<p class="sm-hint" style="font-size:.78rem;color:var(--sm-text-muted);margin:0 0 8px">موجودی از طریق دفترکل (واریز/برداشت/انتقال) به‌روز می‌شود و از اینجا قابل ویرایش نیست.</p>
+           <div class="sm-form-field"><label>موجودی فعلی</label><div dir="ltr">${SM.fmt(item.balance || 0)} تومان</div></div>`
+        : SMUI.formField('موجودی اولیه (تومان)', 'ab-balance', { type: 'number', value: '', dir: 'ltr' })}`, {
       onSave: async () => {
         const d = SMUI.readForm(['ab-title', 'ab-bank', 'ab-holder', 'ab-card', 'ab-account', 'ab-iban', 'ab-balance'])
         if (!d['ab-title'] && !d['ab-bank']) return SM.toast('نام بانک یا عنوان حساب الزامی است', 'error')
@@ -525,11 +507,14 @@ const SMAccounting = {
         const iban = d['ab-iban'] || ''
         const data = {
           name: d['ab-title'], bank: d['ab-bank'], holder: d['ab-holder'],
-          card: d['ab-card'], account, accountNumber: account, iban, shaba: iban,
-          balance: +d['ab-balance'] || 0
+          card: d['ab-card'], account, accountNumber: account, iban, shaba: iban
         }
-        if (item) await SecureDB.update('banks', item.id, data)
-        else await SecureDB.insert('banks', data)
+        if (item) {
+          // Metadata-only on edit — ledger-managed balance must not be clobbered here
+          await SecureDB.update('banks', item.id, data)
+        } else {
+          await SecureDB.insert('banks', { ...data, balance: +d['ab-balance'] || 0 })
+        }
         SMH.refresh('accounting')
       },
       onDelete: item ? () => SMH.remove('banks', item.id, 'accounting') : null,
@@ -759,22 +744,6 @@ const SMAccounting = {
     })
 
     this._bindTxFormFields(contracts, personnel)
-  },
-
-  async _applyBankDelta(bankId, type, amount) {
-    if (typeof FinanceSync === 'undefined') throw new Error('ماژول مالی در دسترس نیست')
-    return FinanceSync.applyBankDelta(bankId, type, amount)
-  },
-
-  async _adjustBankBalance(oldItem, newItem) {
-    if (oldItem.bankId) {
-      const b = DB.find('banks', x => x.id === oldItem.bankId)
-      if (b) {
-        const rev = oldItem.type === 'deposit' ? -(oldItem.amount || 0) : (oldItem.amount || 0)
-        await SecureDB.update('banks', oldItem.bankId, { balance: (b.balance || 0) + rev })
-      }
-    }
-    await this._applyBankDelta(newItem.bankId, newItem.type, newItem.amount)
   },
 
   /* ── Cheques ── */

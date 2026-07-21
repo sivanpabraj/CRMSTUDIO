@@ -1,6 +1,5 @@
 /**
- * Static guard: transaction inserts must live in FinanceSync (or documented allowlist).
- * Prevents regression of dual finance writers.
+ * Static guard: transaction inserts and bank-balance ledger writes must live in FinanceSync.
  */
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
@@ -9,9 +8,8 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-const ALLOWED = new Set([
-  'js/finance-sync.js'
-])
+const TX_INSERT_ALLOWED = new Set(['js/finance-sync.js'])
+const BANK_BALANCE_ALLOWED = new Set(['js/finance-sync.js'])
 
 function walk(dir, out = []) {
   for (const name of fs.readdirSync(dir)) {
@@ -26,13 +24,23 @@ function walk(dir, out = []) {
 
 describe('finance writer allowlist', () => {
   it('forbids SecureDB.insert(transactions) outside FinanceSync', () => {
-    const files = walk(root)
     const offenders = []
     const re = /SecureDB\.insert\(\s*['"]transactions['"]/g
-    for (const file of files) {
+    for (const file of walk(root)) {
       const rel = path.relative(root, file).replace(/\\/g, '/')
-      if (ALLOWED.has(rel)) continue
-      if (rel.startsWith('tests/')) continue
+      if (TX_INSERT_ALLOWED.has(rel) || rel.startsWith('tests/')) continue
+      if (re.test(fs.readFileSync(file, 'utf8'))) offenders.push(rel)
+    }
+    expect(offenders).toEqual([])
+  })
+
+  it('forbids SecureDB.update(banks, … { balance }) outside FinanceSync', () => {
+    const offenders = []
+    // Same-call object literal only (avoids false positives from nearby insert)
+    const re = /SecureDB\.update\(\s*['"]banks['"]\s*,\s*[^,)]+\s*,\s*\{[^}]*\bbalance\s*:/g
+    for (const file of walk(root)) {
+      const rel = path.relative(root, file).replace(/\\/g, '/')
+      if (BANK_BALANCE_ALLOWED.has(rel) || rel.startsWith('tests/')) continue
       const src = fs.readFileSync(file, 'utf8')
       if (re.test(src)) offenders.push(rel)
     }

@@ -99,17 +99,6 @@ const ChequeManager = {
     return this.DIRECTION[d]?.label || d || '—'
   },
 
-  async _applyBankDelta(bankId, type, amount) {
-    if (typeof FinanceSync !== 'undefined') {
-      return FinanceSync.applyBankDelta(bankId, type, amount)
-    }
-    if (!bankId || !amount) return
-    const b = DB.find('banks', x => x.id === bankId)
-    if (!b) return
-    const next = (b.balance || 0) + (type === 'deposit' ? amount : -amount)
-    await SecureDB.update('banks', bankId, { balance: next })
-  },
-
   async syncNotifications() {
     const cheques = this.pending()
     const notifs = DB.get('notifications') || []

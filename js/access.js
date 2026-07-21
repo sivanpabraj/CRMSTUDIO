@@ -96,12 +96,8 @@ const Access = {
   canAccessLegacyAdmin(user) {
     user = user || (typeof Auth !== 'undefined' ? Auth.getUser() : null)
     if (!user) return false
-    if (this.isSystemAdmin(user) || this.isStudioManager(user)) return true
-    if (this.isStaffOnly(user)) return false
-    const roles = this.roles(user)
-    return roles.some(r => normalizeRole(r) === 'office_secretary') ||
-      roleHasAnyPermission(roles, 'view_all') ||
-      roleHasAnyPermission(roles, 'calendar')
+    // Classic admin is emergency-only — managers and system admins only
+    return !!(this.isSystemAdmin(user) || this.isStudioManager(user))
   },
 
   getRequestTargetRoles(type) {

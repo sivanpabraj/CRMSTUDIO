@@ -111,6 +111,14 @@ const FinanceSync = {
     return this._updateContractPaid(contractId, purposeCategory, amount, { reverse: true })
   },
 
+  _reportMutate(op, payload) {
+    try {
+      if (typeof StudioMutateClient !== 'undefined' && StudioMutateClient.report) {
+        StudioMutateClient.report(op, payload)
+      }
+    } catch { /* never block local ledger */ }
+  },
+
   _logRollback(scope, err) {
     try {
       if (typeof SMObservability !== 'undefined') {
@@ -256,6 +264,7 @@ const FinanceSync = {
           DB.log('finance_tx_update', `${txId} — ${amount.toLocaleString('fa-IR')}`)
         }
         await DB.flush?.()
+        this._reportMutate('update_transaction', { transactionId: txId, amount, bankId })
         return { ok: true, transactionId: txId, invoiceId }
       } catch (e) {
         try {
@@ -352,6 +361,7 @@ const FinanceSync = {
           DB.log('finance_tx_delete', `${txId} — ${(old.amount || 0).toLocaleString('fa-IR')}`)
         }
         await DB.flush?.()
+        this._reportMutate('delete_transaction', { transactionId: txId, amount: old.amount, bankId: old.bankId })
         return { ok: true, transactionId: txId }
       } catch (e) {
         try {
@@ -459,6 +469,10 @@ const FinanceSync = {
           DB.log('finance_transfer', `${amount.toLocaleString('fa-IR')} — ${this.bankLabel(fromId)} → ${this.bankLabel(toId)}`)
         }
         await DB.flush?.()
+        this._reportMutate('transfer_banks', {
+          pairId, amount, fromBankId: fromId, toBankId: toId,
+          outTransactionId: outRow.id, inTransactionId: inRow.id
+        })
         return { ok: true, pairId, outTransactionId: outRow.id, inTransactionId: inRow.id }
       } catch (e) {
         try {
@@ -590,6 +604,7 @@ const FinanceSync = {
       }
 
       await DB.flush?.()
+      this._reportMutate('record_deposit', { transactionId: row.id, invoiceId, bankId: opts.bankId, amount })
       return { ok: true, transactionId: row.id, invoiceId, bankId: opts.bankId }
     } catch (e) {
       try {
@@ -667,6 +682,7 @@ const FinanceSync = {
       }
 
       await DB.flush?.()
+      this._reportMutate('record_withdrawal', { transactionId: row.id, invoiceId, bankId: opts.bankId, amount })
       return { ok: true, transactionId: row.id, invoiceId, bankId: opts.bankId }
     } catch (e) {
       try {

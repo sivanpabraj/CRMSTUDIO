@@ -264,7 +264,7 @@ const SMDashboard = {
     const off = meta.route && SM.isModuleDisabled(meta.route)
     return `<div class="sm-dash-widget sm-dash-widget--click${wide ? ' sm-dash-widget--wide' : ''}${off ? ' sm-dash-widget--off' : ''}"
       style="--w-color:${meta.color}" role="button" tabindex="0"
-      ${SMEvents.attrs('SMDashboard.go', [meta.route])} onkeydown="if(event.key==='Enter')SMDashboard.go('${meta.route}')">
+      ${typeof SMEvents !== 'undefined' ? SMEvents.elAttrs('SMDashboard.go', [meta.route]) : ''}>
       <div class="sm-dash-widget-head">
         <span class="sm-dash-widget-title"><i class="fas ${meta.icon}"></i> ${SM.esc(meta.title)}</span>
         <span class="sm-dash-widget-go"><i class="fas fa-arrow-left"></i></span>

@@ -54,6 +54,8 @@ export const browserGlobals = {
   AuthBridge: "readonly",
   FinanceSync: "readonly",
   SMObservability: "readonly",
+  StudioMutateClient: "readonly",
+  SMExport: "readonly",
   SMEvents: "readonly",
   ListPage: "readonly",
   paginate: "readonly",

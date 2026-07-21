@@ -12,8 +12,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
   <link rel="stylesheet" href="css/studio-m.css"/>
   <link rel="stylesheet" href="../css/notification-ticker.css"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+  <!-- html2pdf/html2canvas lazy-loaded via SMExport when exporting -->
 </head>
 <body class="sm-app" data-theme="light">
   <div id="sm-root" aria-live="polite"></div>
@@ -54,6 +53,7 @@
   <script src="../js/glass-theme.js" defer></script>
   <script type="module" src="../js/cloud.js"></script>
   <script type="module" src="../js/lib/observability.js"></script>
+  <script type="module" src="../js/lib/studio-mutate-client.js"></script>
   <script src="../js/bootstrap.js" defer></script>
 
   <!-- Studio M Pro -->
@@ -62,6 +62,7 @@
   <script src="js/events.js" defer></script>
   <script src="js/crud.js" defer></script>
   <script src="js/ui.js" defer></script>
+  <script src="js/export.js" defer></script>
   <script src="js/dashboard.js" defer></script>
   <script src="js/modules.js" defer></script>
   <script src="js/modules-bookings.js" defer></script>
