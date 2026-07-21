@@ -77,11 +77,32 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: 'not authenticated' }, 401, origin)
     }
 
+    // Must be an active studio member (blocks arbitrary Auth users)
+    // Schema uses roles text[] (not singular `role`)
+    const { data: memberships, error: memErr } = await supabase
+      .from('studio_members')
+      .select('studio_id, roles, status')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .limit(5)
+    if (memErr || !memberships?.length) {
+      return json({ ok: false, error: 'not a studio member' }, 403, origin)
+    }
+
     if (!checkRate(user.id)) {
       return json({ ok: false, error: 'rate limit exceeded' }, 429, origin)
     }
 
     const body = await req.json()
+    const purpose = String(body.purpose || 'generic').toLowerCase()
+    const allowedPurposes = new Set([
+      'otp_login', 'portal_invite', 'password_reset', 'contract_verify',
+      'cheque_reminder', 'generic'
+    ])
+    if (!allowedPurposes.has(purpose)) {
+      return json({ ok: false, error: 'purpose not allowed' }, 400, origin)
+    }
+
     const rawPhones = Array.isArray(body.phones) ? body.phones : [body.phone].filter(Boolean)
     if (rawPhones.length > MAX_PHONES) {
       return json({ ok: false, error: `max ${MAX_PHONES} phones per request` }, 400, origin)

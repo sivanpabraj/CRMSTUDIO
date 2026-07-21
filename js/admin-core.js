@@ -11,7 +11,7 @@ const Admin = {
     this._sectionRendered.delete(section)
   },
 
-  init() {
+  async init() {
     document.body.classList.add('admin-app')
     if (!Auth.isLoggedIn()) {
       this._showGate('login')
@@ -22,6 +22,27 @@ const Admin = {
       return
     }
     if (!new URLSearchParams(location.search).has('classic')) {
+      window.location.replace('studio-m/')
+      return
+    }
+    // Verify signed unlock (legacy sm_allow_classic only in local dev)
+    if (typeof SignedProof !== 'undefined' && SignedProof.verify) {
+      const user = Auth.getUser()
+      const ok = await SignedProof.verify('sm_classic_unlock', {
+        purpose: 'classic',
+        userId: user?.id || ''
+      })
+      if (!ok) {
+        const legacy = (() => { try { return sessionStorage.getItem('sm_allow_classic') === '1' } catch { return false } })()
+        const allowLegacy = legacy && typeof AppConfig !== 'undefined' && AppConfig.isLocalDev?.()
+        if (!allowLegacy) {
+          try { sessionStorage.removeItem('sm_allow_classic') } catch { /* */ }
+          window.location.replace('studio-m/')
+          return
+        }
+      }
+    } else if (typeof AppConfig !== 'undefined' && AppConfig.isProduction?.()) {
+      // Production without SignedProof module: never stay on classic
       window.location.replace('studio-m/')
       return
     }

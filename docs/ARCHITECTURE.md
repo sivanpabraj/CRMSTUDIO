@@ -2,71 +2,56 @@
 
 ## Overview
 
-Studio M is an offline-first PWA (Vanilla JS + IndexedDB) with optional Supabase cloud sync.
+Studio M is a **public multi-tenant B2B SaaS** foundation for studios.
+
+- **Pro shell** (`studio-m/`) is the only public production UI.
+- **IndexedDB** is local cache + offline finance outbox; **Postgres/Edge** is finance SoR when cloud is enabled.
+- Classic `admin.html` is **excluded from public production builds** (redirect stub); break-glass only with `VITE_ALLOW_CLASSIC=1` + SignedProof.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Presentation                                                │
-│  studio-m/ (Pro ERP) · index.html · admin.html (legacy)     │
-│  customer.html · contract.html · site.html                    │
+│ Presentation: studio-m/ (public) · admin stub → Pro         │
 ├─────────────────────────────────────────────────────────────┤
-│ Application                                                 │
-│  Auth · UnifiedLogin · PortalInvite · Access · SecureDB     │
-│  Cloud · SyncEngine · RealtimeSync · FinanceSync            │
+│ FinanceSync → StudioMutateClient → Edge studio-mutate       │
+│            ↘ FinanceOutbox (offline / no session)           │
 ├─────────────────────────────────────────────────────────────┤
-│ Data                                                        │
-│  IndexedDB (talar_studio_v5) — 44 logical collections     │
-│  Supabase PostgreSQL — tenants, entities, snapshots         │
+│ IDB cache · financeOutbox · Supabase tenants + ledger       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Sync model (Phase 2–3)
+## Finance SoR policy
 
-1. **Entity sync** (primary, ~2.5s) — 15 entity types → `studio_entities`
-2. **Snapshot** (fallback, 60s) — sanitized JSON → `studio_snapshots`
-3. **Realtime** — postgres changes → pull entities
+| Condition | Behavior |
+|-----------|----------|
+| Online + cloud session | Await Edge accept **before** local commit; bump `claim_ledger_version` |
+| Ledger version conflict (409) | Fail closed — no local write |
+| Offline / no session / network | Local commit + `financeOutbox` queue; flush on reconnect |
+| Server 5xx while session online | Fail closed |
+| `mutateRequiredWhenOnline=false` | Optional post-commit audit if `mutateEnabled` |
 
-### Snapshot security
+## Tenancy
 
-Before cloud push, `js/lib/snapshot-sanitize.js` removes:
+- `register_studio`: join by `join_code` **or** create studio; re-signup reuses existing membership (no duplicate tenant)
+- Mutate rejects foreign `studioId`
+- Soft plan quotas: `js/lib/plan-limits.js` (trial/starter/pro) — payment gateway still out of band
 
-- Password hashes, salts, API keys, SMS keys
-- `securityState`, `apiKeys` collections
-- Portal OTP codes
+## Migrations
 
-After pull, local secrets are merged back from the device.
+`001` → `009` (`008` ledger entries, `009` ledger heads + register harden).
 
-## Authentication
-
-| Layer | Mechanism |
-|-------|-----------|
-| Local | PBKDF2 + HMAC-signed session + CSRF |
-| Cloud | Supabase Auth (separate password via AuthBridge) |
-| OTP | Unified SMS login + separate portal invite code |
-| Customer | CustomerSession (contract-bound) |
-
-## Multi-tenancy (Supabase)
-
-- `studios` — tenant
-- `studio_members` — user ↔ studio + roles
-- RLS via `user_studio_ids()`
-- Migration 005: snapshot SELECT limited to `studio_manager`
+```bash
+supabase db push
+supabase functions deploy studio-mutate
+```
 
 ## Module map
 
 | Path | Role |
 |------|------|
-| `js/db.js` | IndexedDB blob + migrations |
-| `js/secure-db.js` | CSRF write gate |
-| `js/cloud.js` | Supabase client + sync orchestration |
-| `js/sync/*` | Entity engine, conflict, realtime |
-| `studio-m/js/core.js` | Pro shell routing |
-| `studio-m/js/modules.js` | Feature modules registry |
+| `js/finance-sync.js` | Sole local money façade |
+| `js/lib/studio-mutate-client.js` | Authorize / queueable reasons |
+| `js/lib/finance-outbox.js` | Offline queue + flush |
+| `js/lib/plan-limits.js` | Soft SaaS quotas |
+| `supabase/functions/studio-mutate` | Audit + ledger + version claim |
 
-## Deployment
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md).
-
-## Migrations
-
-Apply in order: `001` → `005` in Supabase SQL Editor.
+See also: [ADR_OFFLINE_FINANCE_OUTBOX.md](./ADR_OFFLINE_FINANCE_OUTBOX.md), [RLS_ISOLATION_CHECKS.md](./RLS_ISOLATION_CHECKS.md).

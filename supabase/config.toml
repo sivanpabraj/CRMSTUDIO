@@ -6,3 +6,6 @@ enabled = true
 
 [functions.send-sms]
 verify_jwt = true
+
+[functions.studio-mutate]
+verify_jwt = true

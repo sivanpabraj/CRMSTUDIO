@@ -74,11 +74,16 @@ export function mergeCollection(localItems, remoteRows, { idKey = 'id', onConfli
 
     const verdict = compareRows(local, row.payload, row.updated_at)
     if (verdict === 'remote' || (!local && row.payload)) {
-      byId.set(localId, {
+      const next = {
         ...row.payload,
         id: localId,
         updatedAtIso: row.updated_at
-      })
+      }
+      if (row.payload?._deleted) {
+        next._deleted = true
+        next.deletedAtIso = row.payload.deletedAtIso || row.updated_at
+      }
+      byId.set(localId, next)
       applied++
     } else {
       skipped++

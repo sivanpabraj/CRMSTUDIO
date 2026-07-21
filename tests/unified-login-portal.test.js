@@ -22,7 +22,7 @@ describe('UnifiedLogin portal gate', () => {
       isOtpVerifyLocked: () => 0,
       recordOtpVerifyFail: () => 0
     })
-    vi.stubGlobal('SecureDB', { update: vi.fn() })
+    vi.stubGlobal('SecureDB', { update: vi.fn(async () => {}) })
     vi.stubGlobal('CustomerSession', null)
     vi.stubGlobal('PortalInvite', {
       needsOtpVerification: (u) => u?.portalStatus === 'pending_verify',
@@ -37,7 +37,7 @@ describe('UnifiedLogin portal gate', () => {
     })
   })
 
-  it('requires portal invite code instead of auto-verifying', async () => {
+  it('activates pending portal on SMS login in one step (no second invite code)', async () => {
     await import('../js/unified-login.js')
     const UnifiedLogin = window.UnifiedLogin
 
@@ -68,8 +68,12 @@ describe('UnifiedLogin portal gate', () => {
 
     const result = await UnifiedLogin.verifyOtp('09121111111', '222222')
     expect(result.ok).toBe(true)
-    expect(result.next).toBe('portal_verify')
-    expect(Auth.loginWithOtp).not.toHaveBeenCalled()
-    expect(SecureDB.update).not.toHaveBeenCalled()
+    expect(result.next).toBe('redirect')
+    expect(Auth.loginWithOtp).toHaveBeenCalled()
+    expect(SecureDB.update).toHaveBeenCalledWith(
+      'users',
+      'u1',
+      expect.objectContaining({ portalStatus: 'active' })
+    )
   })
 })

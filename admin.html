@@ -7,7 +7,13 @@
   <title>پنل مدیریت — Studio M</title>
   <script>
   (function () {
-    if (/[?&]classic=1(?:&|$)/.test(location.search)) return
+    // Classic admin is deprecated — always prefer Studio M Pro.
+    // Escape hatch: ?classic=1 AND SignedProof session key only (no legacy flag in early gate).
+    if (/[?&]classic=1(?:&|$)/.test(location.search)) {
+      try {
+        if (sessionStorage.getItem('sm_classic_unlock')) return
+      } catch (e) { /* */ }
+    }
     location.replace('studio-m/' + (location.hash || ''))
   })()
   </script>
@@ -67,6 +73,7 @@
   <script src="js/admin-photo-house.js" defer></script>
   <script src="js/sms.js" defer></script>
   <script src="js/cheques.js" defer></script>
+  <script src="js/finance-sync.js" defer></script>
   <script src="js/demo-seed.js" defer></script>
   <script src="js/glass-theme.js" defer></script>
   <script src="js/bootstrap.js" defer></script>

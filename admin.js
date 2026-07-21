@@ -197,18 +197,43 @@ const AdminTools = {
 
   async _openTransactionForm(presetType = 'deposit') {
     const type = presetType === 'withdrawal' ? 'withdrawal' : 'deposit'
+    if (typeof FinanceSync === 'undefined') {
+      return Utils.toast('ماژول مالی در دسترس نیست — از Studio M → حسابداری استفاده کنید', 'error')
+    }
+    const banks = (typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted))
+    if (!banks.length) {
+      return Utils.toast('ابتدا در Studio M یک حساب بانکی بسازید', 'error')
+    }
+    const bankOpts = banks.map(b => ({
+      value: b.id,
+      label: typeof FinanceSync.bankLabel === 'function' ? FinanceSync.bankLabel(b.id) : (b.name || b.bank || b.id)
+    }))
     const data = await UiKit.form({
       title: type === 'deposit' ? 'تراکنش واریز' : 'تراکنش برداشت',
       fields: [
         { id: 'amount', label: 'مبلغ (تومان)', type: 'number', required: true, dir: 'ltr', inputmode: 'numeric' },
+        { id: 'bankId', label: 'حساب بانکی', type: 'select', required: true, options: bankOpts },
         { id: 'desc', label: 'شرح', type: 'textarea', rows: 2 }
       ]
     })
     if (!data) return
     const num = +String(data.amount).replace(/[^0-9]/g, '')
     if (!num) return Utils.toast('مبلغ نامعتبر است', 'error')
+    if (!data.bankId) return Utils.toast('انتخاب حساب بانکی الزامی است', 'error')
     await UiKit.withLoading(async () => {
-      await SecureDB.insert('transactions', { type, amount: num, desc: data.desc || '', date: Utils.todayJalali() })
+      const opts = {
+        amount: num,
+        bankId: data.bankId,
+        purpose: data.desc || (type === 'deposit' ? 'واریز' : 'برداشت'),
+        notes: data.desc || '',
+        purposeCategory: type === 'deposit' ? 'other_income' : 'other',
+        syncInvoice: true,
+        allowOverdraft: true
+      }
+      const res = type === 'deposit'
+        ? await FinanceSync.recordDeposit(opts)
+        : await FinanceSync.recordWithdrawal(opts)
+      if (!res.ok) throw new Error(res.error || 'خطا در ثبت تراکنش')
     })
     Utils.toast('تراکنش ثبت شد', 'success')
     Admin.invalidateSection('finance')
