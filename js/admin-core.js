@@ -25,7 +25,7 @@ const Admin = {
       window.location.replace('studio-m/')
       return
     }
-    // Verify signed unlock when available (legacy sm_allow_classic accepted only in local dev)
+    // Verify signed unlock (legacy sm_allow_classic only in local dev)
     if (typeof SignedProof !== 'undefined' && SignedProof.verify) {
       const user = Auth.getUser()
       const ok = await SignedProof.verify('sm_classic_unlock', {
@@ -41,6 +41,10 @@ const Admin = {
           return
         }
       }
+    } else if (typeof AppConfig !== 'undefined' && AppConfig.isProduction?.()) {
+      // Production without SignedProof module: never stay on classic
+      window.location.replace('studio-m/')
+      return
     }
     if (this.needsOnboarding()) {
       this._enterOnboardingMode()

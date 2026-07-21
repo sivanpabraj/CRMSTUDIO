@@ -8,11 +8,10 @@
   <script>
   (function () {
     // Classic admin is deprecated — always prefer Studio M Pro.
-    // Escape hatch: ?classic=1 AND signed unlock proof (or legacy flag during rollout).
+    // Escape hatch: ?classic=1 AND SignedProof session key only (no legacy flag in early gate).
     if (/[?&]classic=1(?:&|$)/.test(location.search)) {
       try {
         if (sessionStorage.getItem('sm_classic_unlock')) return
-        if (sessionStorage.getItem('sm_allow_classic') === '1') return
       } catch (e) { /* */ }
     }
     location.replace('studio-m/' + (location.hash || ''))

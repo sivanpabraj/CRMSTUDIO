@@ -496,7 +496,7 @@ const SMSettings = {
           ${SMUI.formField('Anon Key (public)', 'cloud-key', { value: key, dir: 'ltr', placeholder: 'eyJhbG...' })}
           <label class="sm-check-row"><input type="checkbox" id="cloud-enabled" ${info.cloudEnabled ? 'checked' : ''}/> فعال‌سازی همگام‌سازی ابر</label>
           <label class="sm-check-row"><input type="checkbox" id="cloud-unify-pw" ${info.cloudUnifyPassword ? 'checked' : ''}/> یکسان‌سازی رمز محلی با Supabase (هنگام تغییر رمز)</label>
-          <label class="sm-check-row"><input type="checkbox" id="cloud-mutate-required" ${info.mutateRequiredWhenOnline !== false && info.cloudEnabled ? 'checked' : (info.mutateRequiredWhenOnline ? 'checked' : '')}/> الزام تأیید Edge برای پول آنلاین (<code dir="ltr">mutateRequiredWhenOnline</code>) — پیش‌فرض SaaS</label>
+          <label class="sm-check-row"><input type="checkbox" id="cloud-mutate-required" ${(info.mutateRequiredWhenOnline === false) ? '' : ((info.mutateRequiredWhenOnline || info.cloudEnabled) ? 'checked' : '')}/> الزام تأیید Edge برای پول آنلاین (<code dir="ltr">mutateRequiredWhenOnline</code>) — پیش‌فرض SaaS</label>
           <label class="sm-check-row"><input type="checkbox" id="cloud-mutate" ${info.mutateEnabled ? 'checked' : ''}/> audit اختیاری وقتی الزام خاموش است</label>
           ${SMUI.formField('Observability URL (اختیاری)', 'cloud-obs-url', {
             value: info.observabilityUrl || '',
@@ -765,10 +765,10 @@ const SMSettings = {
             </div>
           </div>
           <div class="sm-danger-box" style="margin-top:12px">
-            <h4><i class="fas fa-clock-rotate-left"></i> پنل کلاسیک (منسوخ)</h4>
-            <p>فقط برای بازیابی اضطراری. بعد از فعال‌سازی موقت، <code>?classic=1</code> روی admin.html کار می‌کند.</p>
+            <h4><i class="fas fa-clock-rotate-left"></i> Break-glass: پنل کلاسیک</h4>
+            <p>مسیر عمومی محصول فقط Studio M Pro است. این کلید اضطراری SignedProof (۲ ساعت) برای بازیابی است — لینک عمومی ندارد.</p>
             <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.enableClassicAdmin')}>
-              <i class="fas fa-unlock"></i> فعال‌سازی موقت پنل کلاسیک
+              <i class="fas fa-unlock"></i> فعال‌سازی اضطراری کلاسیک
             </button>
           </div>
           <p style="font-size:.72rem;color:var(--sm-text-muted);margin-top:14px">

@@ -59,9 +59,6 @@ const SMPortalMgmt = {
 
       <div class="sm-portal-links">
         <a class="sm-btn sm-btn-ghost sm-btn-sm" href="../index.html?view=portal" target="_blank"><i class="fas fa-door-open"></i> پورتال پرسنل</a>
-        ${(typeof Access !== 'undefined' && Access.canAccessLegacyAdmin?.())
-          ? `<a class="sm-btn sm-btn-ghost sm-btn-sm" href="../admin.html?classic=1" target="_blank"><i class="fas fa-table-columns"></i> پنل کلاسیک (legacy)</a>`
-          : ''}
       </div>
 
       <div style="margin-top:16px">${users.length ? users.map(u => this._userCard(u)).join('') :

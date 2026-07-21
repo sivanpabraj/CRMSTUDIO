@@ -5,7 +5,7 @@ const PageNav = {
     dashboard: { icon: 'fa-chart-line', fa: 'داشبورد', en: 'Studio M Dashboard', parent: 'login', href: 'studio-m/#dashboard' },
     contracts: { icon: 'fa-file-signature', fa: 'قراردادها', en: 'Contracts', parent: 'dashboard', href: 'studio-m/#contracts' },
     contractNew: { icon: 'fa-file-circle-plus', fa: 'ثبت قرارداد جدید', en: 'New Contract', parent: 'contracts', href: 'contract.html' },
-    adminClassic: { icon: 'fa-table-columns', fa: 'پنل کلاسیک', en: 'Classic Admin', parent: 'dashboard', href: 'admin.html?classic=1' },
+    // Classic admin removed from public nav — break-glass only via Settings → SignedProof
     staff: { icon: 'fa-user-tie', fa: 'پورتال پرسنل', en: 'Staff Portal', parent: 'login', href: 'index.html?view=portal' },
     customer: { icon: 'fa-heart', fa: 'پورتال مشتری', en: 'Customer Portal', parent: null, href: 'index.html' }
   },
