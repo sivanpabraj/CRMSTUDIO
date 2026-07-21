@@ -1,7 +1,6 @@
-// Supabase Edge Function — authoritative studio mutations (finance-first stub)
+// Supabase Edge Function — authoritative studio finance mutations (SaaS)
 // Deploy: supabase functions deploy studio-mutate
-// This is the foundation for moving mutation authority off the browser.
-// Client may continue using IndexedDB offline; when online, call this for money ops.
+// Requires migrations 007 (audit) + 008 (ledger entries).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -37,6 +36,19 @@ const FINANCE_OPS = new Set([
   'update_transaction',
 ])
 
+type Membership = {
+  studio_id: string
+  roles?: string[] | null
+  role?: string | null
+  status: string
+}
+
+function memberRoles(m: Membership): string[] {
+  if (Array.isArray(m.roles) && m.roles.length) return m.roles.map(String)
+  if (m.role) return [String(m.role)]
+  return []
+}
+
 Deno.serve(async (req) => {
   const origin = allowedOrigin(req)
   const headers = corsHeaders(origin)
@@ -66,9 +78,10 @@ Deno.serve(async (req) => {
     } = await supabase.auth.getUser()
     if (userErr || !user) return json({ ok: false, error: 'not authenticated' }, 401, origin)
 
+    // Schema uses roles text[]; never select non-existent `role` column.
     const { data: memberships, error: memErr } = await supabase
       .from('studio_members')
-      .select('studio_id, role, status')
+      .select('studio_id, roles, status')
       .eq('user_id', user.id)
       .eq('status', 'active')
 
@@ -83,9 +96,19 @@ Deno.serve(async (req) => {
 
     const op = String(body.op || '')
     const idempotencyKey = String(body.idempotencyKey || '').slice(0, 128)
-    const studioId = String(body.studioId || memberships[0].studio_id)
-    const member = memberships.find((m) => m.studio_id === studioId)
+    const studioId = String(body.studioId || '')
+    if (!studioId) {
+      return json({ ok: false, error: 'studioId required' }, 400, origin)
+    }
+
+    const member = (memberships as Membership[]).find((m) => m.studio_id === studioId)
     if (!member) return json({ ok: false, error: 'studio access denied' }, 403, origin)
+
+    // Spoofing guard: studioId must be an active membership (checked above).
+    const roles = memberRoles(member)
+    if (!roles.length) {
+      return json({ ok: false, error: 'member has no roles' }, 403, origin)
+    }
 
     if (!FINANCE_OPS.has(op)) {
       return json({ ok: false, error: `unsupported op: ${op}` }, 400, origin)
@@ -95,50 +118,122 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: 'idempotencyKey required' }, 400, origin)
     }
 
-    // Idempotency: if a prior audit row exists, return it
-    const { data: prior } = await supabase
+    // Idempotency: prefer ledger row, then audit
+    const { data: priorLedger } = await supabase
+      .from('studio_ledger_entries')
+      .select('id, status, payload, created_at')
+      .eq('studio_id', studioId)
+      .eq('idempotency_key', idempotencyKey)
+      .maybeSingle()
+
+    if (priorLedger) {
+      return json({
+        ok: true,
+        deduped: true,
+        result: {
+          op,
+          studioId,
+          status: priorLedger.status || 'accepted',
+          ledgerId: priorLedger.id,
+          acceptedAt: priorLedger.created_at,
+        },
+      }, 200, origin)
+    }
+
+    const { data: priorAudit } = await supabase
       .from('studio_mutation_audit')
       .select('id, result, created_at')
       .eq('studio_id', studioId)
       .eq('idempotency_key', idempotencyKey)
       .maybeSingle()
 
-    if (prior?.result) {
-      return json({ ok: true, deduped: true, result: prior.result }, 200, origin)
+    if (priorAudit?.result) {
+      return json({ ok: true, deduped: true, result: priorAudit.result }, 200, origin)
     }
 
-    // Stub authority path: accept payload, write audit row for reconciliation.
-    // Full ledger tables can be wired in a follow-up migration.
     const payload = body.payload && typeof body.payload === 'object' ? body.payload : {}
+    const amountRaw = (payload as Record<string, unknown>).amount
+    const amount = typeof amountRaw === 'number' ? amountRaw : Number(amountRaw) || null
+
     const result = {
       op,
       studioId,
       acceptedAt: new Date().toISOString(),
       payload,
-      status: 'accepted_pending_ledger',
-      note: 'Edge stub — deploy migration for studio_mutation_audit + ledger tables to activate server SoR',
+      status: 'accepted',
+      roles,
+      note: 'Edge accept — studio_ledger_entries is SaaS finance SoR foundation',
     }
 
-    const { error: auditErr } = await supabase.from('studio_mutation_audit').insert({
-      studio_id: studioId,
-      user_id: user.id,
-      op,
-      idempotency_key: idempotencyKey,
-      payload,
-      result,
-    })
+    const { data: auditRow, error: auditErr } = await supabase
+      .from('studio_mutation_audit')
+      .insert({
+        studio_id: studioId,
+        user_id: user.id,
+        op,
+        idempotency_key: idempotencyKey,
+        payload,
+        result,
+      })
+      .select('id')
+      .maybeSingle()
 
-    // Table may not exist yet — still return accepted so clients can feature-detect
     if (auditErr) {
+      // Unique violation → concurrent duplicate
+      if (/duplicate|unique/i.test(auditErr.message || '')) {
+        return json({ ok: true, deduped: true, result }, 200, origin)
+      }
+      return json({
+        ok: false,
+        error: auditErr.message || 'audit write failed',
+        reason: 'audit_failed',
+      }, 500, origin)
+    }
+
+    const { data: ledgerRow, error: ledgerErr } = await supabase
+      .from('studio_ledger_entries')
+      .insert({
+        studio_id: studioId,
+        user_id: user.id,
+        audit_id: auditRow?.id || null,
+        op,
+        idempotency_key: idempotencyKey,
+        amount,
+        payload,
+        status: 'accepted',
+      })
+      .select('id')
+      .maybeSingle()
+
+    if (ledgerErr) {
+      if (/duplicate|unique/i.test(ledgerErr.message || '')) {
+        return json({
+          ok: true,
+          deduped: true,
+          result: { ...result, ledgerPending: false },
+        }, 200, origin)
+      }
+      // Audit succeeded but ledger missing — still accept with warning (008 may not be applied)
       return json({
         ok: true,
-        stub: true,
-        warning: auditErr.message,
-        result,
+        warning: ledgerErr.message,
+        result: {
+          ...result,
+          status: 'accepted_audit_only',
+          auditId: auditRow?.id || null,
+          note: 'Deploy migration 008_studio_ledger_entries for full SaaS ledger SoR',
+        },
       }, 200, origin)
     }
 
-    return json({ ok: true, result }, 200, origin)
+    return json({
+      ok: true,
+      result: {
+        ...result,
+        auditId: auditRow?.id || null,
+        ledgerId: ledgerRow?.id || null,
+      },
+    }, 200, origin)
   } catch (e) {
     return json({ ok: false, error: e?.message || 'server error' }, 500, origin)
   }

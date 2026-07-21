@@ -496,13 +496,14 @@ const SMSettings = {
           ${SMUI.formField('Anon Key (public)', 'cloud-key', { value: key, dir: 'ltr', placeholder: 'eyJhbG...' })}
           <label class="sm-check-row"><input type="checkbox" id="cloud-enabled" ${info.cloudEnabled ? 'checked' : ''}/> فعال‌سازی همگام‌سازی ابر</label>
           <label class="sm-check-row"><input type="checkbox" id="cloud-unify-pw" ${info.cloudUnifyPassword ? 'checked' : ''}/> یکسان‌سازی رمز محلی با Supabase (هنگام تغییر رمز)</label>
-          <label class="sm-check-row"><input type="checkbox" id="cloud-mutate" ${info.mutateEnabled ? 'checked' : ''}/> گزارش تراکنش‌های مالی به Edge <code dir="ltr">studio-mutate</code> (آزمایشی)</label>
+          <label class="sm-check-row"><input type="checkbox" id="cloud-mutate-required" ${info.mutateRequiredWhenOnline !== false && info.cloudEnabled ? 'checked' : (info.mutateRequiredWhenOnline ? 'checked' : '')}/> الزام تأیید Edge برای پول آنلاین (<code dir="ltr">mutateRequiredWhenOnline</code>) — پیش‌فرض SaaS</label>
+          <label class="sm-check-row"><input type="checkbox" id="cloud-mutate" ${info.mutateEnabled ? 'checked' : ''}/> audit اختیاری وقتی الزام خاموش است</label>
           ${SMUI.formField('Observability URL (اختیاری)', 'cloud-obs-url', {
             value: info.observabilityUrl || '',
             dir: 'ltr',
             placeholder: 'https://logs.example.com/ingest'
           })}
-          <p style="font-size:.72rem;color:var(--sm-text-muted);margin:8px 0 0;line-height:1.6">mutate فعلاً فقط audit است — IDB منبع حقیقت می‌ماند تا ledger سروری آماده شود.</p>
+          <p style="font-size:.72rem;color:var(--sm-text-muted);margin:8px 0 0;line-height:1.6">با ابر فعال، پول آنلاین فقط بعد از قبول <code dir="ltr">studio-mutate</code> + ledger ثبت می‌شود. آفلاین فعلاً مسدود است (outbox در فاز بعد).</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
             <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMSettings.saveCloudConfig')}><i class="fas fa-save"></i> ذخیره تنظیمات</button>
             <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.testObservability')}><i class="fas fa-satellite-dish"></i> تست observability</button>
@@ -565,6 +566,7 @@ const SMSettings = {
     const enabled = !!document.getElementById('cloud-enabled')?.checked
     const unify = !!document.getElementById('cloud-unify-pw')?.checked
     const mutateEnabled = !!document.getElementById('cloud-mutate')?.checked
+    const mutateRequiredWhenOnline = !!document.getElementById('cloud-mutate-required')?.checked
     let observabilityUrl = (document.getElementById('cloud-obs-url')?.value || '').trim()
     if (observabilityUrl) {
       try {
@@ -584,6 +586,7 @@ const SMSettings = {
       cloudEnabled: enabled,
       cloudUnifyPassword: unify,
       mutateEnabled,
+      mutateRequiredWhenOnline,
       observabilityUrl
     })
     Cloud._client = null

@@ -78,9 +78,10 @@ Deno.serve(async (req) => {
     }
 
     // Must be an active studio member (blocks arbitrary Auth users)
+    // Schema uses roles text[] (not singular `role`)
     const { data: memberships, error: memErr } = await supabase
       .from('studio_members')
-      .select('studio_id, role, status')
+      .select('studio_id, roles, status')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .limit(5)

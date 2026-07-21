@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { StudioMutateClient } from '../js/lib/studio-mutate-client.js'
 
-describe('StudioMutateClient', () => {
+describe('StudioMutateClient SaaS authority', () => {
   const prev = {}
 
   beforeEach(() => {
@@ -13,11 +13,19 @@ describe('StudioMutateClient', () => {
     globalThis.DB = {
       get: () => ({
         mutateEnabled: false,
+        mutateRequiredWhenOnline: false,
+        cloudEnabled: false,
+        supabaseUrl: '',
         supabaseStudioId: 'studio_1'
       })
     }
     delete globalThis.__SM_MUTATE_ENABLED
+    delete globalThis.__SM_MUTATE_REQUIRED
     delete globalThis.__SM_MUTATE_URL
+    Object.defineProperty(globalThis.navigator, 'onLine', {
+      configurable: true,
+      get: () => true
+    })
   })
 
   afterEach(() => {
@@ -29,13 +37,58 @@ describe('StudioMutateClient', () => {
     vi.restoreAllMocks()
   })
 
-  it('skips when feature flag off', async () => {
-    const res = await StudioMutateClient.report('record_deposit', { amount: 1 })
+  it('skips when feature flag off and not required', async () => {
+    const res = await StudioMutateClient.authorize('record_deposit', { amount: 1 })
     expect(res.skipped).toBe(true)
+    expect(res.reason).toBe('not_required')
   })
 
-  it('posts when enabled using Cloud.client() + resolvedConfig()', async () => {
-    globalThis.__SM_MUTATE_ENABLED = true
+  it('stableKey is deterministic for same transaction id', () => {
+    const a = StudioMutateClient.stableKey('record_deposit', { transactionId: 't1' })
+    const b = StudioMutateClient.stableKey('record_deposit', { transactionId: 't1' })
+    expect(a).toBe('record_deposit:t1')
+    expect(b).toBe(a)
+  })
+
+  it('requiredWhenOnline defaults true when cloud enabled + url', () => {
+    globalThis.DB = {
+      get: () => ({
+        cloudEnabled: true,
+        supabaseUrl: 'https://abc.supabase.co',
+        supabaseStudioId: 'studio_1'
+      })
+    }
+    expect(StudioMutateClient.requiredWhenOnline()).toBe(true)
+  })
+
+  it('fail-closed when required and no cloud session', async () => {
+    globalThis.__SM_MUTATE_REQUIRED = true
+    globalThis.__SM_MUTATE_URL = 'https://abc.supabase.co/functions/v1/studio-mutate'
+    globalThis.Cloud = {
+      resolvedConfig: () => ({ url: 'https://abc.supabase.co' }),
+      client: async () => ({ auth: { getSession: async () => ({ data: { session: null } }) } })
+    }
+    const res = await StudioMutateClient.authorize('record_deposit', {
+      transactionId: 't1',
+      amount: 100
+    }, { idempotencyKey: 'record_deposit:t1' })
+    expect(res.ok).toBe(false)
+    expect(res.reason).toBe('no_cloud_session')
+  })
+
+  it('fail-closed when required and offline', async () => {
+    globalThis.__SM_MUTATE_REQUIRED = true
+    Object.defineProperty(globalThis.navigator, 'onLine', {
+      configurable: true,
+      get: () => false
+    })
+    const res = await StudioMutateClient.authorize('record_deposit', { transactionId: 't1', amount: 1 })
+    expect(res.ok).toBe(false)
+    expect(res.reason).toBe('offline_blocked')
+  })
+
+  it('posts stable idempotency key when authorized', async () => {
+    globalThis.__SM_MUTATE_REQUIRED = true
     globalThis.Cloud = {
       resolvedConfig: () => ({ url: 'https://abc.supabase.co', anonKey: 'k', enabled: true }),
       client: async () => ({
@@ -46,30 +99,55 @@ describe('StudioMutateClient', () => {
     }
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({ ok: true, result: { status: 'accepted_pending_ledger' } })
+      json: async () => ({ ok: true, result: { status: 'accepted', ledgerId: 'L1' } })
     }))
     globalThis.fetch = fetchMock
 
-    const res = await StudioMutateClient.report('record_deposit', { transactionId: 't1', amount: 100 })
+    const res = await StudioMutateClient.authorize(
+      'record_deposit',
+      { transactionId: 't1', amount: 100 },
+      { idempotencyKey: 'record_deposit:t1' }
+    )
     expect(res.ok).toBe(true)
-    expect(fetchMock).toHaveBeenCalledOnce()
-    const [url, opts] = fetchMock.mock.calls[0]
-    expect(url).toBe('https://abc.supabase.co/functions/v1/studio-mutate')
-    expect(opts.headers.Authorization).toBe('Bearer tok')
-    const body = JSON.parse(opts.body)
-    expect(body.op).toBe('record_deposit')
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.idempotencyKey).toBe('record_deposit:t1')
     expect(body.studioId).toBe('studio_1')
-    expect(body.idempotencyKey).toBeTruthy()
   })
 
-  it('skips when cloud session missing', async () => {
+  it('server 500 fails closed when required', async () => {
+    globalThis.__SM_MUTATE_REQUIRED = true
+    globalThis.Cloud = {
+      resolvedConfig: () => ({ url: 'https://abc.supabase.co' }),
+      client: async () => ({
+        auth: { getSession: async () => ({ data: { session: { access_token: 'tok' } } }) }
+      })
+    }
+    globalThis.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 500,
+      statusText: ' Internal Server Error',
+      json: async () => ({ error: 'boom' })
+    }))
+    const res = await StudioMutateClient.authorize('record_deposit', { transactionId: 't1', amount: 1 })
+    expect(res.ok).toBe(false)
+    expect(res.reason).toBe('server_rejected')
+  })
+
+  it('report still works for optional audit mode', async () => {
     globalThis.__SM_MUTATE_ENABLED = true
     globalThis.Cloud = {
       resolvedConfig: () => ({ url: 'https://abc.supabase.co' }),
-      client: async () => ({ auth: { getSession: async () => ({ data: { session: null } }) } })
+      client: async () => ({
+        auth: { getSession: async () => ({ data: { session: { access_token: 'tok' } } }) }
+      })
     }
-    const res = await StudioMutateClient.report('record_deposit', { amount: 1 })
-    expect(res.skipped).toBe(true)
-    expect(res.reason).toBe('no_cloud_session')
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true, result: { status: 'accepted' } })
+    }))
+    globalThis.fetch = fetchMock
+    const res = await StudioMutateClient.report('record_deposit', { transactionId: 't1', amount: 100 })
+    expect(res.ok).toBe(true)
+    expect(fetchMock).toHaveBeenCalledOnce()
   })
 })

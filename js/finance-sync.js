@@ -111,12 +111,53 @@ const FinanceSync = {
     return this._updateContractPaid(contractId, purposeCategory, amount, { reverse: true })
   },
 
+  _newLocalId(prefix = 'tx') {
+    try {
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID()
+      }
+    } catch { /* */ }
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+  },
+
   _reportMutate(op, payload) {
     try {
       if (typeof StudioMutateClient !== 'undefined' && StudioMutateClient.report) {
         StudioMutateClient.report(op, payload)
       }
-    } catch { /* never block local ledger */ }
+    } catch { /* never block local ledger in optional mode */ }
+  },
+
+  /**
+   * SaaS gate: when mutateRequiredWhenOnline, await Edge accept BEFORE local money writes.
+   * Offline / no session while required → fail closed (outbox deferred to follow-up).
+   */
+  async _beforeMoneyCommit(op, payload, idempotencyKey) {
+    try {
+      if (typeof StudioMutateClient === 'undefined' || typeof StudioMutateClient.authorize !== 'function') {
+        return { ok: true }
+      }
+      const required = typeof StudioMutateClient.requiredWhenOnline === 'function'
+        && StudioMutateClient.requiredWhenOnline()
+      const optional = typeof StudioMutateClient.enabled === 'function' && StudioMutateClient.enabled()
+      if (!required && !optional) return { ok: true }
+      if (!required && optional) return { ok: true, deferReport: true }
+
+      const res = await StudioMutateClient.authorize(op, payload, { idempotencyKey })
+      if (res.ok) return { ok: true, authorized: true, server: res }
+      if (res.skipped && res.reason === 'not_required') return { ok: true }
+      return {
+        ok: false,
+        error: res.error || 'تأیید سرور برای تراکنش مالی ناموفق بود',
+        reason: res.reason || 'mutate_failed'
+      }
+    } catch (e) {
+      return { ok: false, error: e.message || 'خطای دروازه مالی سرور' }
+    }
+  },
+
+  _afterMoneyCommit(op, payload, gate) {
+    if (gate?.deferReport) this._reportMutate(op, payload)
   },
 
   _logRollback(scope, err) {
@@ -212,6 +253,16 @@ const FinanceSync = {
       : null
 
     const syncInvoice = opts.syncInvoice !== false || !!old.invoiceId
+    const mutationId = opts.clientMutationId || this._newLocalId('mut')
+    const idempotencyKey = `update_transaction:${txId}:${mutationId}`
+    const gate = await this._beforeMoneyCommit('update_transaction', {
+      transactionId: txId,
+      amount,
+      bankId,
+      type,
+      mutationId
+    }, idempotencyKey)
+    if (!gate.ok) return { ok: false, error: gate.error }
 
     const run = async () => {
       let txUpdated = false
@@ -264,7 +315,7 @@ const FinanceSync = {
           DB.log('finance_tx_update', `${txId} — ${amount.toLocaleString('fa-IR')}`)
         }
         await DB.flush?.()
-        this._reportMutate('update_transaction', { transactionId: txId, amount, bankId })
+        this._afterMoneyCommit('update_transaction', { transactionId: txId, amount, bankId, mutationId }, gate)
         return { ok: true, transactionId: txId, invoiceId }
       } catch (e) {
         try {
@@ -325,6 +376,14 @@ const FinanceSync = {
       })()
       : null
 
+    const idempotencyKey = `delete_transaction:${txId}`
+    const gate = await this._beforeMoneyCommit('delete_transaction', {
+      transactionId: txId,
+      amount: old.amount,
+      bankId: old.bankId
+    }, idempotencyKey)
+    if (!gate.ok) return { ok: false, error: gate.error }
+
     const run = async () => {
       let txDeleted = false
       let invDeleted = false
@@ -361,7 +420,9 @@ const FinanceSync = {
           DB.log('finance_tx_delete', `${txId} — ${(old.amount || 0).toLocaleString('fa-IR')}`)
         }
         await DB.flush?.()
-        this._reportMutate('delete_transaction', { transactionId: txId, amount: old.amount, bankId: old.bankId })
+        this._afterMoneyCommit('delete_transaction', {
+          transactionId: txId, amount: old.amount, bankId: old.bankId
+        }, gate)
         return { ok: true, transactionId: txId }
       } catch (e) {
         try {
@@ -403,6 +464,16 @@ const FinanceSync = {
     if (!fromId || !toId) return { ok: false, error: 'انتخاب هر دو حساب الزامی است' }
     if (fromId === toId) return { ok: false, error: 'حساب مبدأ و مقصد باید متفاوت باشند' }
 
+    const pairId = opts.pairId || this._newLocalId('xfer')
+    const outId = opts.outTransactionId || this._newLocalId('tx')
+    const inId = opts.inTransactionId || this._newLocalId('tx')
+    const idempotencyKey = `transfer_banks:${pairId}`
+    const gate = await this._beforeMoneyCommit('transfer_banks', {
+      pairId, amount, fromBankId: fromId, toBankId: toId,
+      outTransactionId: outId, inTransactionId: inId
+    }, idempotencyKey)
+    if (!gate.ok) return { ok: false, error: gate.error }
+
     const run = async () => {
       const from = (typeof DB.findActive === 'function'
         ? DB.findActive('banks', b => b.id === fromId)
@@ -417,11 +488,11 @@ const FinanceSync = {
 
       const date = opts.date || Utils.todayJalali()
       const note = opts.notes || opts.purpose || 'انتقال بین حساب'
-      const pairId = opts.pairId || (`xfer_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`)
       let outRow, inRow
       let balancesTouched = false
       try {
         outRow = await SecureDB.insert('transactions', {
+          id: outId,
           type: 'withdrawal',
           amount,
           date,
@@ -440,6 +511,7 @@ const FinanceSync = {
         })
 
         inRow = await SecureDB.insert('transactions', {
+          id: inId,
           type: 'deposit',
           amount,
           date,
@@ -469,10 +541,10 @@ const FinanceSync = {
           DB.log('finance_transfer', `${amount.toLocaleString('fa-IR')} — ${this.bankLabel(fromId)} → ${this.bankLabel(toId)}`)
         }
         await DB.flush?.()
-        this._reportMutate('transfer_banks', {
+        this._afterMoneyCommit('transfer_banks', {
           pairId, amount, fromBankId: fromId, toBankId: toId,
           outTransactionId: outRow.id, inTransactionId: inRow.id
-        })
+        }, gate)
         return { ok: true, pairId, outTransactionId: outRow.id, inTransactionId: inRow.id }
       } catch (e) {
         try {
@@ -547,8 +619,10 @@ const FinanceSync = {
       : null
     const purposeCategory = opts.purposeCategory || (opts.isDeposit ? 'contract_deposit' : 'contract_payment')
     const client = opts.client || (contract ? this.couple(contract) : '')
+    const txId = opts.transactionId || this._newLocalId('tx')
 
     const data = {
+      id: txId,
       type: 'deposit',
       amount,
       date: opts.date || Utils.todayJalali(),
@@ -565,6 +639,16 @@ const FinanceSync = {
       notes: opts.notes || '',
       desc: opts.purpose || opts.notes || this.DEPOSIT_CATS[purposeCategory] || 'واریز'
     }
+
+    const idempotencyKey = `record_deposit:${txId}`
+    const gate = await this._beforeMoneyCommit('record_deposit', {
+      transactionId: txId,
+      bankId: opts.bankId,
+      amount,
+      purposeCategory,
+      contractId: opts.contractId || ''
+    }, idempotencyKey)
+    if (!gate.ok) return { ok: false, error: gate.error }
 
     const bank = DB.find('banks', b => b.id === opts.bankId && !b._deleted)
     const balBefore = bank?.balance || 0
@@ -604,7 +688,9 @@ const FinanceSync = {
       }
 
       await DB.flush?.()
-      this._reportMutate('record_deposit', { transactionId: row.id, invoiceId, bankId: opts.bankId, amount })
+      this._afterMoneyCommit('record_deposit', {
+        transactionId: row.id, invoiceId, bankId: opts.bankId, amount
+      }, gate)
       return { ok: true, transactionId: row.id, invoiceId, bankId: opts.bankId }
     } catch (e) {
       try {
@@ -641,7 +727,9 @@ const FinanceSync = {
       return { ok: false, error: 'موجودی حساب کافی نیست' }
     }
 
+    const txId = opts.transactionId || this._newLocalId('tx')
     const data = {
+      id: txId,
       type: 'withdrawal',
       amount,
       date: opts.date || Utils.todayJalali(),
@@ -661,6 +749,15 @@ const FinanceSync = {
       expenseId: opts.expenseId || '',
       salaryPaymentId: opts.salaryPaymentId || ''
     }
+
+    const idempotencyKey = `record_withdrawal:${txId}`
+    const gate = await this._beforeMoneyCommit('record_withdrawal', {
+      transactionId: txId,
+      bankId: opts.bankId,
+      amount,
+      purposeCategory: data.purposeCategory
+    }, idempotencyKey)
+    if (!gate.ok) return { ok: false, error: gate.error }
 
     const balBefore = bank.balance || 0
     let row = null
@@ -682,7 +779,9 @@ const FinanceSync = {
       }
 
       await DB.flush?.()
-      this._reportMutate('record_withdrawal', { transactionId: row.id, invoiceId, bankId: opts.bankId, amount })
+      this._afterMoneyCommit('record_withdrawal', {
+        transactionId: row.id, invoiceId, bankId: opts.bankId, amount
+      }, gate)
       return { ok: true, transactionId: row.id, invoiceId, bankId: opts.bankId }
     } catch (e) {
       try {
