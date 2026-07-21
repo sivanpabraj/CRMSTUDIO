@@ -73,11 +73,22 @@ supabase/migrations/006_contracts_manager_rls.sql
 
 ## محدودیت‌های باقی‌مانده
 
-- Session محلی client-only است (بدون HMAC سرور-side) — در production نشست بدون `sig` در مسیر sync هم رد می‌شود
-- E2E smoke در CI فعال است؛ سناریوی مالی authenticated هنوز اختیاری (`E2E_LOGIN_*`)
-- CSP: `/studio-m/` بدون script `unsafe-inline`؛ صفحات کلاسیک هنوز `unsafe-inline` دارند تا admin.html بازنشسته شود
-- `studio-mutate` فعلاً audit/feature-flag است — Security به ۱۰ نمی‌رسد تا ledger سروری authoritative شود
-- سقف امتیاز واقعی: [`docs/QUALITY_SCORES.md`](./QUALITY_SCORES.md)
+- Session محلی هنوز client-side است (HMAC سرور-side کامل نیست)
+- پول آفلاین در حالت SaaS مسدود است تا outbox پیاده شود ([ADR](./ADR_OFFLINE_FINANCE_OUTBOX.md))
+- Ledger سروری هنوز accept-log است نه double-entry کامل
+- CSP: `/studio-m/` بدون script `unsafe-inline`؛ صفحات کلاسیک هنوز `unsafe-inline` دارند (خارج از مسیر عمومی)
+- E2E مالی authenticated با `E2E_LOGIN_PHONE` / `E2E_LOGIN_PASSWORD` (در CI در صورت نبودن secret اسکیپ می‌شود)
+- سقف امتیاز SaaS: [`docs/QUALITY_SCORES.md`](./QUALITY_SCORES.md)
+
+## فاز SaaS P0 (پیاده‌شده)
+
+| لایه | نقش |
+|------|-----|
+| `mutateRequiredWhenOnline` | قبل از commit محلی پول، Edge را await می‌کند |
+| `008_studio_ledger_entries.sql` | accept-log ledger با idempotency |
+| `studio-mutate` | membership روی `roles[]` + audit + ledger |
+| Classic | فقط break-glass SignedProof؛ بدون لینک عمومی Pro |
+| Tenant spoof | `studioId` باید membership فعال باشد |
 
 ## Migration 002
 

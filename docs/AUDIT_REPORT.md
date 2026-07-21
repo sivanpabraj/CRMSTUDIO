@@ -1,56 +1,44 @@
 # Studio M — Comprehensive Engineering Audit Report
 
 **Date:** 2026-07-21  
-**Branch:** `cursor/finance-cheque-p0-66da`  
+**Branch:** `cursor/saas-p0-authority-66da`  
 **Version:** 6.0.0  
-**Overall Score: 83 / 100**
+**Product target:** Public multi-tenant B2B SaaS for studios  
+**Overall (SaaS frame): 68 / 100** · Single-studio nostalgia: ~83 / 100
 
 ---
 
 ## 1. Executive Summary
 
-Studio M is production-credible for a **trusted single studio**.
+Studio M is **no longer scored as a single-studio offline ERP**. The public product requires server authority for money, tenant isolation, and Pro-only production UX.
 
-**Round E** fixed a real P1: `StudioMutateClient` now talks to the actual `Cloud.client()` / `resolvedConfig()` APIs; settings expose `mutateEnabled` + observability URL; classic unlock uses signed proof; cheque lists paginate; receipt fallback dropped `document.write`; bank-edit integrity is unit-tested. **111 unit tests**.
+**SaaS P0 landed:**
+
+1. `mutateRequiredWhenOnline` — FinanceSync awaits Edge before local money commit; fail-closed online/offline-without-session
+2. Migration `008_studio_ledger_entries` + hardened `studio-mutate` (`roles[]`, tenant spoof guard, ledger write)
+3. Classic removed from public operator paths (SignedProof break-glass only)
+4. Gated Playwright finance auth (`E2E_LOGIN_*`) + ADR for deferred outbox
+5. Honest SaaS rescore — **no vanity inflation**
 
 ### Hard-stop honesty
 
-| Dimension | 10/10 possible? | Why |
-|-----------|-----------------|-----|
-| Security | **No** (~7.4–7.6) | Browser remains SoR until `studio-mutate` is authoritative |
-| Scalability | **No** (~5.5–6.0) | Single-studio IDB document store |
-| Other dimensions | Approachable | Continue incremental work |
-
-These ceilings are **unfixable without intentional architecture change**.
+| Dimension | 10/10? | Why |
+|-----------|--------|-----|
+| Security | **No** (~7.8) | Offline money blocked not queued; local session still client-side |
+| Scalability | **No** (~5.8) | Thin ledger; multi-tenant load unproven |
+| Billing / onboarding polish | **No** | Out of P0 scope |
 
 ---
 
-## 2. Scores
+## 2. Scores (SaaS frame)
 
 | Metric | Score |
 |--------|------:|
-| **Overall** | **83** |
-| Production readiness (single studio) | 86 |
-| SaaS readiness | 45 |
+| **Overall (SaaS)** | **68** |
+| Production readiness (public SaaS) | 62 |
+| Single-studio optional-cloud (legacy) | 83 |
 
-| Category | Score |
-|----------|------:|
-| Architecture | 80 |
-| Code Quality | 85 |
-| Maintainability | 79 |
-| Scalability | 55 |
-| Performance | 77 |
-| Security | 74 |
-| UI/UX | 74 |
-| Accessibility | 65 |
-| Testing | 88 |
-| Documentation | 88 |
-| DevOps | 82 |
-| Error Handling | 80 |
-| Logging & Monitoring | 70 |
-| API Design | 77 |
-| Database Design | 68 |
-| Project Structure | 80 |
+See [`QUALITY_SCORES.md`](./QUALITY_SCORES.md) for category table.
 
 ---
 
@@ -58,21 +46,26 @@ These ceilings are **unfixable without intentional architecture change**.
 
 | Round | Resolved |
 |-------|----------|
-| A–D | FinanceSync sole writer, Pro CSP, bank metadata integrity, mutate stub |
-| **E** | Mutate client Cloud wiring; settings flags; signed classic unlock; cheque pagination; no `document.write`; 111 tests |
+| Finance cheque / integrity | FinanceSync sole writer, cheque pagination, bank metadata |
+| Mutate client wiring | Cloud.client + resolvedConfig |
+| **SaaS P0** | mutateRequired, ledger 008, classic public retire, finance e2e gate |
 
 ---
 
-## 4. Residual P1 (requires product/infra decision)
+## 4. Residual risks
 
-1. Make online finance **require** `studio-mutate` success (behavior change).
-2. Retire classic `admin.html` → drop global script `unsafe-inline`.
-3. Server conflict rules for multi-device money (LWW).
-
-**P0 Critical in-scope:** none.
+- Offline finance outbox not implemented ([ADR](./ADR_OFFLINE_FINANCE_OUTBOX.md))
+- Ledger is accept-log, not double-entry balances on server
+- Money LWW conflict policy across devices still incomplete
+- Billing / plans / abuse quotas not started
+- Classic HTML still in repo (quarantined) with weaker CSP
 
 ---
 
-## 5. Final confirmation
+## 5. Ordered follow-ups
 
-Re-scanned after Round E: no new Critical; no High fixable without architecture/product change; Security/Scalability remain below 10 by documented ceiling.
+1. **P1** Finance outbox + flush  
+2. **P1** RLS isolation proof tests + onboarding harden  
+3. **P1** Server conflict / sequential ledger versions  
+4. **P2** Billing + quotas + monitoring alerts  
+5. **P2** Retire classic assets from production builds entirely  
