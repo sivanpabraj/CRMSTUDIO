@@ -64,7 +64,9 @@ Bank **metadata** edits must not overwrite `balance` (ledger-owned); opening bal
 
 ### Optional online audit path
 
-When `studioInfo.mutateEnabled` or `window.__SM_MUTATE_ENABLED` is set, FinanceSync fire-and-forgets ops to Edge Function `studio-mutate` (`js/lib/studio-mutate-client.js`). Local IDB remains SoR until server ledger is authoritative.
+When `studioInfo.mutateEnabled` (Settings → Cloud) or `window.__SM_MUTATE_ENABLED` is set, FinanceSync fire-and-forgets ops to Edge Function `studio-mutate` via `js/lib/studio-mutate-client.js` (uses `Cloud.resolvedConfig()` + `await Cloud.client()`). Local IDB remains SoR until server ledger is authoritative.
+
+Classic admin unlock requires a **SignedProof** (`sm_classic_unlock`, 2h TTL) issued after manager password confirmation.
 
 ## Authentication
 

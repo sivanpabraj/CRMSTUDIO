@@ -56,6 +56,8 @@ export const browserGlobals = {
   SMObservability: "readonly",
   StudioMutateClient: "readonly",
   SMExport: "readonly",
+  bankSavePlan: "readonly",
+  bankMetadataPatch: "readonly",
   SMEvents: "readonly",
   ListPage: "readonly",
   paginate: "readonly",

@@ -496,8 +496,16 @@ const SMSettings = {
           ${SMUI.formField('Anon Key (public)', 'cloud-key', { value: key, dir: 'ltr', placeholder: 'eyJhbG...' })}
           <label class="sm-check-row"><input type="checkbox" id="cloud-enabled" ${info.cloudEnabled ? 'checked' : ''}/> فعال‌سازی همگام‌سازی ابر</label>
           <label class="sm-check-row"><input type="checkbox" id="cloud-unify-pw" ${info.cloudUnifyPassword ? 'checked' : ''}/> یکسان‌سازی رمز محلی با Supabase (هنگام تغییر رمز)</label>
+          <label class="sm-check-row"><input type="checkbox" id="cloud-mutate" ${info.mutateEnabled ? 'checked' : ''}/> گزارش تراکنش‌های مالی به Edge <code dir="ltr">studio-mutate</code> (آزمایشی)</label>
+          ${SMUI.formField('Observability URL (اختیاری)', 'cloud-obs-url', {
+            value: info.observabilityUrl || '',
+            dir: 'ltr',
+            placeholder: 'https://logs.example.com/ingest'
+          })}
+          <p style="font-size:.72rem;color:var(--sm-text-muted);margin:8px 0 0;line-height:1.6">mutate فعلاً فقط audit است — IDB منبع حقیقت می‌ماند تا ledger سروری آماده شود.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
             <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMSettings.saveCloudConfig')}><i class="fas fa-save"></i> ذخیره تنظیمات</button>
+            <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.testObservability')}><i class="fas fa-satellite-dish"></i> تست observability</button>
           </div>
         </div>
       </div>
@@ -556,17 +564,38 @@ const SMSettings = {
     if (anonKey && !keyCheck.ok) return SM.toast(keyCheck.error, 'error')
     const enabled = !!document.getElementById('cloud-enabled')?.checked
     const unify = !!document.getElementById('cloud-unify-pw')?.checked
+    const mutateEnabled = !!document.getElementById('cloud-mutate')?.checked
+    let observabilityUrl = (document.getElementById('cloud-obs-url')?.value || '').trim()
+    if (observabilityUrl) {
+      try {
+        const u = new URL(observabilityUrl)
+        if (u.protocol !== 'https:' && !(typeof AppConfig !== 'undefined' && AppConfig.isLocalDev?.() && u.protocol === 'http:')) {
+          return SM.toast('Observability URL باید https باشد', 'error')
+        }
+        observabilityUrl = u.href
+      } catch {
+        return SM.toast('Observability URL نامعتبر است', 'error')
+      }
+    }
     await SecureDB.merge('studioInfo', {
       ...DB.get('studioInfo'),
       supabaseUrl: url,
       supabaseAnonKey: anonKey,
       cloudEnabled: enabled,
-      cloudUnifyPassword: unify
+      cloudUnifyPassword: unify,
+      mutateEnabled,
+      observabilityUrl
     })
     Cloud._client = null
     await DB.flush?.()
     SM.toast('تنظیمات ابر ذخیره شد', 'success')
     SMSettings.setTab('cloud')
+  },
+
+  testObservability() {
+    if (typeof SMObservability === 'undefined') return SM.toast('ماژول observability نیست', 'error')
+    SMObservability.captureEvent('ops_ping', { from: 'settings' })
+    SM.toast('رویداد تست ثبت شد (کنسول / remote sink)', 'info')
   },
 
   async cloudSignIn() {
@@ -759,7 +788,18 @@ const SMSettings = {
     const v = await Auth.verifyCurrentPassword(pw)
     if (!v.ok) return SM.toast(v.error || 'رمز اشتباه', 'error')
     try {
-      sessionStorage.setItem('sm_allow_classic', '1')
+      const user = SM.user()
+      const ttl = 2 * 60 * 60 * 1000
+      if (typeof SignedProof !== 'undefined' && SignedProof.issue) {
+        await SignedProof.issue('sm_classic_unlock', {
+          purpose: 'classic',
+          userId: user?.id || '',
+          issuedAt: Date.now()
+        }, ttl)
+        try { sessionStorage.removeItem('sm_allow_classic') } catch { /* */ }
+      } else {
+        sessionStorage.setItem('sm_allow_classic', '1')
+      }
       SM.toast('پنل کلاسیک برای این نشست فعال شد — admin.html?classic=1', 'success')
       if (typeof SMObservability !== 'undefined') SMObservability.captureEvent('classic_admin_unlock')
     } catch {

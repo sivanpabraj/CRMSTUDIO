@@ -4,6 +4,8 @@ const SMAccounting = {
   _tab: 'banks',
   _flowFilter: 'all',
   _chequeFilter: 'all',
+  _chequePage: 0,
+  _chequePageSize: 40,
   _ledgerPage: 0,
   _ledgerPageSize: 40,
 
@@ -67,6 +69,12 @@ const SMAccounting = {
 
   setChequeFilter(f) {
     this._chequeFilter = f
+    this._chequePage = 0
+    SM.navigate('accounting')
+  },
+
+  setChequePage(p) {
+    this._chequePage = Math.max(0, Number(p) || 0)
     SM.navigate('accounting')
   },
 
@@ -352,9 +360,23 @@ const SMAccounting = {
           <button type="button" class="sm-inv-cat ${f.cls || ''}${this._chequeFilter === f.id ? ' active' : ''}"
             ${SMEvents.attrs('SMAccounting.setChequeFilter', [f.id])}>${f.label}</button>`).join('')}
       </div>
+      ${(() => {
+        const pageFn = (typeof ListPage !== 'undefined' && ListPage.paginate) || (typeof paginate === 'function' ? paginate : null)
+        const page = pageFn
+          ? pageFn(cheques, this._chequePage, this._chequePageSize)
+          : { items: cheques.slice(0, this._chequePageSize), page: 0, pages: 1, total: cheques.length, hasPrev: false, hasNext: cheques.length > this._chequePageSize }
+        return `
       <div class="sm-acc-tx-list">
-        ${cheques.length ? cheques.map(c => this._chequeRow(c)).join('') : SMUI.empty('fa-money-check', q ? 'چکی یافت نشد' : 'چکی ثبت نشده')}
-      </div>`
+        ${page.items.length ? page.items.map(c => this._chequeRow(c)).join('') : SMUI.empty('fa-money-check', q ? 'چکی یافت نشد' : 'چکی ثبت نشده')}
+      </div>
+      ${page.pages > 1 ? `<div class="sm-acc-pager">
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${page.hasPrev ? '' : 'disabled '}
+          ${SMEvents.attrs('SMAccounting.setChequePage', [page.page - 1])}>قبلی</button>
+        <span>${page.page + 1} / ${page.pages} · ${page.total.toLocaleString('fa-IR')} چک</span>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${page.hasNext ? '' : 'disabled '}
+          ${SMEvents.attrs('SMAccounting.setChequePage', [page.page + 1])}>بعدی</button>
+      </div>` : ''}`
+      })()}`
   },
 
   _chequeRow(c) {
@@ -462,16 +484,20 @@ const SMAccounting = {
       }
       const w = window.open('', '_blank')
       if (w) {
-        w.document.write(`<html dir="rtl"><head><title></title><style>
+        const doc = w.document
+        doc.open()
+        const root = doc.documentElement
+        root.setAttribute('dir', 'rtl')
+        doc.head.innerHTML = `<meta charset="UTF-8"/><style>
           body{font-family:Vazirmatn,Tahoma,sans-serif;padding:24px;color:#111}
           .sm-receipt-amt{font-size:28px;font-weight:800;margin:16px 0}
           .sm-receipt-amt.in{color:#34C759}.sm-receipt-amt.out{color:#FF3B30}
           table{width:100%;border-collapse:collapse} td{padding:8px;border-bottom:1px solid #eee;font-size:13px}
           td:first-child{color:#666;width:35%;font-weight:600}
-        </style></head><body></body></html>`)
-        w.document.close()
-        w.document.title = fname
-        w.document.body.innerHTML = html
+        </style>`
+        doc.title = fname
+        doc.body.innerHTML = html
+        doc.close()
         w.print()
       }
       done()
@@ -503,18 +529,18 @@ const SMAccounting = {
       onSave: async () => {
         const d = SMUI.readForm(['ab-title', 'ab-bank', 'ab-holder', 'ab-card', 'ab-account', 'ab-iban', 'ab-balance'])
         if (!d['ab-title'] && !d['ab-bank']) return SM.toast('نام بانک یا عنوان حساب الزامی است', 'error')
-        const account = d['ab-account'] || ''
-        const iban = d['ab-iban'] || ''
-        const data = {
+        const fields = {
           name: d['ab-title'], bank: d['ab-bank'], holder: d['ab-holder'],
-          card: d['ab-card'], account, accountNumber: account, iban, shaba: iban
+          card: d['ab-card'], account: d['ab-account'] || '', iban: d['ab-iban'] || '',
+          balance: d['ab-balance']
         }
-        if (item) {
-          // Metadata-only on edit — ledger-managed balance must not be clobbered here
-          await SecureDB.update('banks', item.id, data)
-        } else {
-          await SecureDB.insert('banks', { ...data, balance: +d['ab-balance'] || 0 })
-        }
+        const plan = (typeof bankSavePlan === 'function')
+          ? bankSavePlan(item, fields)
+          : (item
+            ? { mode: 'update', id: item.id, patch: { name: fields.name, bank: fields.bank, holder: fields.holder, card: fields.card, account: fields.account, accountNumber: fields.account, iban: fields.iban, shaba: fields.iban } }
+            : { mode: 'insert', row: { name: fields.name, bank: fields.bank, holder: fields.holder, card: fields.card, account: fields.account, accountNumber: fields.account, iban: fields.iban, shaba: fields.iban, balance: +fields.balance || 0 } })
+        if (plan.mode === 'update') await SecureDB.update('banks', plan.id, plan.patch)
+        else await SecureDB.insert('banks', plan.row)
         SMH.refresh('accounting')
       },
       onDelete: item ? () => SMH.remove('banks', item.id, 'accounting') : null,

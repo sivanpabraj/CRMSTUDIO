@@ -3,92 +3,76 @@
 **Date:** 2026-07-21  
 **Branch:** `cursor/finance-cheque-p0-66da`  
 **Version:** 6.0.0  
-**Overall Score: 81 / 100**
+**Overall Score: 83 / 100**
 
 ---
 
 ## 1. Executive Summary
 
-Studio M is production-credible for a **trusted single studio** (offline-first, IndexedDB SoR, optional Supabase).
+Studio M is production-credible for a **trusted single studio**.
 
-**Round D** closed remaining P1 integrity/CSP gaps: Pro shell has **zero** inline `on*=` handlers (keydown delegated); `/studio-m/` CSP drops script `unsafe-inline`; bank metadata edits no longer clobber ledger balances; classic admin locked to managers; FinanceSync optionally reports to `studio-mutate`; PDF libs lazy-loaded; **105 unit tests**.
+**Round E** fixed a real P1: `StudioMutateClient` now talks to the actual `Cloud.client()` / `resolvedConfig()` APIs; settings expose `mutateEnabled` + observability URL; classic unlock uses signed proof; cheque lists paginate; receipt fallback dropped `document.write`; bank-edit integrity is unit-tested. **111 unit tests**.
 
-### Hard-stop honesty (Phase 9)
+### Hard-stop honesty
 
-| Dimension | Can it be 10/10 in this architecture? | Justification |
-|-----------|--------------------------------------|---------------|
-| Security | **No** (~7.3–7.5 max) | Browser remains mutation authority until `studio-mutate` owns the ledger |
-| Scalability | **No** (~5.5–6.0 max) | Single-studio document IDB; full collections in memory |
-| All other scored dimensions | Approachable | Continue incremental hardening |
+| Dimension | 10/10 possible? | Why |
+|-----------|-----------------|-----|
+| Security | **No** (~7.4–7.6) | Browser remains SoR until `studio-mutate` is authoritative |
+| Scalability | **No** (~5.5–6.0) | Single-studio IDB document store |
+| Other dimensions | Approachable | Continue incremental work |
 
-These Security/Scalability ceilings are **unfixable without intentional product/architecture change** (server-authoritative SoR). Documented — not inflated.
+These ceilings are **unfixable without intentional architecture change**.
 
 ---
 
-## 2. Overall Project Score
+## 2. Scores
 
 | Metric | Score |
 |--------|------:|
-| **Overall** | **81 / 100** |
-| Production readiness (single studio) | 85 |
-| SaaS / multi-tenant readiness | 44 |
+| **Overall** | **83** |
+| Production readiness (single studio) | 86 |
+| SaaS readiness | 45 |
+
+| Category | Score |
+|----------|------:|
+| Architecture | 80 |
+| Code Quality | 85 |
+| Maintainability | 79 |
+| Scalability | 55 |
+| Performance | 77 |
+| Security | 74 |
+| UI/UX | 74 |
+| Accessibility | 65 |
+| Testing | 88 |
+| Documentation | 88 |
+| DevOps | 82 |
+| Error Handling | 80 |
+| Logging & Monitoring | 70 |
+| API Design | 77 |
+| Database Design | 68 |
+| Project Structure | 80 |
 
 ---
 
-## 3. Category Scores
+## 3. Round log
 
-| Category | Score | Notes |
-|----------|------:|-------|
-| Architecture | 78 | studio-mutate client wired (feature-flagged audit path) |
-| Code Quality | 84 | Dead finance helpers removed; allowlists |
-| Maintainability | 78 | Megafiles remain (settings/accounting) |
-| Scalability | 55 | **Ceiling — IDB SoR** |
-| Performance | 76 | Lazy PDF libs; ledger paging |
-| Security | 73 | Pro CSP no script inline; classic still unsafe-inline |
-| UI/UX | 74 | — |
-| Accessibility | 65 | Route focus + keyboard widgets |
-| Testing | 86 | 105 tests; mutate client; legacy access; bank allowlist |
-| Documentation | 88 | Honest ceilings |
-| DevOps | 82 | CI e2e + stricter Pro CSP |
-| Error Handling | 79 | Global errors → SMObservability |
-| Logging & Monitoring | 66 | Obs sink optional; no default APM |
-| API Design | 75 | Mutate Edge stub + client |
-| Database Design | 68 | Soft-delete; blob SoR |
-| Project Structure | 80 | — |
+| Round | Resolved |
+|-------|----------|
+| A–D | FinanceSync sole writer, Pro CSP, bank metadata integrity, mutate stub |
+| **E** | Mutate client Cloud wiring; settings flags; signed classic unlock; cheque pagination; no `document.write`; 111 tests |
 
 ---
 
-## 4. Round log
+## 4. Residual P1 (requires product/infra decision)
 
-| Round | Resolved | Remaining |
-|-------|----------|-----------|
-| A–C | FinanceSync CRUD, dual-writer purge, Pro `data-sm-fn`, studio-mutate stub | — |
-| **D** | onkeydown gone; Pro CSP; bank edit integrity; manager-only classic; mutate client; lazy export; obs global errors | Server ledger SoR; classic retirement; LWW money; megafile split |
+1. Make online finance **require** `studio-mutate` success (behavior change).
+2. Retire classic `admin.html` → drop global script `unsafe-inline`.
+3. Server conflict rules for multi-device money (LWW).
 
----
-
-## 5. Residual gaps (explicitly justified)
-
-### P0 Critical
-*None remaining that are fixable without architecture change.*
-
-### P1 High — requires product/infra decision
-1. **Browser-as-authority** — wire clients so online mutations require `studio-mutate` success before local commit (behavior change / flag).
-2. **LWW multi-device money** — needs single-writer or CRDT/server conflict rules.
-3. **Global CSP `unsafe-inline`** on non-Pro pages — retire classic `admin.html`.
-
-### P2 Medium
-- Split `settings.js` / `accounting.js`
-- axe a11y in CI
-- Authenticated finance Playwright suite
+**P0 Critical in-scope:** none.
 
 ---
 
-## 6. Final confirmation (this pass)
+## 5. Final confirmation
 
-Re-scanned after Round D:
-- No Critical in-scope defects found
-- No High defects remaining that are fixable without intentional behavior/architecture change
-- Security & Scalability remain below 10 **by architectural ceiling** (documented above)
-
-**Next strategic investment:** make `studio-mutate` authoritative for online finance (feature flag → required).
+Re-scanned after Round E: no new Critical; no High fixable without architecture/product change; Security/Scalability remain below 10 by documented ceiling.

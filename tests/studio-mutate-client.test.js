@@ -7,9 +7,15 @@ describe('StudioMutateClient', () => {
   beforeEach(() => {
     prev.fetch = globalThis.fetch
     prev.DB = globalThis.DB
+    prev.Cloud = globalThis.Cloud
     prev.window = globalThis.window
     globalThis.window = globalThis
-    globalThis.DB = { get: () => ({ mutateEnabled: false }) }
+    globalThis.DB = {
+      get: () => ({
+        mutateEnabled: false,
+        supabaseStudioId: 'studio_1'
+      })
+    }
     delete globalThis.__SM_MUTATE_ENABLED
     delete globalThis.__SM_MUTATE_URL
   })
@@ -17,6 +23,7 @@ describe('StudioMutateClient', () => {
   afterEach(() => {
     globalThis.fetch = prev.fetch
     globalThis.DB = prev.DB
+    globalThis.Cloud = prev.Cloud
     if (prev.window === undefined) delete globalThis.window
     else globalThis.window = prev.window
     vi.restoreAllMocks()
@@ -27,15 +34,15 @@ describe('StudioMutateClient', () => {
     expect(res.skipped).toBe(true)
   })
 
-  it('posts when enabled and cloud session present', async () => {
+  it('posts when enabled using Cloud.client() + resolvedConfig()', async () => {
     globalThis.__SM_MUTATE_ENABLED = true
-    globalThis.__SM_MUTATE_URL = 'https://example.test/functions/v1/studio-mutate'
     globalThis.Cloud = {
-      client: {
+      resolvedConfig: () => ({ url: 'https://abc.supabase.co', anonKey: 'k', enabled: true }),
+      client: async () => ({
         auth: {
           getSession: async () => ({ data: { session: { access_token: 'tok' } } })
         }
-      }
+      })
     }
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -47,10 +54,22 @@ describe('StudioMutateClient', () => {
     expect(res.ok).toBe(true)
     expect(fetchMock).toHaveBeenCalledOnce()
     const [url, opts] = fetchMock.mock.calls[0]
-    expect(url).toContain('studio-mutate')
+    expect(url).toBe('https://abc.supabase.co/functions/v1/studio-mutate')
     expect(opts.headers.Authorization).toBe('Bearer tok')
     const body = JSON.parse(opts.body)
     expect(body.op).toBe('record_deposit')
+    expect(body.studioId).toBe('studio_1')
     expect(body.idempotencyKey).toBeTruthy()
+  })
+
+  it('skips when cloud session missing', async () => {
+    globalThis.__SM_MUTATE_ENABLED = true
+    globalThis.Cloud = {
+      resolvedConfig: () => ({ url: 'https://abc.supabase.co' }),
+      client: async () => ({ auth: { getSession: async () => ({ data: { session: null } }) } })
+    }
+    const res = await StudioMutateClient.report('record_deposit', { amount: 1 })
+    expect(res.skipped).toBe(true)
+    expect(res.reason).toBe('no_cloud_session')
   })
 })

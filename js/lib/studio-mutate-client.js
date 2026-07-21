@@ -17,8 +17,9 @@ const StudioMutateClient = {
   _endpoint() {
     try {
       if (typeof window !== 'undefined' && window.__SM_MUTATE_URL) return String(window.__SM_MUTATE_URL)
-      const cloud = typeof Cloud !== 'undefined' ? Cloud : null
-      const base = cloud?.url || cloud?.supabaseUrl || ''
+      if (typeof Cloud === 'undefined') return ''
+      const cfg = typeof Cloud.resolvedConfig === 'function' ? Cloud.resolvedConfig() : null
+      const base = cfg?.url || ''
       if (!base) return ''
       return `${String(base).replace(/\/$/, '')}/functions/v1/studio-mutate`
     } catch {
@@ -28,11 +29,12 @@ const StudioMutateClient = {
 
   async _authHeader() {
     try {
-      if (typeof Cloud !== 'undefined' && Cloud.client?.auth?.getSession) {
-        const { data } = await Cloud.client.auth.getSession()
-        const token = data?.session?.access_token
-        if (token) return { Authorization: `Bearer ${token}` }
-      }
+      if (typeof Cloud === 'undefined' || typeof Cloud.client !== 'function') return null
+      const client = await Cloud.client()
+      if (!client?.auth?.getSession) return null
+      const { data } = await client.auth.getSession()
+      const token = data?.session?.access_token
+      if (token) return { Authorization: `Bearer ${token}` }
     } catch { /* offline / no cloud session */ }
     return null
   },
@@ -44,10 +46,11 @@ const StudioMutateClient = {
   report(op, payload = {}) {
     if (!this.enabled()) return Promise.resolve({ skipped: true })
     const url = this._endpoint()
-    if (!url || typeof fetch !== 'function') return Promise.resolve({ skipped: true })
+    if (!url || typeof fetch !== 'function') return Promise.resolve({ skipped: true, reason: 'no_endpoint' })
 
     const idempotencyKey = `${op}_${payload.transactionId || payload.pairId || Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    const studioId = (typeof DB !== 'undefined' && DB.get?.('studioInfo')?.cloudStudioId) || ''
+    const info = typeof DB !== 'undefined' ? DB.get?.('studioInfo') : null
+    const studioId = info?.supabaseStudioId || info?.cloudStudioId || ''
 
     return this._authHeader().then((auth) => {
       if (!auth) return { skipped: true, reason: 'no_cloud_session' }
