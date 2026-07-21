@@ -19,11 +19,18 @@ jobs:
 
       - run: npm ci
 
+      - name: Dependency audit (high+)
+        run: npm audit --audit-level=high
+
       - run: npm run lint
 
       - run: npm run test
 
       - run: npm run build
+
+      - name: Playwright smoke (no credentials)
+        run: npx playwright install --with-deps chromium && npx playwright test
+        # Uses built dist via `vite preview` (build step above)
 
       - name: Docker build
         run: docker build -t studio-m:ci .

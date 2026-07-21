@@ -83,14 +83,17 @@ const SMDashboard = {
   },
 
   _ctx() {
-    const contracts = DB.get('contracts') || []
-    const tx = DB.get('transactions') || []
-    const personnel = (DB.get('personnel') || []).filter(p => p.status === 'active')
-    const bookings = DB.get('bookings') || []
-    const cheques = DB.get('cheques') || []
-    const persProjects = DB.get('persProjects') || []
-    const expenses = DB.get('expenses') || []
-    const requests = DB.get('customerRequests') || []
+    const rows = (name) => (typeof DB.active === 'function'
+      ? DB.active(name)
+      : (DB.get(name) || []).filter(i => i && !i._deleted))
+    const contracts = rows('contracts')
+    const tx = rows('transactions')
+    const personnel = rows('personnel').filter(p => p.status === 'active')
+    const bookings = rows('bookings')
+    const cheques = rows('cheques')
+    const persProjects = rows('persProjects')
+    const expenses = rows('expenses')
+    const requests = rows('customerRequests')
 
     const income = tx.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0)
     const expense = tx.filter(t => t.type === 'withdrawal').reduce((s, t) => s + (t.amount || 0), 0)
@@ -168,11 +171,14 @@ const SMDashboard = {
       const p = Utils.parseJalali(key)
       if (p && p.jy === jy && p.jm === jm) map[key] = (map[key] || 0) + 1
     }
-    ;(DB.get('contracts') || []).forEach(c => {
+    const rows = (name) => (typeof DB.active === 'function'
+      ? DB.active(name)
+      : (DB.get(name) || []).filter(i => i && !i._deleted))
+    rows('contracts').forEach(c => {
       if (c.status !== 'cancelled' && (c.eventDate || c.date)) add(c.eventDate || c.date)
     })
-    ;(DB.get('bookings') || []).forEach(b => { if (b.date) add(b.date) })
-    ;(DB.get('appointments') || []).forEach(a => { if (a.date) add(a.date) })
+    rows('bookings').forEach(b => { if (b.date) add(b.date) })
+    rows('appointments').forEach(a => { if (a.date) add(a.date) })
     return map
   },
 
@@ -240,9 +246,9 @@ const SMDashboard = {
           </div>
         </div>
         <div class="sm-finance-dash-links">
-          <button type="button" class="sm-finance-link" onclick="event.stopPropagation();SMDashboard.go('accounting')"><i class="fas fa-calculator"></i> حسابداری</button>
-          <button type="button" class="sm-finance-link" onclick="event.stopPropagation();SMDashboard.go('invoices')"><i class="fas fa-file-invoice"></i> فاکتور</button>
-          <button type="button" class="sm-finance-link" onclick="event.stopPropagation();SMDashboard.go('expenses')"><i class="fas fa-receipt"></i> هزینه</button>
+          <button type="button" class="sm-finance-link" ${SMEvents.attrs('SMDashboard.go', ["accounting"])} data-sm-stop="1"><i class="fas fa-calculator"></i> حسابداری</button>
+          <button type="button" class="sm-finance-link" ${SMEvents.attrs('SMDashboard.go', ["invoices"])} data-sm-stop="1"><i class="fas fa-file-invoice"></i> فاکتور</button>
+          <button type="button" class="sm-finance-link" ${SMEvents.attrs('SMDashboard.go', ["expenses"])} data-sm-stop="1"><i class="fas fa-receipt"></i> هزینه</button>
         </div>
         ${ctx.recentDeposits.length ? `
           <div class="sm-finance-recent">
@@ -258,7 +264,7 @@ const SMDashboard = {
     const off = meta.route && SM.isModuleDisabled(meta.route)
     return `<div class="sm-dash-widget sm-dash-widget--click${wide ? ' sm-dash-widget--wide' : ''}${off ? ' sm-dash-widget--off' : ''}"
       style="--w-color:${meta.color}" role="button" tabindex="0"
-      onclick="SMDashboard.go('${meta.route}')" onkeydown="if(event.key==='Enter')SMDashboard.go('${meta.route}')">
+      ${typeof SMEvents !== 'undefined' ? SMEvents.elAttrs('SMDashboard.go', [meta.route]) : ''}>
       <div class="sm-dash-widget-head">
         <span class="sm-dash-widget-title"><i class="fas ${meta.icon}"></i> ${SM.esc(meta.title)}</span>
         <span class="sm-dash-widget-go"><i class="fas fa-arrow-left"></i></span>
@@ -377,7 +383,7 @@ const SMDashboard = {
     const badgeType = days <= 0 ? 'danger' : days <= 7 ? 'warning' : 'success'
     const groom = c.groom || '—'
     const bride = c.bride || c.couple?.split(' و ')[0] || '—'
-    return `<div class="sm-event-card" style="--ev-color:${color}" onclick="event.stopPropagation();SMDashboard.go('contracts')">
+    return `<div class="sm-event-card" style="--ev-color:${color}" ${SMEvents.attrs('SMDashboard.go', ["contracts"])} data-sm-stop="1">
       <div class="sm-event-body">
         <div class="sm-event-names">
           <span class="sm-couple-name">${SM.esc(bride)}</span>
@@ -406,11 +412,11 @@ const SMDashboard = {
     el.innerHTML = `
       ${SMUI.moduleSearch('dashboard', 'جستجو در داشبورد — مراسم، مشتری...')}
       <div class="sm-dash-layout-bar">
-        <button type="button" class="sm-btn sm-btn-sm ${edit ? 'sm-btn-primary' : 'sm-btn-ghost'}" onclick="SMDashboard.toggleLayoutEdit()">
+        <button type="button" class="sm-btn sm-btn-sm ${edit ? 'sm-btn-primary' : 'sm-btn-ghost'}" ${SMEvents.attrs('SMDashboard.toggleLayoutEdit')}>
           <i class="fas fa-arrows-up-down-left-right"></i> ${edit ? 'اتمام چیدمان' : 'جابه‌جایی ویجت‌ها'}
         </button>
         ${edit ? '<span class="sm-dash-layout-hint"><i class="fas fa-grip-vertical"></i> بکشید و رها کنید</span>' : ''}
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('settings');SMSettings.setTab('widgets')" title="تنظیم ویجت‌ها">
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SM.openSettingsTab', ['widgets'])} title="تنظیم ویجت‌ها">
           <i class="fas fa-sliders"></i>
         </button>
       </div>

@@ -73,8 +73,11 @@ supabase/migrations/006_contracts_manager_rls.sql
 
 ## محدودیت‌های باقی‌مانده
 
-- Session محلی client-only است (بدون HMAC سرور-side)
-- TypeScript + E2E tests گسترده‌تر
+- Session محلی client-only است (بدون HMAC سرور-side) — در production نشست بدون `sig` در مسیر sync هم رد می‌شود
+- E2E smoke در CI فعال است؛ سناریوی مالی authenticated هنوز اختیاری (`E2E_LOGIN_*`)
+- CSP: `/studio-m/` بدون script `unsafe-inline`؛ صفحات کلاسیک هنوز `unsafe-inline` دارند تا admin.html بازنشسته شود
+- `studio-mutate` فعلاً audit/feature-flag است — Security به ۱۰ نمی‌رسد تا ledger سروری authoritative شود
+- سقف امتیاز واقعی: [`docs/QUALITY_SCORES.md`](./QUALITY_SCORES.md)
 
 ## Migration 002
 

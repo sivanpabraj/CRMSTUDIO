@@ -299,13 +299,29 @@ const PhotoHouseAdmin = {
       Utils.toast('✅ سفارش ویرایش شد', 'success')
     } else {
       if (deposit > 0 && data.depositBankId) {
-        const bank = DB.find('banks', b => b.id === data.depositBankId)
-        if (bank) await SecureDB.update('banks', data.depositBankId, { balance: (bank.balance || 0) + deposit })
-        await SecureDB.insert('transactions', {
-          type: 'deposit', bankId: data.depositBankId, bankName: bank?.name || '',
-          amount: deposit, description: `بیعانه عکس‌خانه — ${data.customerName}`,
-          date: Utils.todayJalali(), by: Auth.getUser()?.name || 'ادمین'
+        if (typeof FinanceSync === 'undefined') {
+          Utils.toast('ماژول مالی در دسترس نیست — از Studio M استفاده کنید', 'error')
+          return
+        }
+        const res = await FinanceSync.recordDeposit({
+          amount: deposit,
+          bankId: data.depositBankId,
+          contractId: customerId || '',
+          client: data.customerName || '',
+          // Do not inflate contract.paid — print-house deposit is operational income
+          purposeCategory: 'other_income',
+          purpose: `بیعانه عکس‌خانه — ${data.customerName || ''}`,
+          paymentMethod: data.depositMethod === 'card' ? 'transfer' : (data.depositMethod || 'transfer'),
+          notes: data.notes || '',
+          date: data.date || Utils.todayJalali(),
+          syncInvoice: true
         })
+        if (!res.ok) {
+          Utils.toast(res.error || 'خطا در ثبت بیعانه در دفترکل', 'error')
+          return
+        }
+        data.depositTransactionId = res.transactionId || ''
+        data.depositInvoiceId = res.invoiceId || ''
       }
       data.createdAt = Utils.todayJalali()
       await SecureDB.insert('printOrders', data)

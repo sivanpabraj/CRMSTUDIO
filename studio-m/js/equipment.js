@@ -54,7 +54,7 @@ const SMEquipment = {
 
   render(el) {
     if (SM.state.viewStack.length) return
-    const items = SMH.filterBySearch(DB.get('equipment'), ['name', 'brand', 'model', 'serial', 'category', 'status', 'notes', 'location'], 'equipment')
+    const items = SMH.filterBySearch(DB.active('equipment'), ['name', 'brand', 'model', 'serial', 'category', 'status', 'notes', 'location'], 'equipment')
     const filtered = this._tab === 'all' ? items : items.filter(e => this._normCat(e.category) === this._tab)
     const byCat = {}
     filtered.forEach(e => {
@@ -65,7 +65,7 @@ const SMEquipment = {
 
     el.innerHTML = `
       ${SMUI.sectionHead('تجهیزات استودیو', 'دوربین · سیستم · مانیتور · هارد و…', `
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMEquipment.add()"><i class="fas fa-plus"></i> افزودن تجهیز</button>`)}
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMEquipment.add')}><i class="fas fa-plus"></i> افزودن تجهیز</button>`)}
       ${SMUI.statCards([
         { label: 'کل تجهیزات', value: SM.fmt(items.length), color: 'var(--sm-accent)' },
         { label: 'آماده', value: SM.fmt(items.filter(e => e.status === 'available').length), color: 'var(--sm-success)' },
@@ -74,7 +74,7 @@ const SMEquipment = {
       ])}
       ${SMUI.moduleSearch('equipment', 'جستجو — نام، برند، سریال، محل…')}
       <div class="sm-eq-cat-pills">${[{ id: 'all', label: 'همه' }, ...Object.entries(this.CATEGORIES).map(([id, c]) => ({ id, label: c.label }))].map(c =>
-        `<button type="button" class="sm-eq-pill${this._tab === c.id ? ' active' : ''}" onclick="SMEquipment.setTab('${c.id}')">${SM.esc(c.label)}</button>`
+        `<button type="button" class="sm-eq-pill${this._tab === c.id ? ' active' : ''}" ${SMEvents.attrs('SMEquipment.setTab', [c.id])}>${SM.esc(c.label)}</button>`
       ).join('')}</div>
       <div style="margin-top:16px">${filtered.length ? this._listHtml(byCat) : SMUI.empty('fa-camera', 'تجهیزی ثبت نشده', 'دوربین، مانیتور، هارد و لوازم استودیو را اضافه کنید')}</div>`
   },
@@ -92,7 +92,7 @@ const SMEquipment = {
   },
 
   _card(e, meta) {
-    return `<div class="sm-eq-card" style="--eq-color:${meta.color}" onclick="SMEquipment.view('${e.id}')">
+    return `<div class="sm-eq-card" style="--eq-color:${meta.color}" ${SMEvents.attrs('SMEquipment.view', [e.id])}>
       <div class="sm-eq-card-icon"><i class="fas ${meta.icon}"></i></div>
       <div class="sm-eq-card-body">
         <div class="sm-eq-name">${SM.esc(e.name)}</div>
@@ -111,7 +111,7 @@ const SMEquipment = {
     SM.pushSubView(e.name, () => `
       <div class="sm-card"><div class="sm-card-head">
         <div class="sm-card-title"><i class="fas ${cat.icon}" style="color:${cat.color}"></i> ${SM.esc(e.name)}</div>
-        <button class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMEquipment.edit('${e.id}')"><i class="fas fa-pen"></i></button>
+        <button class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMEquipment.edit', [e.id])}><i class="fas fa-pen"></i></button>
       </div><div class="sm-card-body">
         <p><strong>دسته:</strong> ${SM.esc(cat.label)}</p>
         <p style="margin-top:8px"><strong>برند:</strong> ${SM.esc(e.brand || '—')}</p>

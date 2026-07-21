@@ -155,7 +155,15 @@ const PasswordReset = {
     }
 
     sessionStorage.removeItem(this.SESSION_KEY)
-    return Auth.resetManagerPassword(phone, newPassword, { otpVerified: true })
+    if (typeof SignedProof !== 'undefined' && SignedProof.issue) {
+      await SignedProof.issue(Auth.PW_RESET_PROOF_KEY || 'talar_pw_reset_proof', {
+        phone,
+        purpose: 'pw_reset'
+      }, AppConfig.OTP_TTL_MS || 300000)
+    }
+    const result = await Auth.resetManagerPassword(phone, newPassword, { otpVerified: true })
+    if (typeof SignedProof !== 'undefined') SignedProof.clear?.(Auth.PW_RESET_PROOF_KEY || 'talar_pw_reset_proof')
+    return result
   }
 }
 

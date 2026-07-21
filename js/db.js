@@ -4,12 +4,13 @@
    ══════════════════════════════════════════════ */
 
 const DB_KEY = AppConfig.DB_KEY
-const DB_VERSION = 20
+const DB_VERSION = 22
 const DB_OBJECT_KEYS = new Set(['studioInfo', 'securityState'])
 const SYNC_TOUCH_KEYS = new Set([
   'contracts', 'transactions', 'invoices', 'bookings', 'personnel', 'equipment',
   'workflows', 'packages', 'expenses', 'leads', 'banks', 'cheques',
-  'appointments', 'customerRequests', 'fileAssets'
+  'appointments', 'customerRequests', 'fileAssets', 'salaryPayments',
+  'attendance', 'notifications'
 ])
 
 function createDefaultData() {
@@ -61,6 +62,7 @@ function createDefaultData() {
     commLogs: [],
     apiKeys: [],
     payrollRuns: [],
+    salaryPayments: [],
     customerCustody: [],
     securityState: { loginAttempts: {}, otpSend: {}, otpVerify: {} }
   }
@@ -288,6 +290,41 @@ const DB_MIGRATIONS = {
     }
     data._meta.dbVersion = 20
     return data
+  },
+  21(data) {
+    ;(data.banks || []).forEach(b => {
+      const account = b.account || b.accountNumber || ''
+      const iban = b.iban || b.shaba || ''
+      b.account = account
+      b.accountNumber = account
+      b.iban = iban
+      b.shaba = iban
+      if (b.card == null) b.card = ''
+      if (b.holder == null) b.holder = ''
+      b.balance = Number(b.balance) || 0
+    })
+    ;(data.cheques || []).forEach(c => {
+      const type = c.type || c.direction || 'incoming'
+      const number = c.number || c.chequeNumber || ''
+      const client = c.client || c.drawer || c.party || ''
+      c.type = type
+      c.direction = type
+      c.number = number
+      c.chequeNumber = number
+      c.client = client
+      c.party = client
+      if (!c.drawer) c.drawer = client
+      if (!c.status) c.status = 'pending'
+    })
+    data._meta.dbVersion = 21
+    return data
+  },
+  22(data) {
+    if (!data.salaryPayments) data.salaryPayments = []
+    if (!data.attendance) data.attendance = []
+    if (!data.notifications) data.notifications = []
+    data._meta.dbVersion = 22
+    return data
   }
 }
 
@@ -328,9 +365,11 @@ const DB = {
       await this._migrateBackupsFromLocalStorage()
       this._purgeLocalStorageMirror()
       this.syncAllPersonnel()
+      this._bindUnloadFlush()
     } catch (e) {
       console.warn('DB init failed, using defaults:', e)
       this._data = createDefaultData()
+      this._bindUnloadFlush()
     }
     return this
   },
@@ -355,18 +394,71 @@ const DB = {
     } catch { /* */ }
   },
 
-  async _persist() {
-    try {
-      await IdbStore.set(AppConfig.IDB_STORE, DB_KEY, this._data)
-      if (typeof Cloud !== 'undefined' && Cloud.schedulePush) Cloud.schedulePush()
-    } catch (e) {
-      console.error('DB persist failed:', e)
-      if (typeof Utils !== 'undefined') {
-        Utils.toast('خطا در ذخیره‌سازی داده‌ها', 'error')
+  async _persist(opts = {}) {
+    const run = async () => {
+      try {
+        await IdbStore.set(AppConfig.IDB_STORE, DB_KEY, this._data)
+        this._dirty = false
+        if (!opts.skipCloud && typeof Cloud !== 'undefined' && Cloud.schedulePush) Cloud.schedulePush()
+      } catch (e) {
+        console.error('DB persist failed:', e)
+        this._dirty = true
+        if (typeof Utils !== 'undefined') {
+          Utils.toast('خطا در ذخیره‌سازی داده‌ها', 'error')
+        }
+        if (typeof SMObservability !== 'undefined') {
+          // Do not DB.log here — that would re-dirty and reschedule persist
+          SMObservability.captureError('db_persist', e, { noDbLog: true })
+        }
       }
     }
+    this._persistChain = (this._persistChain || Promise.resolve()).then(run, run)
+    return this._persistChain
   },
 
+  _dirty: false,
+  _persistTimer: null,
+  _pendingNeedCloud: false,
+  _persistChain: Promise.resolve(),
+
+  /**
+   * Coalesce rapid writes. skipCloud only if EVERY pending op in the burst skipped cloud.
+   * Any non-skip write forces cloud schedule on flush.
+   */
+  _schedulePersist(opts = {}) {
+    this._dirty = true
+    if (!opts.skipCloud) this._pendingNeedCloud = true
+
+    clearTimeout(this._persistTimer)
+    const delay = opts.delay ?? 120
+    this._persistTimer = setTimeout(() => {
+      this._persistTimer = null
+      const skipCloud = !this._pendingNeedCloud
+      this._pendingNeedCloud = false
+      this._persist({ skipCloud }).catch(() => {})
+    }, delay)
+  },
+
+  _scheduleLogPersist() {
+    this._schedulePersist({ skipCloud: true, delay: 2000 })
+  },
+
+  _bindUnloadFlush() {
+    if (this._unloadBound || typeof window === 'undefined') return
+    this._unloadBound = true
+    const flush = () => {
+      try {
+        clearTimeout(this._persistTimer)
+        this._persistTimer = null
+        if (this._dirty) {
+          // sync best-effort via keepalive is unavailable for IDB; fire async
+          this._persist({ skipCloud: false }).catch(() => {})
+        }
+      } catch { /* */ }
+    }
+    window.addEventListener('pagehide', flush)
+    window.addEventListener('beforeunload', flush)
+  },
   _normalizePhone(phone) {
     if (!phone) return ''
     const map = { '۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9' }
@@ -386,13 +478,19 @@ const DB = {
   findPersonnelByPhone(phone) {
     const norm = this._normalizePhone(phone)
     if (!norm) return null
-    return this.find('personnel', p => this._normalizePhone(p.phone) === norm) ?? null
+    return this.active('personnel').find(p => this._normalizePhone(p.phone) === norm) ?? null
   },
 
   findPersonnelByUserId(userId) {
-    const user = this.find('users', u => u.id === userId)
+    const user = this.find('users', u => u.id === userId && !u._deleted)
     if (!user) return null
-    return this.findPersonnelByPhone(user.phone) || this.find('personnel', p => p.userId === userId)
+    return this.findPersonnelByPhone(user.phone) ||
+      this.active('personnel').find(p => p.userId === userId) || null
+  },
+
+  /** Find active row by id (skips tombstones) */
+  findActive(collection, predicate) {
+    return this.active(collection).find(predicate) ?? null
   },
 
   syncPersonnelFromUser(user) {
@@ -439,11 +537,7 @@ const DB = {
   },
 
   save() {
-    return this._persist()
-  },
-
-  async flush() {
-    if (this._data) await this._persist()
+    return this.flush()
   },
 
   async exportData() {
@@ -501,9 +595,22 @@ const DB = {
     return val ?? []
   },
 
+  /** Active rows only (excludes soft-deleted) */
+  active(collection) {
+    return this.get(collection).filter(i => i && !i._deleted)
+  },
+
   set(collection, data) {
     this._data[collection] = data
-    return this._persist().catch(err => console.error('[DB] persist error', err))
+    const skipCloud = collection === 'logs'
+    this._schedulePersist({ skipCloud })
+    return Promise.resolve(true)
+  },
+
+  async flush() {
+    clearTimeout(this._persistTimer)
+    this._persistTimer = null
+    if (this._data) await this._persist({ skipCloud: false, force: true })
   },
 
   find(collection, predicate) {
@@ -550,13 +657,20 @@ const DB = {
 
   log(action, detail) {
     const MAX_LOGS = 500
-    const logs = this.get('logs')
-    if (logs.length >= MAX_LOGS) this._data.logs = logs.slice(-MAX_LOGS + 1)
-    this.insert('logs', {
+    if (!this._data) return
+    if (!Array.isArray(this._data.logs)) this._data.logs = []
+    if (this._data.logs.length >= MAX_LOGS) {
+      this._data.logs = this._data.logs.slice(-MAX_LOGS + 1)
+    }
+    // Direct push — avoid insert()→set()→full cloud schedule on every log
+    this._data.logs.push({
+      id: crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       action,
       detail: typeof detail === 'object' ? JSON.stringify(detail) : String(detail),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      createdAt: this._today()
     })
+    this._scheduleLogPersist()
   },
 
   _today() {
