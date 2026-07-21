@@ -28,9 +28,13 @@ jobs:
 
       - run: npm run build
 
-      - name: Playwright smoke (no credentials)
+      - name: Playwright smoke + gated finance auth
         run: npx playwright install --with-deps chromium && npx playwright test
+        # finance-auth.spec.js skips unless E2E_LOGIN_PHONE + E2E_LOGIN_PASSWORD are set
         # Uses built dist via `vite preview` (build step above)
+        env:
+          E2E_LOGIN_PHONE: ${{ secrets.E2E_LOGIN_PHONE }}
+          E2E_LOGIN_PASSWORD: ${{ secrets.E2E_LOGIN_PASSWORD }}
 
       - name: Docker build
         run: docker build -t studio-m:ci .
