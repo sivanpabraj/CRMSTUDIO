@@ -4,7 +4,7 @@
    ══════════════════════════════════════════════ */
 
 const DB_KEY = AppConfig.DB_KEY
-const DB_VERSION = 22
+const DB_VERSION = 23
 const DB_OBJECT_KEYS = new Set(['studioInfo', 'securityState'])
 const SYNC_TOUCH_KEYS = new Set([
   'contracts', 'transactions', 'invoices', 'bookings', 'personnel', 'equipment',
@@ -64,6 +64,7 @@ function createDefaultData() {
     payrollRuns: [],
     salaryPayments: [],
     customerCustody: [],
+    financeOutbox: [],
     securityState: { loginAttempts: {}, otpSend: {}, otpVerify: {} }
   }
 }
@@ -324,6 +325,17 @@ const DB_MIGRATIONS = {
     if (!data.attendance) data.attendance = []
     if (!data.notifications) data.notifications = []
     data._meta.dbVersion = 22
+    return data
+  },
+  23(data) {
+    if (!data.financeOutbox) data.financeOutbox = []
+    if (data.studioInfo && data.studioInfo.ledgerVersion == null) {
+      data.studioInfo.ledgerVersion = 0
+    }
+    if (data.studioInfo && !data.studioInfo.planTier) {
+      data.studioInfo.planTier = data.studioInfo.licenseTier || 'trial'
+    }
+    data._meta.dbVersion = 23
     return data
   }
 }

@@ -87,7 +87,8 @@ const StudioMutateClient = {
 
   /**
    * Authoritative mutate when required; optional audit when only enabled.
-   * @returns {Promise<{ok?:boolean, skipped?:boolean, reason?:string, error?:string, deduped?:boolean, result?:unknown}>}
+   * Queueable reasons (offline / no session / network before accept) let FinanceSync
+   * commit locally + enqueue outbox instead of hard-blocking.
    */
   async authorize(op, payload = {}, opts = {}) {
     const required = this.requiredWhenOnline()
@@ -98,67 +99,102 @@ const StudioMutateClient = {
     const auth = await this._authHeader()
     const idempotencyKey = String(opts.idempotencyKey || this.stableKey(op, payload)).slice(0, 128)
     const studioId = this._studioId()
+    const info = typeof DB !== 'undefined' ? DB.get?.('studioInfo') : null
+    const expectedVersion = opts.expectedVersion != null
+      ? opts.expectedVersion
+      : (info?.ledgerVersion != null ? Number(info.ledgerVersion) : null)
 
     if (required) {
       if (this._isOffline()) {
         return {
           ok: false,
+          queueable: true,
           reason: 'offline_blocked',
-          error: 'ثبت مالی آفلاین در حالت SaaS مسدود است — آنلاین شوید یا صف outbox را فعال کنید'
+          error: 'آفلاین — در صف همگام‌سازی مالی قرار می‌گیرد'
         }
       }
       if (!url) {
-        return { ok: false, reason: 'no_endpoint', error: 'آدرس Edge studio-mutate تنظیم نشده' }
+        return {
+          ok: false,
+          queueable: true,
+          reason: 'no_endpoint',
+          error: 'آدرس Edge studio-mutate تنظیم نشده — صف محلی'
+        }
       }
       if (!auth) {
         return {
           ok: false,
+          queueable: true,
           reason: 'no_cloud_session',
-          error: 'برای ثبت مالی آنلاین، ورود به حساب ابری لازم است'
+          error: 'ورود ابر لازم است — تراکنش در صف می‌ماند تا ورود'
         }
       }
       if (!studioId) {
-        return { ok: false, reason: 'no_studio', error: 'شناسه استودیو ابری مشخص نیست' }
+        return {
+          ok: false,
+          queueable: true,
+          reason: 'no_studio',
+          error: 'شناسه استودیو ابری مشخص نیست — صف محلی'
+        }
       }
     } else if (!url || !auth) {
       return { skipped: true, reason: !url ? 'no_endpoint' : 'no_cloud_session' }
     }
 
     try {
+      const body = {
+        op,
+        idempotencyKey,
+        studioId,
+        payload,
+        expectedVersion: Number.isFinite(expectedVersion) ? expectedVersion : null
+      }
       const res = await fetch(url, {
         method: 'POST',
         headers: { ...auth, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ op, idempotencyKey, studioId, payload }),
+        body: JSON.stringify(body),
         mode: 'cors'
       })
-      const body = await res.json().catch(() => ({}))
+      const resBody = await res.json().catch(() => ({}))
       if (!res.ok) {
         if (typeof SMObservability !== 'undefined') {
-          SMObservability.captureError('studio_mutate', new Error(body.error || res.statusText), { op, required })
+          SMObservability.captureError('studio_mutate', new Error(resBody.error || res.statusText), {
+            op,
+            required,
+            status: res.status
+          })
         }
+        const queueable = res.status === 401 || res.status === 429
         return {
           ok: false,
-          reason: 'server_rejected',
-          error: body.error || res.statusText || 'mutate rejected',
+          queueable,
+          reason: res.status === 409 ? 'ledger_conflict' : 'server_rejected',
+          error: resBody.error || res.statusText || 'mutate rejected',
           status: res.status,
-          ...body
+          ...resBody
         }
       }
       if (typeof SMObservability !== 'undefined') {
         SMObservability.captureEvent('studio_mutate', {
           op,
           required,
-          deduped: !!body.deduped,
-          status: body.result?.status || 'ok'
+          deduped: !!resBody.deduped,
+          status: resBody.result?.status || 'ok',
+          ledgerVersion: resBody.result?.ledgerVersion
         })
       }
-      return { ok: true, deduped: !!body.deduped, ...body }
+      return { ok: true, deduped: !!resBody.deduped, ...resBody }
     } catch (e) {
       if (typeof SMObservability !== 'undefined') {
         SMObservability.captureError('studio_mutate', e, { op, required, offline: true })
       }
       if (required) {
-        return { ok: false, reason: 'network', error: e.message || 'خطای شبکه mutate' }
+        return {
+          ok: false,
+          queueable: true,
+          reason: 'network',
+          error: e.message || 'خطای شبکه mutate — صف محلی'
+        }
       }
       return { ok: false, error: e.message }
     }

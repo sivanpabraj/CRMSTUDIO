@@ -2,12 +2,13 @@
  * Copy vanilla JS/CSS assets into dist/ after Vite build.
  * HTML entries reference js/*.js directly — they are not bundled by Vite.
  */
-import { cpSync, existsSync, mkdirSync } from 'fs'
+import { cpSync, existsSync, mkdirSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dist = join(root, 'dist')
+const allowClassic = process.env.VITE_ALLOW_CLASSIC === '1'
 
 function copy(src, dest) {
   const from = join(root, src)
@@ -32,11 +33,32 @@ for (const file of ['sw.js', 'manifest.json', 'admin.css', 'contract.css', 'admi
   }
 }
 
+// Public SaaS: always ship a redirect stub if Vite omitted admin.html or classic disallowed
+const adminDist = join(dist, 'admin.html')
+if (!existsSync(adminDist) || !allowClassic) {
+  writeFileSync(adminDist, `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta http-equiv="refresh" content="0;url=studio-m/"/>
+  <title>Studio M Pro</title>
+  <script>location.replace('studio-m/'+(location.hash||''))</script>
+</head>
+<body>
+  <p>پنل کلاسیک در بیلد عمومی موجود نیست. <a href="studio-m/">Studio M Pro</a></p>
+</body>
+</html>
+`)
+  console.log('copy-static: admin.html → redirect stub (classic excluded from public build)')
+}
+
 const required = [
   'js/lib/observability.js',
   'js/lib/list-page.js',
   'js/lib/sms-settings.js',
   'js/lib/secure-db-policy.js',
+  'js/lib/finance-outbox.js',
+  'js/lib/plan-limits.js',
   'studio-m/js/events.js',
   'studio-m/js/modules.js',
   'studio-m/js/modules-bookings.js',

@@ -3,7 +3,7 @@
  */
 
 export const SECURE_DB_FINANCE = new Set([
-  'transactions', 'banks', 'cheques', 'invoices', 'expenses', 'salaryPayments'
+  'transactions', 'banks', 'cheques', 'invoices', 'expenses', 'salaryPayments', 'financeOutbox'
 ])
 
 export function canWriteCollection(opts = {}) {

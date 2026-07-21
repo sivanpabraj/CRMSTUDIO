@@ -503,7 +503,7 @@ const SMSettings = {
             dir: 'ltr',
             placeholder: 'https://logs.example.com/ingest'
           })}
-          <p style="font-size:.72rem;color:var(--sm-text-muted);margin:8px 0 0;line-height:1.6">با ابر فعال، پول آنلاین فقط بعد از قبول <code dir="ltr">studio-mutate</code> + ledger ثبت می‌شود. آفلاین فعلاً مسدود است (outbox در فاز بعد).</p>
+          <p style="font-size:.72rem;color:var(--sm-text-muted);margin:8px 0 0;line-height:1.6">با ابر فعال، پول آنلاین بعد از قبول <code dir="ltr">studio-mutate</code> ثبت می‌شود. آفلاین/بدون session → صف <code dir="ltr">financeOutbox</code> و flush هنگام بازگشت آنلاین.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
             <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMSettings.saveCloudConfig')}><i class="fas fa-save"></i> ذخیره تنظیمات</button>
             <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.testObservability')}><i class="fas fa-satellite-dish"></i> تست observability</button>

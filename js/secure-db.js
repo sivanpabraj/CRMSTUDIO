@@ -10,7 +10,7 @@ const SecureDB = {
 
   /** Collections requiring manage_finance (or manager) to mutate */
   FINANCE_COLLECTIONS: new Set([
-    'transactions', 'banks', 'cheques', 'invoices', 'expenses', 'salaryPayments'
+    'transactions', 'banks', 'cheques', 'invoices', 'expenses', 'salaryPayments', 'financeOutbox'
   ]),
 
   /** Soft-delete instead of hard splice (must match sync TOMBSTONE_ENTITIES) */

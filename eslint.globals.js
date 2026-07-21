@@ -55,6 +55,8 @@ export const browserGlobals = {
   FinanceSync: "readonly",
   SMObservability: "readonly",
   StudioMutateClient: "readonly",
+  FinanceOutbox: "readonly",
+  PlanLimits: "readonly",
   SMExport: "readonly",
   bankSavePlan: "readonly",
   bankMetadataPatch: "readonly",

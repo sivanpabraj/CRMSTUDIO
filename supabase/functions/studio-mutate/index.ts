@@ -154,6 +154,38 @@ Deno.serve(async (req) => {
     const payload = body.payload && typeof body.payload === 'object' ? body.payload : {}
     const amountRaw = (payload as Record<string, unknown>).amount
     const amount = typeof amountRaw === 'number' ? amountRaw : Number(amountRaw) || null
+    const expectedVersion = body.expectedVersion == null || body.expectedVersion === ''
+      ? null
+      : Number(body.expectedVersion)
+
+    // Sequential ledger version (migration 009). Skip conflict check when client sends null
+    // (first sync / unknown); still bump when RPC available.
+    let ledgerVersion: number | null = null
+    {
+      const { data: ver, error: verErr } = await supabase.rpc('claim_ledger_version', {
+        p_studio_id: studioId,
+        p_expected_version: Number.isFinite(expectedVersion as number) ? expectedVersion : null,
+      })
+      if (verErr) {
+        const msg = verErr.message || ''
+        if (/ledger_conflict/i.test(msg)) {
+          const parts = msg.split(':')
+          return json({
+            ok: false,
+            error: 'ledger conflict — refresh and retry',
+            reason: 'ledger_conflict',
+            serverVersion: parts[1] ? Number(parts[1]) : null,
+            clientVersion: parts[2] ? Number(parts[2]) : expectedVersion,
+          }, 409, origin)
+        }
+        if (!/function|does not exist|schema cache/i.test(msg)) {
+          return json({ ok: false, error: msg || 'ledger version claim failed' }, 500, origin)
+        }
+        // 009 not deployed yet — continue without versioning
+      } else {
+        ledgerVersion = typeof ver === 'number' ? ver : Number(ver)
+      }
+    }
 
     const result = {
       op,
@@ -162,6 +194,7 @@ Deno.serve(async (req) => {
       payload,
       status: 'accepted',
       roles,
+      ledgerVersion,
       note: 'Edge accept — studio_ledger_entries is SaaS finance SoR foundation',
     }
 
@@ -201,6 +234,7 @@ Deno.serve(async (req) => {
         amount,
         payload,
         status: 'accepted',
+        ledger_version: ledgerVersion,
       })
       .select('id')
       .maybeSingle()

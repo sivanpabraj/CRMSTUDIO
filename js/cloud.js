@@ -166,6 +166,11 @@ const Cloud = {
     if (error) return { ok: false, error: this.formatAuthError(error.message) }
     await this._loadMemberStudioId()
     await RealtimeSync.start(this)
+    try {
+      if (typeof FinanceOutbox !== 'undefined' && FinanceOutbox.flush) {
+        await FinanceOutbox.flush()
+      }
+    } catch { /* outbox best-effort */ }
     return { ok: true, session: data.session, user: data.user }
   },
 
@@ -444,6 +449,11 @@ const Cloud = {
       this._notifyCloudError(pull.error || entityPull.error || 'دریافت از ابر ناموفق')
     }
     if (this.isEnabled()) await RealtimeSync.start(this)
+    try {
+      if (typeof FinanceOutbox !== 'undefined' && FinanceOutbox.flush) {
+        await FinanceOutbox.flush()
+      }
+    } catch { /* */ }
     return pull.ok ? pull : entityPull
   }
 }

@@ -129,11 +129,22 @@ const FinanceSync = {
   },
 
   /**
-   * SaaS gate: when mutateRequiredWhenOnline, await Edge accept BEFORE local money writes.
-   * Offline / no session while required → fail closed (outbox deferred to follow-up).
+   * SaaS gate: await Edge when online; queue outbox when offline/no-session (queueable).
+   * Hard fail on server reject / ledger conflict while online with session.
    */
   async _beforeMoneyCommit(op, payload, idempotencyKey) {
     try {
+      // Soft SaaS plan quota (client UX); not a substitute for server billing
+      if (typeof PlanLimits !== 'undefined' && PlanLimits.assertMoneyOpAllowed) {
+        const info = typeof DB !== 'undefined' ? (DB.get('studioInfo') || {}) : {}
+        const txs = typeof DB !== 'undefined'
+          ? (typeof DB.active === 'function' ? DB.active('transactions') : (DB.get('transactions') || []))
+          : []
+        const today = typeof Utils !== 'undefined' ? Utils.todayJalali() : ''
+        const quota = PlanLimits.assertMoneyOpAllowed(info, txs, today)
+        if (!quota.ok) return { ok: false, error: quota.error, reason: 'plan_quota' }
+      }
+
       if (typeof StudioMutateClient === 'undefined' || typeof StudioMutateClient.authorize !== 'function') {
         return { ok: true }
       }
@@ -144,8 +155,26 @@ const FinanceSync = {
       if (!required && optional) return { ok: true, deferReport: true }
 
       const res = await StudioMutateClient.authorize(op, payload, { idempotencyKey })
-      if (res.ok) return { ok: true, authorized: true, server: res }
+      if (res.ok) {
+        if (res.result?.ledgerVersion != null && typeof SecureDB !== 'undefined') {
+          try {
+            const info = DB.get('studioInfo') || {}
+            await SecureDB.merge('studioInfo', { ...info, ledgerVersion: res.result.ledgerVersion })
+          } catch { /* */ }
+        }
+        return { ok: true, authorized: true, server: res }
+      }
       if (res.skipped && res.reason === 'not_required') return { ok: true }
+      if (res.queueable) {
+        return {
+          ok: true,
+          queueOutbox: true,
+          op,
+          payload,
+          idempotencyKey,
+          queueReason: res.reason
+        }
+      }
       return {
         ok: false,
         error: res.error || 'تأیید سرور برای تراکنش مالی ناموفق بود',
@@ -156,8 +185,29 @@ const FinanceSync = {
     }
   },
 
-  _afterMoneyCommit(op, payload, gate) {
+  async _afterMoneyCommit(op, payload, gate) {
     if (gate?.deferReport) this._reportMutate(op, payload)
+    if (gate?.queueOutbox && typeof FinanceOutbox !== 'undefined' && FinanceOutbox.enqueue) {
+      try {
+        await FinanceOutbox.enqueue({
+          op: gate.op || op,
+          idempotencyKey: gate.idempotencyKey,
+          payload: { ...(gate.payload || payload) }
+        })
+        const txId = payload?.transactionId || payload?.outTransactionId
+        if (txId) await SecureDB.update('transactions', txId, { mutateStatus: 'pending' })
+        if (payload?.inTransactionId) {
+          await SecureDB.update('transactions', payload.inTransactionId, { mutateStatus: 'pending' })
+        }
+      } catch (e) {
+        this._logRollback('outboxEnqueue', e)
+      }
+    } else if (gate?.authorized) {
+      const txId = payload?.transactionId || payload?.outTransactionId
+      if (txId) {
+        try { await SecureDB.update('transactions', txId, { mutateStatus: 'synced' }) } catch { /* */ }
+      }
+    }
   },
 
   _logRollback(scope, err) {
@@ -315,7 +365,7 @@ const FinanceSync = {
           DB.log('finance_tx_update', `${txId} — ${amount.toLocaleString('fa-IR')}`)
         }
         await DB.flush?.()
-        this._afterMoneyCommit('update_transaction', { transactionId: txId, amount, bankId, mutationId }, gate)
+        await this._afterMoneyCommit('update_transaction', { transactionId: txId, amount, bankId, mutationId }, gate)
         return { ok: true, transactionId: txId, invoiceId }
       } catch (e) {
         try {
@@ -420,7 +470,7 @@ const FinanceSync = {
           DB.log('finance_tx_delete', `${txId} — ${(old.amount || 0).toLocaleString('fa-IR')}`)
         }
         await DB.flush?.()
-        this._afterMoneyCommit('delete_transaction', {
+        await this._afterMoneyCommit('delete_transaction', {
           transactionId: txId, amount: old.amount, bankId: old.bankId
         }, gate)
         return { ok: true, transactionId: txId }
@@ -541,7 +591,7 @@ const FinanceSync = {
           DB.log('finance_transfer', `${amount.toLocaleString('fa-IR')} — ${this.bankLabel(fromId)} → ${this.bankLabel(toId)}`)
         }
         await DB.flush?.()
-        this._afterMoneyCommit('transfer_banks', {
+        await this._afterMoneyCommit('transfer_banks', {
           pairId, amount, fromBankId: fromId, toBankId: toId,
           outTransactionId: outRow.id, inTransactionId: inRow.id
         }, gate)
@@ -688,7 +738,7 @@ const FinanceSync = {
       }
 
       await DB.flush?.()
-      this._afterMoneyCommit('record_deposit', {
+      await this._afterMoneyCommit('record_deposit', {
         transactionId: row.id, invoiceId, bankId: opts.bankId, amount
       }, gate)
       return { ok: true, transactionId: row.id, invoiceId, bankId: opts.bankId }
@@ -779,7 +829,7 @@ const FinanceSync = {
       }
 
       await DB.flush?.()
-      this._afterMoneyCommit('record_withdrawal', {
+      await this._afterMoneyCommit('record_withdrawal', {
         transactionId: row.id, invoiceId, bankId: opts.bankId, amount
       }, gate)
       return { ok: true, transactionId: row.id, invoiceId, bankId: opts.bankId }

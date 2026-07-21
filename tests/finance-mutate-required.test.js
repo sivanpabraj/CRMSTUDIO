@@ -180,18 +180,28 @@ describe('FinanceSync mutateRequiredWhenOnline', () => {
     expect(body.idempotencyKey).toBe('record_deposit:tx_fixed_1')
   })
 
-  it('blocks deposit without cloud session when required', async () => {
+  it('commits locally and queues outbox without cloud session when required', async () => {
     globalThis.Cloud = {
       resolvedConfig: () => ({ url: 'https://abc.supabase.co' }),
       client: async () => ({ auth: { getSession: async () => ({ data: { session: null } }) } })
+    }
+    const enqueued = []
+    globalThis.FinanceOutbox = {
+      enqueue: async (row) => {
+        enqueued.push(row)
+        return { ok: true }
+      }
     }
     const res = await FinanceSync.recordDeposit({
       amount: 1000,
       bankId: 'b1',
       purposeCategory: 'other_income',
-      syncInvoice: false
+      syncInvoice: false,
+      transactionId: 'tx_queued_1'
     })
-    expect(res.ok).toBe(false)
-    expect(g.data.transactions.filter(t => !t._deleted)).toHaveLength(0)
+    expect(res.ok).toBe(true)
+    expect(g.data.transactions.some(t => t.id === 'tx_queued_1')).toBe(true)
+    expect(enqueued).toHaveLength(1)
+    expect(enqueued[0].idempotencyKey).toBe('record_deposit:tx_queued_1')
   })
 })

@@ -10,7 +10,7 @@ const AppConfig = {
   SW_CACHE: 'studio-m-v23',
 
   DB_KEY: 'studio_db_v5',
-  DB_VERSION: 22,
+  DB_VERSION: 23,
   IDB_NAME: 'talar_studio_v5',
   IDB_STORE: 'main',
   IDB_BACKUP_STORE: 'backups',

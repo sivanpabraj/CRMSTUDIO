@@ -61,7 +61,19 @@ describe('StudioMutateClient SaaS authority', () => {
     expect(StudioMutateClient.requiredWhenOnline()).toBe(true)
   })
 
-  it('fail-closed when required and no cloud session', async () => {
+  it('fail-closed when required and offline is queueable (not hard block)', async () => {
+    globalThis.__SM_MUTATE_REQUIRED = true
+    Object.defineProperty(globalThis.navigator, 'onLine', {
+      configurable: true,
+      get: () => false
+    })
+    const res = await StudioMutateClient.authorize('record_deposit', { transactionId: 't1', amount: 1 })
+    expect(res.ok).toBe(false)
+    expect(res.queueable).toBe(true)
+    expect(res.reason).toBe('offline_blocked')
+  })
+
+  it('no cloud session is queueable when required', async () => {
     globalThis.__SM_MUTATE_REQUIRED = true
     globalThis.__SM_MUTATE_URL = 'https://abc.supabase.co/functions/v1/studio-mutate'
     globalThis.Cloud = {
@@ -73,18 +85,8 @@ describe('StudioMutateClient SaaS authority', () => {
       amount: 100
     }, { idempotencyKey: 'record_deposit:t1' })
     expect(res.ok).toBe(false)
+    expect(res.queueable).toBe(true)
     expect(res.reason).toBe('no_cloud_session')
-  })
-
-  it('fail-closed when required and offline', async () => {
-    globalThis.__SM_MUTATE_REQUIRED = true
-    Object.defineProperty(globalThis.navigator, 'onLine', {
-      configurable: true,
-      get: () => false
-    })
-    const res = await StudioMutateClient.authorize('record_deposit', { transactionId: 't1', amount: 1 })
-    expect(res.ok).toBe(false)
-    expect(res.reason).toBe('offline_blocked')
   })
 
   it('posts stable idempotency key when authorized', async () => {

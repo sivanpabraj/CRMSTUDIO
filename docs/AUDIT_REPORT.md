@@ -1,71 +1,32 @@
-# Studio M — Comprehensive Engineering Audit Report
+# Studio M — Audit Report
 
 **Date:** 2026-07-21  
 **Branch:** `cursor/saas-p0-authority-66da`  
-**Version:** 6.0.0  
-**Product target:** Public multi-tenant B2B SaaS for studios  
-**Overall (SaaS frame): 68 / 100** · Single-studio nostalgia: ~83 / 100
+**Overall (SaaS): 74 / 100**
 
----
+## Executive summary
 
-## 1. Executive Summary
+P0 server-authoritative online finance + P1 outbox, ledger versioning, register/join harden, RLS policy tests, soft plan quotas, and classic stripped from public builds.
 
-Studio M is **no longer scored as a single-studio offline ERP**. The public product requires server authority for money, tenant isolation, and Pro-only production UX.
+## What landed (this pass)
 
-**SaaS P0 landed:**
+- `FinanceOutbox` — offline/no-session queue + flush
+- `claim_ledger_version` + Edge 409 conflict
+- `register_studio` join-by-code / no duplicate tenant
+- RLS isolation unit mirror + docs checklist
+- Soft `PlanLimits` quotas
+- Production build: `admin.html` redirect stub (`VITE_ALLOW_CLASSIC=1` to keep classic)
 
-1. `mutateRequiredWhenOnline` — FinanceSync awaits Edge before local money commit; fail-closed online/offline-without-session
-2. Migration `008_studio_ledger_entries` + hardened `studio-mutate` (`roles[]`, tenant spoof guard, ledger write)
-3. Classic removed from public operator paths (SignedProof break-glass only)
-4. Gated Playwright finance auth (`E2E_LOGIN_*`) + ADR for deferred outbox
-5. Honest SaaS rescore — **no vanity inflation**
+## Residual
 
-### Hard-stop honesty
+- Payment gateway / real billing
+- Full double-entry server balances
+- Auto-reverse of permanently failed outbox rows
+- Multi-region
 
-| Dimension | 10/10? | Why |
-|-----------|--------|-----|
-| Security | **No** (~7.8) | Offline money blocked not queued; local session still client-side |
-| Scalability | **No** (~5.8) | Thin ledger; multi-tenant load unproven |
-| Billing / onboarding polish | **No** | Out of P0 scope |
+## Follow-ups
 
----
-
-## 2. Scores (SaaS frame)
-
-| Metric | Score |
-|--------|------:|
-| **Overall (SaaS)** | **68** |
-| Production readiness (public SaaS) | 62 |
-| Single-studio optional-cloud (legacy) | 83 |
-
-See [`QUALITY_SCORES.md`](./QUALITY_SCORES.md) for category table.
-
----
-
-## 3. Round log
-
-| Round | Resolved |
-|-------|----------|
-| Finance cheque / integrity | FinanceSync sole writer, cheque pagination, bank metadata |
-| Mutate client wiring | Cloud.client + resolvedConfig |
-| **SaaS P0** | mutateRequired, ledger 008, classic public retire, finance e2e gate |
-
----
-
-## 4. Residual risks
-
-- Offline finance outbox not implemented ([ADR](./ADR_OFFLINE_FINANCE_OUTBOX.md))
-- Ledger is accept-log, not double-entry balances on server
-- Money LWW conflict policy across devices still incomplete
-- Billing / plans / abuse quotas not started
-- Classic HTML still in repo (quarantined) with weaker CSP
-
----
-
-## 5. Ordered follow-ups
-
-1. **P1** Finance outbox + flush  
-2. **P1** RLS isolation proof tests + onboarding harden  
-3. **P1** Server conflict / sequential ledger versions  
-4. **P2** Billing + quotas + monitoring alerts  
-5. **P2** Retire classic assets from production builds entirely  
+1. Stripe/Zarinpal (or local PSP) billing  
+2. Server-side balance materialization  
+3. Outbox dead-letter UI for managers  
+4. Load test multi-tenant mutate path  

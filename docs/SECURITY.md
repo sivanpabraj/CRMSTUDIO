@@ -73,22 +73,24 @@ supabase/migrations/006_contracts_manager_rls.sql
 
 ## محدودیت‌های باقی‌مانده
 
-- Session محلی هنوز client-side است (HMAC سرور-side کامل نیست)
-- پول آفلاین در حالت SaaS مسدود است تا outbox پیاده شود ([ADR](./ADR_OFFLINE_FINANCE_OUTBOX.md))
-- Ledger سروری هنوز accept-log است نه double-entry کامل
-- CSP: `/studio-m/` بدون script `unsafe-inline`؛ صفحات کلاسیک هنوز `unsafe-inline` دارند (خارج از مسیر عمومی)
-- E2E مالی authenticated با `E2E_LOGIN_PHONE` / `E2E_LOGIN_PASSWORD` (در CI در صورت نبودن secret اسکیپ می‌شود)
-- سقف امتیاز SaaS: [`docs/QUALITY_SCORES.md`](./QUALITY_SCORES.md)
+- Session محلی هنوز client-HMAC است
+- Outbox می‌تواند کوتاه‌مدت از ledger جلو بزند تا flush
+- سهمیه پلن نرم است — درگاه پرداخت هنوز نیست
+- Ledger accept-log + version head است نه double-entry کامل
+- E2E مالی authenticated با `E2E_LOGIN_*`
+- سقف امتیاز: [`docs/QUALITY_SCORES.md`](./QUALITY_SCORES.md)
 
-## فاز SaaS P0 (پیاده‌شده)
+## فاز SaaS P0–P1 (پیاده‌شده)
 
 | لایه | نقش |
 |------|-----|
-| `mutateRequiredWhenOnline` | قبل از commit محلی پول، Edge را await می‌کند |
-| `008_studio_ledger_entries.sql` | accept-log ledger با idempotency |
-| `studio-mutate` | membership روی `roles[]` + audit + ledger |
-| Classic | فقط break-glass SignedProof؛ بدون لینک عمومی Pro |
-| Tenant spoof | `studioId` باید membership فعال باشد |
+| `mutateRequiredWhenOnline` | قبل از commit محلی (آنلاین) |
+| `financeOutbox` | صف آفلاین + flush |
+| `008`/`009` | ledger entries + version heads + register harden |
+| `claim_ledger_version` | تعارض ۴۰۹ |
+| Classic | خارج از بیلد عمومی (stub) |
+| `PlanLimits` | سقف نرم trial/starter/pro |
+| RLS tests | `tests/rls-isolation-policy.test.js` |
 
 ## Migration 002
 
