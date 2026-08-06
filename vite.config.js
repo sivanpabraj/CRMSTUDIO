@@ -3,7 +3,6 @@ import { resolve } from 'path'
 
 export default defineConfig(({ mode }) => {
   loadEnv(mode, process.cwd(), '')
-  const allowClassic = process.env.VITE_ALLOW_CLASSIC === '1' || mode === 'development'
   const input = {
     site: resolve(__dirname, 'site.html'),
     start: resolve(__dirname, 'start.html'),
@@ -14,10 +13,6 @@ export default defineConfig(({ mode }) => {
     customer: resolve(__dirname, 'customer.html'),
     studioM: resolve(__dirname, 'studio-m/index.html'),
     studioMAuthCallback: resolve(__dirname, 'studio-m/auth-callback.html')
-  }
-  // Public SaaS production builds omit classic admin entry (break-glass via stub redirect).
-  if (allowClassic) {
-    input.admin = resolve(__dirname, 'admin.html')
   }
   return {
     root: '.',

@@ -5,6 +5,7 @@
 const ROLE_DEFS = {
   system_admin:       { id: 'system_admin',       emoji: '🛡️', title: 'ادمین سیستم',     type: 'management', perms: ['all', 'manage_users', 'manage_system'] },
   studio_manager:     { id: 'studio_manager',     emoji: '👑', title: 'مدیر استودیو',    type: 'management', perms: ['view_all', 'view_contract', 'calendar', 'sms', 'editing', 'manage_personnel', 'manage_contracts', 'manage_finance'] },
+  accountant:         { id: 'accountant',         emoji: '🧾', title: 'حسابدار',          type: 'management', perms: ['view_all', 'view_contract', 'manage_finance'] },
   office_secretary:   { id: 'office_secretary',   emoji: '📋', title: 'منشی / هماهنگ‌کننده', type: 'management', perms: ['calendar', 'view_contract', 'view_appointments', 'view_all', 'sms'] },
   coordinator:        { id: 'coordinator',        emoji: '🎯', title: 'هماهنگ‌کننده',    type: 'management', perms: ['calendar', 'view_contract', 'view_appointments', 'view_all', 'sms'], aliasOf: 'office_secretary' },
   inspector:          { id: 'inspector',          emoji: '🔍', title: 'بازرس',           type: 'management', perms: ['view_all', 'view_contract'] },
@@ -108,7 +109,7 @@ function getRoleColor(id) {
 }
 
 function getManagementRoles() {
-  const order = ['system_admin', 'studio_manager', 'office_secretary', 'coordinator', 'inspector']
+  const order = ['system_admin', 'studio_manager', 'accountant', 'office_secretary', 'coordinator', 'inspector']
   return getAllRoles()
     .filter(r => r.type === 'management')
     .sort((a, b) => {

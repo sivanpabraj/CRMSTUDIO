@@ -165,14 +165,13 @@ const FinanceSync = {
         return { ok: true, authorized: true, server: res }
       }
       if (res.skipped && res.reason === 'not_required') return { ok: true }
+      // Finance is server-authoritative. Offline/no-session commands must not
+      // change balances locally; the user retries after connectivity returns.
       if (res.queueable) {
         return {
-          ok: true,
-          queueOutbox: true,
-          op,
-          payload,
-          idempotencyKey,
-          queueReason: res.reason
+          ok: false,
+          error: res.error || 'عملیات مالی تا تأیید سرور انجام نمی‌شود',
+          reason: res.reason || 'server_confirmation_required'
         }
       }
       return {

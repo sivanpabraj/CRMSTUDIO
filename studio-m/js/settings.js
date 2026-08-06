@@ -764,50 +764,12 @@ const SMSettings = {
               </button>
             </div>
           </div>
-          <div class="sm-danger-box" style="margin-top:12px">
-            <h4><i class="fas fa-clock-rotate-left"></i> Break-glass: پنل کلاسیک</h4>
-            <p>مسیر عمومی محصول فقط Studio M Pro است. این کلید اضطراری SignedProof (۲ ساعت) برای بازیابی است — لینک عمومی ندارد.</p>
-            <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMSettings.enableClassicAdmin')}>
-              <i class="fas fa-unlock"></i> فعال‌سازی اضطراری کلاسیک
-            </button>
-          </div>
           <p style="font-size:.72rem;color:var(--sm-text-muted);margin-top:14px">
             <strong>نسخه:</strong> ${AppConfig.APP_VERSION} · <strong>DB:</strong> v${DB.getStorageInfo?.()?.version || '—'}
           </p>
         </div>
       </div>
     </div>`
-  },
-
-  async enableClassicAdmin() {
-    if (typeof Access !== 'undefined' && !Access.isStudioManager?.(SM.user()) && !Access.isSystemAdmin?.(SM.user())) {
-      return SM.toast('فقط مدیر مجاز است', 'error')
-    }
-    if (!confirm('فعال‌سازی موقت پنل کلاسیک؟ فقط برای بازیابی اضطراری.')) return
-    const typed = prompt('برای تأیید، کلمه «کلاسیک» را بنویسید:')
-    if (typed !== 'کلاسیک') return SM.toast('لغو شد', 'info')
-    const pw = prompt('رمز ورود فعلی مدیر را وارد کنید:')
-    if (!pw) return SM.toast('لغو شد', 'info')
-    const v = await Auth.verifyCurrentPassword(pw)
-    if (!v.ok) return SM.toast(v.error || 'رمز اشتباه', 'error')
-    try {
-      const user = SM.user()
-      const ttl = 2 * 60 * 60 * 1000
-      if (typeof SignedProof !== 'undefined' && SignedProof.issue) {
-        await SignedProof.issue('sm_classic_unlock', {
-          purpose: 'classic',
-          userId: user?.id || '',
-          issuedAt: Date.now()
-        }, ttl)
-        try { sessionStorage.removeItem('sm_allow_classic') } catch { /* */ }
-      } else {
-        sessionStorage.setItem('sm_allow_classic', '1')
-      }
-      SM.toast('پنل کلاسیک برای این نشست فعال شد — admin.html?classic=1', 'success')
-      if (typeof SMObservability !== 'undefined') SMObservability.captureEvent('classic_admin_unlock')
-    } catch {
-      SM.toast('خطا در فعال‌سازی', 'error')
-    }
   },
 
   async wipeOperational() {
@@ -1064,8 +1026,7 @@ SMModules.settings = {
   saveStudio() { SMSettings.saveStudio() },
   saveSms() { SMSettings.saveSms() },
   backup() { SMSettings.backupNow() },
-  restore(input) { SMSettings.restore(input) },
-  enableClassicAdmin() { SMSettings.enableClassicAdmin() }
+  restore(input) { SMSettings.restore(input) }
 }
 
 window.SMSettings = SMSettings

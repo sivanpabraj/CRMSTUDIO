@@ -2,39 +2,85 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-and-test:
+  quality:
+    name: Quality, unit tests and build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run ci:verify
+      - name: Upload production artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-m-dist-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  security:
+    name: Dependency security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
-
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
 
-      - name: Dependency audit (high+)
-        run: npm audit --audit-level=high
-
-      - run: npm run lint
-
-      - run: npm run test
-
-      - run: npm run build
-
-      - name: Playwright smoke + gated finance auth
-        run: npx playwright install --with-deps chromium && npx playwright test
-        # finance-auth.spec.js skips unless E2E_LOGIN_PHONE + E2E_LOGIN_PASSWORD are set
-        # Uses built dist via `vite preview` (build step above)
+  e2e:
+    name: Browser and authenticated finance tests
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
         env:
           E2E_LOGIN_PHONE: ${{ secrets.E2E_LOGIN_PHONE }}
           E2E_LOGIN_PASSWORD: ${{ secrets.E2E_LOGIN_PASSWORD }}
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-${{ github.sha }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
-      - name: Docker build
-        run: docker build -t studio-m:ci .
+  container:
+    name: Container build
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --pull --tag studio-m:${{ github.sha }} .

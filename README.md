@@ -30,7 +30,6 @@ docker run -p 8080:80 studio-m
 | `studio-m/js/modules-*.js` | ماژول‌های شکستهٔ Pro (bookings, contracts, invoices, …) |
 | `js/` | لایه داده، auth، FinanceSync، sync |
 | `js/lib/` | توابع خالص قابل‌تست (ledger, sanitize, policy, …) |
-| `admin.html` | پنل کلاسیک (quarantined — نیاز به unlock مدیر) |
 | `contract.html` | قرارداد و فاکتور |
 | `customer.html` | پورتال مشتری |
 
@@ -60,7 +59,7 @@ docker run -p 8080:80 studio-m
 - Snapshot ابری sanitize می‌شود
 - SMS در production فقط از طریق Edge proxy؛ کلید API روی دستگاه ذخیره نمی‌شود اگر proxy ست باشد
 - Session در production بدون امضا رد می‌شود
-- بازیابی بکاپ و classic admin نیاز به تأیید مدیر + رمز دارند
+- بازیابی بکاپ و عملیات مخرب نیاز به تأیید مدیر + رمز دارند
 
 ## مجوز
 

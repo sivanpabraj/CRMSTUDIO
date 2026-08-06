@@ -88,7 +88,7 @@ supabase/migrations/006_contracts_manager_rls.sql
 | `financeOutbox` | صف آفلاین + flush |
 | `008`/`009` | ledger entries + version heads + register harden |
 | `claim_ledger_version` | تعارض ۴۰۹ |
-| Classic | خارج از بیلد عمومی (stub) |
+| پنل مدیریت | فقط Studio M؛ سورس Classic حذف شده است |
 | `PlanLimits` | سقف نرم trial/starter/pro |
 | RLS tests | `tests/rls-isolation-policy.test.js` |
 

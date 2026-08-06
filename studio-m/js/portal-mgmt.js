@@ -110,12 +110,8 @@ const SMPortalMgmt = {
       onSave: async () => {
         const d = SMUI.readForm(['pi-name', 'pi-phone', 'pi-role'])
         if (!d['pi-name'] || !d['pi-phone']) return SM.toast('نام و موبایل الزامی است', 'error')
-        const res = await PortalInvite.inviteWithCode({
-          name: d['pi-name'],
-          phone: d['pi-phone'],
-          portalType: 'admin',
-          roles: [d['pi-role']],
-          invitedBy: SM.user()?.name || ''
+        const res = await SMPortalMgmt._createInvite({
+          name: d['pi-name'], phone: d['pi-phone'], portalType: 'admin', role: d['pi-role']
         })
         if (!res.ok) return SM.toast(res.error, 'error')
         SMUI.closeModal()
@@ -136,12 +132,8 @@ const SMPortalMgmt = {
       onSave: async () => {
         const d = SMUI.readForm(['ps-name', 'ps-phone', 'ps-role'])
         if (!d['ps-name'] || !d['ps-phone']) return SM.toast('نام و موبایل الزامی است', 'error')
-        const res = await PortalInvite.inviteWithCode({
-          name: d['ps-name'],
-          phone: d['ps-phone'],
-          portalType: 'staff',
-          roles: [d['ps-role']],
-          invitedBy: SM.user()?.name || ''
+        const res = await SMPortalMgmt._createInvite({
+          name: d['ps-name'], phone: d['ps-phone'], portalType: 'staff', role: d['ps-role']
         })
         if (!res.ok) return SM.toast(res.error, 'error')
         SMUI.closeModal()
@@ -151,21 +143,40 @@ const SMPortalMgmt = {
     })
   },
 
+  async _createInvite({ name, phone, portalType, role }) {
+    if (typeof Cloud !== 'undefined' && Cloud.isEnabled?.()) {
+      const cloud = await Cloud.createStudioInvitation([role], 1440)
+      if (!cloud.ok) return cloud
+      return {
+        ok: true,
+        code: cloud.token,
+        secureCloud: true,
+        smsSent: false,
+        user: { name, phone, portalType, roles: [role] }
+      }
+    }
+    return PortalInvite.inviteWithCode({
+      name, phone, portalType, roles: [role], invitedBy: SM.user()?.name || ''
+    })
+  },
+
   _showInviteCode(res) {
     const code = res.code || res.demoCode || '—'
     const phone = res.user?.phone || ''
-    const smsNote = res.smsSent
-      ? 'پیامک هم ارسال شد.'
-      : 'پیامک ارسال نشد — این کد را دستی به کاربر بدهید.'
+    const smsNote = res.secureCloud
+      ? 'دعوت امن ابری تا ۲۴ ساعت و فقط برای یک درخواست معتبر است.'
+      : res.smsSent
+        ? 'پیامک هم ارسال شد.'
+        : 'پیامک ارسال نشد — این کد را دستی به کاربر بدهید.'
     SMUI.modal('کد ورود کاربر', `
       <p style="margin:0 0 12px;color:var(--sm-text-muted);font-size:.88rem">${SM.esc(smsNote)}</p>
       <div style="text-align:center;padding:20px;border:2px dashed var(--sm-border);border-radius:14px;margin-bottom:12px">
         <div style="font-size:.75rem;color:var(--sm-text-muted)">موبایل</div>
         <div dir="ltr" style="font-weight:700;margin:4px 0 12px">${SM.esc(phone)}</div>
-        <div style="font-size:.75rem;color:var(--sm-text-muted)">کد ورود (۶ رقمی)</div>
-        <div dir="ltr" style="font-size:2rem;font-weight:800;letter-spacing:6px;margin-top:6px">${SM.esc(code)}</div>
+        <div style="font-size:.75rem;color:var(--sm-text-muted)">${res.secureCloud ? 'توکن دعوت یک‌بارمصرف' : 'کد ورود (۶ رقمی)'}</div>
+        <div dir="ltr" style="font-size:${res.secureCloud ? '.82rem' : '2rem'};font-weight:800;word-break:break-all;margin-top:6px">${SM.esc(code)}</div>
       </div>
-      <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0">کاربر: صفحه ورود → تب پیامک → همین موبایل → همین کد</p>`, {
+      <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0">${res.secureCloud ? 'کاربر پس از ثبت حساب، این توکن را وارد می‌کند و منتظر تأیید مدیر می‌ماند.' : 'کاربر: صفحه ورود → تب پیامک → همین موبایل → همین کد'}</p>`, {
       width: 420,
       saveLabel: 'کپی کد',
       onSave: () => {

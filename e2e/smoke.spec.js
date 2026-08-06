@@ -21,17 +21,10 @@ test.describe('Studio M smoke (no SMS)', () => {
     await expect(setup.or(login)).toBeVisible({ timeout: 20_000 })
   })
 
-  test('admin.html leaves classic surface without unlock', async ({ page }) => {
+  test('legacy admin URL is a permanent redirect only', async ({ page }) => {
     await page.goto('/admin.html')
-    // Fresh DB → studio-m → start; seeded DB → studio-m (auth gate)
     await page.waitForURL(/studio-m\/|start\.html/, { timeout: 15_000 })
     expect(page.url()).not.toMatch(/\/admin\.html(?:\?|$)/)
-  })
-
-  test('admin.html?classic=1 still leaves without session unlock', async ({ page }) => {
-    await page.goto('/admin.html?classic=1')
-    await page.waitForURL(/studio-m\/|start\.html/, { timeout: 15_000 })
-    expect(page.url()).not.toMatch(/\/admin\.html/)
   })
 
   test('studio-m ships Estedad brand CSS (hashed build ok)', async ({ page }) => {

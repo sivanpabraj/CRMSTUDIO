@@ -93,13 +93,6 @@ const Access = {
     return this.isManagement(user)
   },
 
-  canAccessLegacyAdmin(user) {
-    user = user || (typeof Auth !== 'undefined' ? Auth.getUser() : null)
-    if (!user) return false
-    // Classic admin is emergency-only — managers and system admins only
-    return !!(this.isSystemAdmin(user) || this.isStudioManager(user))
-  },
-
   getRequestTargetRoles(type) {
     return [...(this.REQUEST_TYPE_ROLES[type] || ['coordinator'])]
   },

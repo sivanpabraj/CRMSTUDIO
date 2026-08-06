@@ -9,3 +9,6 @@ verify_jwt = true
 
 [functions.studio-mutate]
 verify_jwt = true
+
+[functions.health]
+verify_jwt = false

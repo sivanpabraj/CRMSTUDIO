@@ -8,7 +8,6 @@ import { fileURLToPath } from 'url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dist = join(root, 'dist')
-const allowClassic = process.env.VITE_ALLOW_CLASSIC === '1'
 
 function copy(src, dest) {
   const from = join(root, src)
@@ -25,7 +24,7 @@ copy('icons', 'icons')
 copy('studio-m/js', 'studio-m/js')
 copy('studio-m/css', 'studio-m/css')
 
-for (const file of ['sw.js', 'manifest.json', 'admin.css', 'contract.css', 'admin.js', 'contract.js']) {
+for (const file of ['sw.js', 'manifest.json', 'contract.css', 'contract.js']) {
   const from = join(root, file)
   if (existsSync(from)) {
     cpSync(from, join(dist, file))
@@ -33,10 +32,9 @@ for (const file of ['sw.js', 'manifest.json', 'admin.css', 'contract.css', 'admi
   }
 }
 
-// Public SaaS: always ship a redirect stub if Vite omitted admin.html or classic disallowed
+// Compatibility redirect only; no classic source is shipped.
 const adminDist = join(dist, 'admin.html')
-if (!existsSync(adminDist) || !allowClassic) {
-  writeFileSync(adminDist, `<!DOCTYPE html>
+writeFileSync(adminDist, `<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8"/>
@@ -49,8 +47,7 @@ if (!existsSync(adminDist) || !allowClassic) {
 </body>
 </html>
 `)
-  console.log('copy-static: admin.html → redirect stub (classic excluded from public build)')
-}
+console.log('copy-static: admin.html → permanent Studio M redirect')
 
 const required = [
   'js/lib/observability.js',

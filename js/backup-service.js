@@ -15,11 +15,23 @@ const BackupService = {
     return !!(s.autoBackup && (s.backupHourly || s.backupDaily))
   },
 
+  async checksum(json) {
+    const bytes = new TextEncoder().encode(String(json || ''))
+    const hash = await crypto.subtle.digest('SHA-256', bytes)
+    return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+  },
+
+  async verify(json, expectedChecksum) {
+    if (!json || !expectedChecksum) return false
+    return (await this.checksum(json)) === String(expectedChecksum).toLowerCase()
+  },
+
   async run(label = 'manual') {
     try {
       const json = DB.exportJSON()
       const ts = Date.now()
       const key = `${AppConfig.BACKUP_PREFIX}${ts}`
+      const checksum = await this.checksum(json)
       await DB.saveBackup(key, json)
       const now = new Date().toISOString()
       const prev = this.settings()
@@ -29,7 +41,8 @@ const BackupService = {
         backupLastAt: now,
         backupLastKey: key,
         backupLastLabel: label,
-        backupLastDisplay: jalaliAt
+        backupLastDisplay: jalaliAt,
+        backupLastChecksum: checksum
       })
       await DB.flush?.()
 
@@ -38,7 +51,7 @@ const BackupService = {
       }
 
       if (typeof SM !== 'undefined' && SM.log) SM.log('backup_auto', `${label} — ${key}`)
-      return { ok: true, key, at: now }
+      return { ok: true, key, at: now, checksum }
     } catch (e) {
       console.warn('Backup failed:', e)
       return { ok: false, error: String(e) }

@@ -180,7 +180,7 @@ describe('FinanceSync mutateRequiredWhenOnline', () => {
     expect(body.idempotencyKey).toBe('record_deposit:tx_fixed_1')
   })
 
-  it('commits locally and queues outbox without cloud session when required', async () => {
+  it('blocks local financial commits without an authenticated cloud session', async () => {
     globalThis.Cloud = {
       resolvedConfig: () => ({ url: 'https://abc.supabase.co' }),
       client: async () => ({ auth: { getSession: async () => ({ data: { session: null } }) } })
@@ -199,9 +199,9 @@ describe('FinanceSync mutateRequiredWhenOnline', () => {
       syncInvoice: false,
       transactionId: 'tx_queued_1'
     })
-    expect(res.ok).toBe(true)
-    expect(g.data.transactions.some(t => t.id === 'tx_queued_1')).toBe(true)
-    expect(enqueued).toHaveLength(1)
-    expect(enqueued[0].idempotencyKey).toBe('record_deposit:tx_queued_1')
+    expect(res.ok).toBe(false)
+    expect(g.data.transactions.some(t => t.id === 'tx_queued_1')).toBe(false)
+    expect(g.data.banks[0].balance).toBe(1_000_000)
+    expect(enqueued).toHaveLength(0)
   })
 })

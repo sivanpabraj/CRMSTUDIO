@@ -183,11 +183,25 @@ const Cloud = {
 
   async _registerStudio(studioName, phone, name, joinCode) {
     const c = await this.client()
+    if (joinCode) {
+      const { data, error } = await c.rpc('request_studio_join', {
+        p_token: String(joinCode).trim(),
+        p_display_name: name || 'عضو',
+        p_phone: Utils.normalizePhone(phone)
+      })
+      if (error) return { ok: false, error: this.formatAuthError(error.message) }
+      return {
+        ok: true,
+        pendingApproval: true,
+        requestId: data,
+        message: 'درخواست عضویت ثبت شد و پس از تأیید مدیر فعال می‌شود.'
+      }
+    }
     const { data, error } = await c.rpc('register_studio', {
       p_studio_name: studioName || AppConfig.DEFAULT_STUDIO_NAME,
       p_phone: Utils.normalizePhone(phone),
       p_display_name: name || 'مدیر',
-      p_join_code: joinCode || null
+      p_join_code: null
     })
     if (error) return { ok: false, error: error.message }
     await this._saveStudioLink(data)
@@ -221,6 +235,29 @@ const Cloud = {
       supabaseStudioId: studioId,
       cloudLastSyncAt: info.cloudLastSyncAt || ''
     })
+  },
+
+  async createStudioInvitation(roles = ['office_secretary'], expiresInMinutes = 1440) {
+    const c = await this.client()
+    const studioId = this.resolvedConfig().studioId
+    if (!c || !studioId) return { ok: false, error: 'اتصال ابری یا شناسه استودیو موجود نیست' }
+    const { data, error } = await c.rpc('create_studio_invitation', {
+      p_studio_id: studioId,
+      p_roles: roles,
+      p_expires_in_minutes: expiresInMinutes,
+      p_max_uses: 1
+    })
+    return error ? { ok: false, error: this.formatAuthError(error.message) } : { ok: true, token: data }
+  },
+
+  async reviewStudioJoin(requestId, approve) {
+    const c = await this.client()
+    if (!c) return { ok: false, error: 'اتصال ابری موجود نیست' }
+    const { data, error } = await c.rpc('review_studio_join', {
+      p_request_id: requestId,
+      p_approve: !!approve
+    })
+    return error ? { ok: false, error: this.formatAuthError(error.message) } : { ok: true, studioId: data }
   },
 
   async enableCloud({ url, anonKey }) {

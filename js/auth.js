@@ -487,7 +487,7 @@ const Auth = {
   },
 
   canAccessAdmin() {
-    if (typeof Access !== 'undefined') return Access.canAccessLegacyAdmin()
+    if (typeof Access !== 'undefined') return Access.canAccessStudioM()
     if (this.isAdmin()) return true
     const user = this.getUser()
     if (!user) return false

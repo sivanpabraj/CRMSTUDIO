@@ -10,4 +10,14 @@ describe('SMObservability', () => {
     expect(recent.at(-1).scope).toBe('unit_test')
     expect(recent.at(-1).message).toContain('boom')
   })
+
+  it('redacts secrets from metadata', () => {
+    SMObservability.captureEvent('secret_test', {
+      password: 'do-not-log',
+      nested: { authorization: 'Bearer abc.def.ghi' }
+    })
+    const entry = SMObservability.recent().at(-1)
+    expect(entry.meta.password).toBe('[redacted]')
+    expect(entry.meta.nested.authorization).toBe('[redacted]')
+  })
 })

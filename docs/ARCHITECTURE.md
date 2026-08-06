@@ -1,57 +1,34 @@
-# Studio M — Architecture
+# معماری Studio M
 
-## Overview
+## مرزهای اصلی
 
-Studio M is a **public multi-tenant B2B SaaS** foundation for studios.
+- `studio-m/` تنها پنل مدیریت است.
+- IndexedDB حافظه موقت رابط کاربر و داده‌های غیرمالی آفلاین است.
+- PostgreSQL و تابع `post_finance_command` تنها مرجع معتبر عملیات مالی هستند.
+- Edge Function فقط درخواست احراز‌شده را به فرمان اتمیک دیتابیس منتقل می‌کند.
+- مجوزها در دیتابیس و بر اساس قابلیت بررسی می‌شوند؛ مخفی‌کردن دکمه مجوز محسوب نمی‌شود.
 
-- **Pro shell** (`studio-m/`) is the only public production UI.
-- **IndexedDB** is local cache + offline finance outbox; **Postgres/Edge** is finance SoR when cloud is enabled.
-- Classic `admin.html` is **excluded from public production builds** (redirect stub); break-glass only with `VITE_ALLOW_CLASSIC=1` + SignedProof.
+## مسیر عملیات مالی
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Presentation: studio-m/ (public) · admin stub → Pro         │
-├─────────────────────────────────────────────────────────────┤
-│ FinanceSync → StudioMutateClient → Edge studio-mutate       │
-│            ↘ FinanceOutbox (offline / no session)           │
-├─────────────────────────────────────────────────────────────┤
-│ IDB cache · financeOutbox · Supabase tenants + ledger       │
-└─────────────────────────────────────────────────────────────┘
-```
+`FinanceSync → StudioMutateClient → studio-mutate → post_finance_command → finance_transactions + finance_journal_lines`
 
-## Finance SoR policy
+واریز، برداشت، انتقال، ویرایش و حذف در یک تراکنش دیتابیس ثبت می‌شوند. ویرایش و حذف، سطر قبلی دفترکل را تغییر نمی‌دهند؛ یک ثبت برگشتی ایجاد می‌شود. اگر اتصال یا نشست ابری وجود نداشته باشد، موجودی محلی تغییر نمی‌کند.
 
-| Condition | Behavior |
-|-----------|----------|
-| Online + cloud session | Await Edge accept **before** local commit; bump `claim_ledger_version` |
-| Ledger version conflict (409) | Fail closed — no local write |
-| Offline / no session / network | Local commit + `financeOutbox` queue; flush on reconnect |
-| Server 5xx while session online | Fail closed |
-| `mutateRequiredWhenOnline=false` | Optional post-commit audit if `mutateEnabled` |
+## عضویت
 
-## Tenancy
+عضویت مستقیم با کد عمومی حذف شده است:
 
-- `register_studio`: join by `join_code` **or** create studio; re-signup reuses existing membership (no duplicate tenant)
-- Mutate rejects foreign `studioId`
-- Soft plan quotas: `js/lib/plan-limits.js` (trial/starter/pro) — payment gateway still out of band
+1. مدیر دعوت‌نامه زمان‌دار و هش‌شده می‌سازد.
+2. کاربر درخواست عضویت ثبت می‌کند.
+3. مدیر درخواست را تأیید یا رد می‌کند.
+4. نقش ممتاز مدیر از طریق دعوت‌نامه قابل واگذاری نیست.
 
-## Migrations
+## Migration
 
-`001` → `009` (`008` ledger entries, `009` ledger heads + register harden).
+Migrationها به‌ترتیب `001` تا `011` اجرا می‌شوند. فایل قدیمی ویرایش نمی‌شود. Migrationهای 010 و 011 به‌ترتیب هسته مالی/مجوزها و دعوت امن/RLS اعضا را ایجاد می‌کنند.
 
-```bash
-supabase db push
-supabase functions deploy studio-mutate
-```
+## انتشار
 
-## Module map
+شاخه `main` باید توسط Ruleset محافظت شود. CI شامل کیفیت، امنیت، تست مرورگر و ساخت Container است. نسخه قابل انتشار فقط از tag نسخه و پس از اجرای migration روی staging ساخته می‌شود.
 
-| Path | Role |
-|------|------|
-| `js/finance-sync.js` | Sole local money façade |
-| `js/lib/studio-mutate-client.js` | Authorize / queueable reasons |
-| `js/lib/finance-outbox.js` | Offline queue + flush |
-| `js/lib/plan-limits.js` | Soft SaaS quotas |
-| `supabase/functions/studio-mutate` | Audit + ledger + version claim |
-
-See also: [ADR_OFFLINE_FINANCE_OUTBOX.md](./ADR_OFFLINE_FINANCE_OUTBOX.md), [RLS_ISOLATION_CHECKS.md](./RLS_ISOLATION_CHECKS.md).
+مستندات عملیاتی: [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md) و [RELEASE_GOVERNANCE.md](./RELEASE_GOVERNANCE.md).
