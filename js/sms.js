@@ -55,14 +55,25 @@ const SmsProvider = {
   async _sendViaProxy(proxyUrl, phones, text, purpose = 'generic') {
     try {
       const headers = { 'Content-Type': 'application/json' }
+      const studioId = typeof Cloud !== 'undefined'
+        ? String(Cloud.resolvedConfig?.().studioId || '')
+        : ''
+      if (!studioId) return { ok: false, error: 'شناسه استودیو برای ارسال پیامک موجود نیست' }
       if (typeof Cloud !== 'undefined') {
         const sess = await Cloud.session?.()
         if (sess?.access_token) headers.Authorization = `Bearer ${sess.access_token}`
       }
+      const idempotencyKey = `sms:${purpose}:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`}`
       const res = await fetch(String(proxyUrl).replace(/\/+$/, ''), {
         method: 'POST',
         headers,
-        body: JSON.stringify({ phones, text, purpose: purpose || 'generic' })
+        body: JSON.stringify({
+          studioId,
+          idempotencyKey,
+          phones,
+          text,
+          purpose: purpose || 'generic'
+        })
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) return { ok: false, error: data.error || `proxy ${res.status}` }
