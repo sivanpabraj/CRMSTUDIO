@@ -9,6 +9,10 @@ describe('StudioMutateClient SaaS authority', () => {
     prev.DB = globalThis.DB
     prev.Cloud = globalThis.Cloud
     prev.window = globalThis.window
+    prev.navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+    if (!globalThis.navigator) {
+      Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} })
+    }
     globalThis.window = globalThis
     globalThis.DB = {
       get: () => ({
@@ -32,6 +36,11 @@ describe('StudioMutateClient SaaS authority', () => {
     globalThis.fetch = prev.fetch
     globalThis.DB = prev.DB
     globalThis.Cloud = prev.Cloud
+    if (prev.navigatorDescriptor) {
+      Object.defineProperty(globalThis, 'navigator', prev.navigatorDescriptor)
+    } else {
+      delete globalThis.navigator
+    }
     if (prev.window === undefined) delete globalThis.window
     else globalThis.window = prev.window
     vi.restoreAllMocks()

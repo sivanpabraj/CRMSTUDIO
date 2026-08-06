@@ -10,6 +10,10 @@ describe('FinanceOutbox', () => {
     prev.SecureDB = globalThis.SecureDB
     prev.StudioMutateClient = globalThis.StudioMutateClient
     prev.SMObservability = globalThis.SMObservability
+    prev.navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+    if (!globalThis.navigator) {
+      Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} })
+    }
     globalThis.DB = {
       get: (c) => data[c] || [],
       insert: (c, row) => { data[c] = data[c] || []; data[c].push(row); return row },
@@ -34,6 +38,11 @@ describe('FinanceOutbox', () => {
     globalThis.SecureDB = prev.SecureDB
     globalThis.StudioMutateClient = prev.StudioMutateClient
     globalThis.SMObservability = prev.SMObservability
+    if (prev.navigatorDescriptor) {
+      Object.defineProperty(globalThis, 'navigator', prev.navigatorDescriptor)
+    } else {
+      delete globalThis.navigator
+    }
     vi.restoreAllMocks()
   })
 
