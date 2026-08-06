@@ -9,6 +9,8 @@
     "build": "vite build && node scripts/copy-static.mjs",
     "preview": "vite preview",
     "lint": "eslint js/ studio-m/js/ admin.js contract.js eslint.config.js eslint.globals.js --max-warnings 0 --no-warn-ignored",
+    "validate:repo": "node scripts/validate-repository.mjs",
+    "ci:verify": "npm run validate:repo && npm run lint && npm test && npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test",
