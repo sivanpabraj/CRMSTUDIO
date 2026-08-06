@@ -29,28 +29,16 @@ const Bootstrap = {
     if (this._errorBound) return
     this._errorBound = true
     const handler = (msg, src, line, col, err) => {
-      console.error('Global error', msg, src, line, col, err)
-      if (typeof Utils !== 'undefined' && Utils.toast) Utils.toast('خطای غیرمنتظره رخ داد', 'error')
-      if (typeof DB !== 'undefined') {
-        try {
-          if (typeof SecureDB !== 'undefined' && SecureDB.systemInsert) {
-            SecureDB.systemInsert('logs', {
-              action: 'error',
-              detail: `${msg} @ ${src}:${line}:${col}`,
-              timestamp: new Date().toISOString(),
-              stack: err?.stack || ''
-            })
-          } else if (DB.insert) {
-            DB.insert('logs', {
-              action: 'error',
-              detail: `${msg} @ ${src}:${line}:${col}`,
-              timestamp: new Date().toISOString(),
-              stack: err?.stack || ''
-            })
-          }
-          DB.flush?.()
-        } catch { /* */ }
+      if (typeof SMObservability !== 'undefined') {
+        SMObservability.captureError('global', err || new Error(String(msg || 'error')), {
+          src: src || '',
+          line: line || 0,
+          col: col || 0
+        })
+      } else {
+        console.error('Global error', msg, src, line, col, err)
       }
+      if (typeof Utils !== 'undefined' && Utils.toast) Utils.toast('خطای غیرمنتظره رخ داد', 'error')
       return false
     }
     window.addEventListener('error', e => handler(e.message, e.filename, e.lineno, e.colno, e.error))
@@ -63,7 +51,16 @@ const Bootstrap = {
       this._bindGlobalErrorHandler()
       if (typeof DB !== 'undefined' && DB.ready) await DB.ready
       if (typeof Auth !== 'undefined' && Auth.verifySessionSignature) {
-        try { await Auth.verifySessionSignature() } catch { /* */ }
+        try {
+          await Auth.verifySessionSignature()
+        } catch (e) {
+          if (typeof SMObservability !== 'undefined') {
+            SMObservability.captureError('session_verify', e)
+          } else {
+            console.error('[Bootstrap] session verify failed', e)
+          }
+          try { Auth.logout?.() } catch { /* */ }
+        }
       }
       if (typeof Auth !== 'undefined' && Auth.getCsrfToken) {
         Auth.getCsrfToken()

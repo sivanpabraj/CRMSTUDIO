@@ -1,72 +1,34 @@
-# Studio M — Architecture
+# معماری Studio M
 
-## Overview
+## مرزهای اصلی
 
-Studio M is an offline-first PWA (Vanilla JS + IndexedDB) with optional Supabase cloud sync.
+- `studio-m/` تنها پنل مدیریت است.
+- IndexedDB حافظه موقت رابط کاربر و داده‌های غیرمالی آفلاین است.
+- PostgreSQL و تابع `post_finance_command` تنها مرجع معتبر عملیات مالی هستند.
+- Edge Function فقط درخواست احراز‌شده را به فرمان اتمیک دیتابیس منتقل می‌کند.
+- مجوزها در دیتابیس و بر اساس قابلیت بررسی می‌شوند؛ مخفی‌کردن دکمه مجوز محسوب نمی‌شود.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Presentation                                                │
-│  studio-m/ (Pro ERP) · index.html · admin.html (legacy)     │
-│  customer.html · contract.html · site.html                    │
-├─────────────────────────────────────────────────────────────┤
-│ Application                                                 │
-│  Auth · UnifiedLogin · PortalInvite · Access · SecureDB     │
-│  Cloud · SyncEngine · RealtimeSync · FinanceSync            │
-├─────────────────────────────────────────────────────────────┤
-│ Data                                                        │
-│  IndexedDB (talar_studio_v5) — 44 logical collections     │
-│  Supabase PostgreSQL — tenants, entities, snapshots         │
-└─────────────────────────────────────────────────────────────┘
-```
+## مسیر عملیات مالی
 
-## Sync model (Phase 2–3)
+`FinanceSync → StudioMutateClient → studio-mutate → post_finance_command → finance_transactions + finance_journal_lines`
 
-1. **Entity sync** (primary, ~2.5s) — 15 entity types → `studio_entities`
-2. **Snapshot** (fallback, 60s) — sanitized JSON → `studio_snapshots`
-3. **Realtime** — postgres changes → pull entities
+واریز، برداشت، انتقال، ویرایش و حذف در یک تراکنش دیتابیس ثبت می‌شوند. ویرایش و حذف، سطر قبلی دفترکل را تغییر نمی‌دهند؛ یک ثبت برگشتی ایجاد می‌شود. اگر اتصال یا نشست ابری وجود نداشته باشد، موجودی محلی تغییر نمی‌کند.
 
-### Snapshot security
+## عضویت
 
-Before cloud push, `js/lib/snapshot-sanitize.js` removes:
+عضویت مستقیم با کد عمومی حذف شده است:
 
-- Password hashes, salts, API keys, SMS keys
-- `securityState`, `apiKeys` collections
-- Portal OTP codes
+1. مدیر دعوت‌نامه زمان‌دار و هش‌شده می‌سازد.
+2. کاربر درخواست عضویت ثبت می‌کند.
+3. مدیر درخواست را تأیید یا رد می‌کند.
+4. نقش ممتاز مدیر از طریق دعوت‌نامه قابل واگذاری نیست.
 
-After pull, local secrets are merged back from the device.
+## Migration
 
-## Authentication
+Migrationها به‌ترتیب `001` تا `011` اجرا می‌شوند. فایل قدیمی ویرایش نمی‌شود. Migrationهای 010 و 011 به‌ترتیب هسته مالی/مجوزها و دعوت امن/RLS اعضا را ایجاد می‌کنند.
 
-| Layer | Mechanism |
-|-------|-----------|
-| Local | PBKDF2 + HMAC-signed session + CSRF |
-| Cloud | Supabase Auth (separate password via AuthBridge) |
-| OTP | Unified SMS login + separate portal invite code |
-| Customer | CustomerSession (contract-bound) |
+## انتشار
 
-## Multi-tenancy (Supabase)
+شاخه `main` باید توسط Ruleset محافظت شود. CI شامل کیفیت، امنیت، تست مرورگر و ساخت Container است. نسخه قابل انتشار فقط از tag نسخه و پس از اجرای migration روی staging ساخته می‌شود.
 
-- `studios` — tenant
-- `studio_members` — user ↔ studio + roles
-- RLS via `user_studio_ids()`
-- Migration 005: snapshot SELECT limited to `studio_manager`
-
-## Module map
-
-| Path | Role |
-|------|------|
-| `js/db.js` | IndexedDB blob + migrations |
-| `js/secure-db.js` | CSRF write gate |
-| `js/cloud.js` | Supabase client + sync orchestration |
-| `js/sync/*` | Entity engine, conflict, realtime |
-| `studio-m/js/core.js` | Pro shell routing |
-| `studio-m/js/modules.js` | Feature modules registry |
-
-## Deployment
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md).
-
-## Migrations
-
-Apply in order: `001` → `005` in Supabase SQL Editor.
+مستندات عملیاتی: [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md) و [RELEASE_GOVERNANCE.md](./RELEASE_GOVERNANCE.md).

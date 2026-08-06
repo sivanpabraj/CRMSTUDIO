@@ -38,7 +38,7 @@ const SMCalendar = {
       map[key].push(ev)
     }
 
-    DB.get('contracts').forEach(c => {
+    DB.active('contracts').forEach(c => {
       if (c.status === 'cancelled') return
       const d = c.eventDate || c.date
       if (!d) return
@@ -56,7 +56,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('contracts').forEach(c => {
+    DB.active('contracts').forEach(c => {
       if (c.status === 'cancelled') return
       const ed = Utils.parseJalali(c.eventDate || c.date)
       if (!ed) return
@@ -78,7 +78,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('bookings').forEach(b => {
+    DB.active('bookings').forEach(b => {
       if (!b.date) return
       add(b.date, {
         id: `booking-${b.id}`,
@@ -94,7 +94,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('appointments').forEach(a => {
+    DB.active('appointments').forEach(a => {
       if (!a.date) return
       add(a.date, {
         id: `appt-${a.id}`,
@@ -110,7 +110,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('cheques').forEach(ch => {
+    DB.active('cheques').forEach(ch => {
       if (!ch.dueDate || ch.status === 'passed') return
       add(ch.dueDate, {
         id: `cheque-${ch.id}`,
@@ -126,7 +126,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('calendarReminders').forEach(r => {
+    DB.active('calendarReminders').forEach(r => {
       if (!r.date) return
       const rd = Utils.parseJalali(r.date)
       if (!rd) return
@@ -218,7 +218,7 @@ const SMCalendar = {
       html += `<button type="button" class="sm-cal-day${isToday ? ' is-today' : ''}${isSelected ? ' is-selected' : ''}${events.length ? ' has-events' : ''}"
         style="${meta ? `--cal-accent:${meta.color}` : ''}"
         data-date="${date}"
-        onclick="SMCalendar.pickDay('${date}')" aria-label="${date}">
+        ${SMEvents.attrs('SMCalendar.pickDay', [date])} aria-label="${date}">
         <span class="sm-cal-day-num">${d.toLocaleString('fa-IR')}</span>
         ${events.length ? `<span class="sm-cal-dots">${dots}</span>` : ''}
       </button>`
@@ -239,7 +239,7 @@ const SMCalendar = {
           <strong>${SM.esc(title)}</strong>
           <span class="sm-cal-day-panel-sub">${events.length ? `${events.length.toLocaleString('fa-IR')} رویداد` : 'رویدادی ثبت نشده'}</span>
         </div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMCalendar.addReminder('${date}')"><i class="fas fa-plus"></i> یادآوری</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMCalendar.addReminder', [date])}><i class="fas fa-plus"></i> یادآوری</button>
       </div>
       ${events.length ? `<div class="sm-cal-event-list">${events.map(e => this._eventCard(e)).join('')}</div>` :
         `<div class="sm-cal-empty-day">روی این روز چیزی نیست — یادآوری شخصی (چک، دادگاه، قرار…) اضافه کنید.</div>`}
@@ -251,15 +251,15 @@ const SMCalendar = {
     const time = e.time ? `<span class="sm-cal-ev-time" dir="ltr">${SM.esc(e.time)}</span>` : ''
     let action = ''
     if (e.src === 'contract') {
-      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMModules.contracts.view('${e.srcId}')">جزئیات عروسی</button>`
+      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMModules.contracts.view', [e.srcId])}>جزئیات عروسی</button>`
     } else if (e.src === 'booking') {
-      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMModules.bookings.view('${e.srcId}')">مشاهده</button>`
+      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMModules.bookings.view', [e.srcId])}>مشاهده</button>`
     } else if (e.src === 'appointment') {
-      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMCalendar.editAppointment('${e.srcId}')">ویرایش</button>`
+      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMCalendar.editAppointment', [e.srcId])}>ویرایش</button>`
     } else if (e.src === 'reminder') {
-      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMCalendar.editReminder('${e.srcId}')">ویرایش</button>`
+      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMCalendar.editReminder', [e.srcId])}>ویرایش</button>`
     } else if (e.src === 'cheque') {
-      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('accounting')">حسابداری</button>`
+      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SM.navigate', ["accounting"])}>حسابداری</button>`
     }
 
     return `<div class="sm-cal-event" style="--cal-accent:${meta.color}">
@@ -283,15 +283,15 @@ const SMCalendar = {
 
     el.innerHTML = `
       ${SMUI.sectionHead('تقویم شمسی', 'عروسی‌ها، سالگردها، چک‌ها و یادآوری‌های شخصی', `
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMCalendar.addReminder()"><i class="fas fa-bell"></i> یادآوری جدید</button>`)}
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMCalendar.addReminder')}><i class="fas fa-bell"></i> یادآوری جدید</button>`)}
       ${SMUI.moduleSearch('calendar', 'جستجو در تقویم — نام مراسم، یادآوری...')}
       <div class="sm-cal-wrap">
         <div class="sm-cal-main sm-card">
           <div class="sm-cal-toolbar">
-            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMCalendar.prevMonth()"><i class="fas fa-chevron-right"></i></button>
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMCalendar.prevMonth')}><i class="fas fa-chevron-right"></i></button>
             <div class="sm-cal-month-label">${SM.esc(monthLabel)}</div>
-            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMCalendar.nextMonth()"><i class="fas fa-chevron-left"></i></button>
-            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMCalendar.goToday()">امروز</button>
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMCalendar.nextMonth')}><i class="fas fa-chevron-left"></i></button>
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMCalendar.goToday')}>امروز</button>
           </div>
           ${this._renderLegend()}
           ${this._renderGrid(jy, jm, eventMap)}

@@ -32,8 +32,8 @@ const SMPortalMgmt = {
 
     el.innerHTML = `
       ${SMUI.sectionHead('مدیریت پرتال', 'ادمین و پرسنل — بدون ثبت‌نام · دعوت با SMS', `
-        <button type="button" class="sm-btn sm-btn-ghost" onclick="SMPortalMgmt.inviteAdmin()"><i class="fas fa-user-shield"></i> + ادمین</button>
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMPortalMgmt.inviteStaff()"><i class="fas fa-user-tie"></i> + پرسنل</button>`)}
+        <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMPortalMgmt.inviteAdmin')}><i class="fas fa-user-shield"></i> + ادمین</button>
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMPortalMgmt.inviteStaff')}><i class="fas fa-user-tie"></i> + پرسنل</button>`)}
 
       <div class="sm-portal-note">
         <i class="fas fa-info-circle"></i>
@@ -50,16 +50,15 @@ const SMPortalMgmt = {
       ])}
 
       ${SMUI.tabs([
-        { id: 'all', fa: 'همه', en: 'All', icon: 'fa-users', onclick: "SMPortalMgmt.setTab('all')" },
-        { id: 'admin', fa: 'ادمین', en: 'Admin', icon: 'fa-user-shield', onclick: "SMPortalMgmt.setTab('admin')" },
-        { id: 'staff', fa: 'پرسنل', en: 'Staff', icon: 'fa-user-tie', onclick: "SMPortalMgmt.setTab('staff')" }
+        { id: 'all', fa: 'همه', en: 'All', icon: 'fa-users', fn: 'SMPortalMgmt.setTab', args: ['all'] },
+        { id: 'admin', fa: 'ادمین', en: 'Admin', icon: 'fa-user-shield', fn: 'SMPortalMgmt.setTab', args: ['admin'] },
+        { id: 'staff', fa: 'پرسنل', en: 'Staff', icon: 'fa-user-tie', fn: 'SMPortalMgmt.setTab', args: ['staff'] }
       ], this._tab)}
 
       ${SMUI.moduleSearch('portal', 'جستجو — نام، موبایل...')}
 
       <div class="sm-portal-links">
         <a class="sm-btn sm-btn-ghost sm-btn-sm" href="../index.html?view=portal" target="_blank"><i class="fas fa-door-open"></i> پورتال پرسنل</a>
-        <a class="sm-btn sm-btn-ghost sm-btn-sm" href="../admin.html?classic=1" target="_blank"><i class="fas fa-table-columns"></i> پنل کلاسیک (legacy)</a>
       </div>
 
       <div style="margin-top:16px">${users.length ? users.map(u => this._userCard(u)).join('') :
@@ -82,10 +81,10 @@ const SMPortalMgmt = {
           </div>
         </div>
         <div class="sm-portal-user-actions">
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMPortalMgmt.resend('${u.id}')" title="ارسال مجدد کد"><i class="fas fa-sms"></i></button>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMPortalMgmt.editUser('${u.id}')" title="ویرایش"><i class="fas fa-pen"></i></button>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMPortalMgmt.copyLink('${u.id}')" title="کپی لینک"><i class="fas fa-link"></i></button>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMPortalMgmt.deleteUser('${u.id}')" title="حذف"><i class="fas fa-trash"></i></button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMPortalMgmt.resend', [u.id])} title="ارسال مجدد کد"><i class="fas fa-sms"></i></button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMPortalMgmt.editUser', [u.id])} title="ویرایش"><i class="fas fa-pen"></i></button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMPortalMgmt.copyLink', [u.id])} title="کپی لینک"><i class="fas fa-link"></i></button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMPortalMgmt.deleteUser', [u.id])} title="حذف"><i class="fas fa-trash"></i></button>
         </div>
       </div>
       <div class="sm-portal-user-roles">${SM.esc(roles || '—')}</div>
@@ -97,6 +96,10 @@ const SMPortalMgmt = {
   },
 
   inviteAdmin() {
+    if (typeof Access !== 'undefined' &&
+      !Access.isSystemAdmin?.(SM.user()) && !Access.isStudioManager?.(SM.user())) {
+      return SM.toast('فقط مدیر استودیو مجاز به افزودن ادمین است', 'error')
+    }
     const roleOpts = PortalInvite.ADMIN_ROLE_OPTIONS
     SMUI.modal('افزودن ادمین', `
       <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0 0 12px">نام و موبایل کافی است. یک کد ورود ساخته می‌شود — همان را به کاربر بدهید.</p>
@@ -107,12 +110,8 @@ const SMPortalMgmt = {
       onSave: async () => {
         const d = SMUI.readForm(['pi-name', 'pi-phone', 'pi-role'])
         if (!d['pi-name'] || !d['pi-phone']) return SM.toast('نام و موبایل الزامی است', 'error')
-        const res = await PortalInvite.inviteWithCode({
-          name: d['pi-name'],
-          phone: d['pi-phone'],
-          portalType: 'admin',
-          roles: [d['pi-role']],
-          invitedBy: SM.user()?.name || ''
+        const res = await SMPortalMgmt._createInvite({
+          name: d['pi-name'], phone: d['pi-phone'], portalType: 'admin', role: d['pi-role']
         })
         if (!res.ok) return SM.toast(res.error, 'error')
         SMUI.closeModal()
@@ -133,12 +132,8 @@ const SMPortalMgmt = {
       onSave: async () => {
         const d = SMUI.readForm(['ps-name', 'ps-phone', 'ps-role'])
         if (!d['ps-name'] || !d['ps-phone']) return SM.toast('نام و موبایل الزامی است', 'error')
-        const res = await PortalInvite.inviteWithCode({
-          name: d['ps-name'],
-          phone: d['ps-phone'],
-          portalType: 'staff',
-          roles: [d['ps-role']],
-          invitedBy: SM.user()?.name || ''
+        const res = await SMPortalMgmt._createInvite({
+          name: d['ps-name'], phone: d['ps-phone'], portalType: 'staff', role: d['ps-role']
         })
         if (!res.ok) return SM.toast(res.error, 'error')
         SMUI.closeModal()
@@ -148,21 +143,40 @@ const SMPortalMgmt = {
     })
   },
 
+  async _createInvite({ name, phone, portalType, role }) {
+    if (typeof Cloud !== 'undefined' && Cloud.isEnabled?.()) {
+      const cloud = await Cloud.createStudioInvitation([role], 1440)
+      if (!cloud.ok) return cloud
+      return {
+        ok: true,
+        code: cloud.token,
+        secureCloud: true,
+        smsSent: false,
+        user: { name, phone, portalType, roles: [role] }
+      }
+    }
+    return PortalInvite.inviteWithCode({
+      name, phone, portalType, roles: [role], invitedBy: SM.user()?.name || ''
+    })
+  },
+
   _showInviteCode(res) {
     const code = res.code || res.demoCode || '—'
     const phone = res.user?.phone || ''
-    const smsNote = res.smsSent
-      ? 'پیامک هم ارسال شد.'
-      : 'پیامک ارسال نشد — این کد را دستی به کاربر بدهید.'
+    const smsNote = res.secureCloud
+      ? 'دعوت امن ابری تا ۲۴ ساعت و فقط برای یک درخواست معتبر است.'
+      : res.smsSent
+        ? 'پیامک هم ارسال شد.'
+        : 'پیامک ارسال نشد — این کد را دستی به کاربر بدهید.'
     SMUI.modal('کد ورود کاربر', `
       <p style="margin:0 0 12px;color:var(--sm-text-muted);font-size:.88rem">${SM.esc(smsNote)}</p>
       <div style="text-align:center;padding:20px;border:2px dashed var(--sm-border);border-radius:14px;margin-bottom:12px">
         <div style="font-size:.75rem;color:var(--sm-text-muted)">موبایل</div>
         <div dir="ltr" style="font-weight:700;margin:4px 0 12px">${SM.esc(phone)}</div>
-        <div style="font-size:.75rem;color:var(--sm-text-muted)">کد ورود (۶ رقمی)</div>
-        <div dir="ltr" style="font-size:2rem;font-weight:800;letter-spacing:6px;margin-top:6px">${SM.esc(code)}</div>
+        <div style="font-size:.75rem;color:var(--sm-text-muted)">${res.secureCloud ? 'توکن دعوت یک‌بارمصرف' : 'کد ورود (۶ رقمی)'}</div>
+        <div dir="ltr" style="font-size:${res.secureCloud ? '.82rem' : '2rem'};font-weight:800;word-break:break-all;margin-top:6px">${SM.esc(code)}</div>
       </div>
-      <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0">کاربر: صفحه ورود → تب پیامک → همین موبایل → همین کد</p>`, {
+      <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0">${res.secureCloud ? 'کاربر پس از ثبت حساب، این توکن را وارد می‌کند و منتظر تأیید مدیر می‌ماند.' : 'کاربر: صفحه ورود → تب پیامک → همین موبایل → همین کد'}</p>`, {
       width: 420,
       saveLabel: 'کپی کد',
       onSave: () => {
@@ -191,7 +205,10 @@ const SMPortalMgmt = {
   },
 
   editUser(userId) {
-    const u = DB.find('users', x => x.id === userId)
+    if (typeof Access !== 'undefined' && !Access.canManageUsers?.(SM.user()) && !Access.canManageStudioOps?.(SM.user())) {
+      return SM.toast('دسترسی کافی ندارید', 'error')
+    }
+    const u = DB.find('users', x => x.id === userId && !x._deleted)
     if (!u) return
     const isAdmin = u.portalType === 'admin'
     const roleOpts = isAdmin
@@ -238,7 +255,11 @@ const SMPortalMgmt = {
   },
 
   async deleteUser(userId) {
-    const u = DB.find('users', x => x.id === userId)
+    if (typeof Access !== 'undefined' &&
+      !Access.isSystemAdmin?.(SM.user()) && !Access.isStudioManager?.(SM.user())) {
+      return SM.toast('فقط مدیر استودیو مجاز به حذف کاربر است', 'error')
+    }
+    const u = DB.find('users', x => x.id === userId && !x._deleted)
     if (!u) return
     if (!confirm(`حذف «${u.name || u.phone}»؟`)) return
     await SecureDB.delete('users', userId)

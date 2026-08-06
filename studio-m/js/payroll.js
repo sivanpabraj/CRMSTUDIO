@@ -55,7 +55,7 @@ const SMPayroll = {
   },
 
   _bankOptions(selected) {
-    const banks = DB.get('banks') || []
+    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
     return [{ value: '', label: '— انتخاب حساب بانکی —' }, ...banks.map(b => ({
       value: b.id,
       label: `${b.name || b.bank || 'بانک'} — ${b.account || this._maskCard(b.card) || ''}`,
@@ -64,7 +64,9 @@ const SMPayroll = {
   },
 
   _bankInfoHtml(bankId) {
-    const b = DB.find('banks', x => x.id === bankId)
+    const b = (typeof DB.findActive === 'function'
+      ? DB.findActive('banks', x => x.id === bankId)
+      : DB.find('banks', x => x.id === bankId && !x._deleted))
     if (!b) return ''
     return `<div class="sm-pay-bank-info">
       <div><span>بانک</span><strong>${SM.esc(b.bank || b.name || '—')}</strong></div>
@@ -75,15 +77,15 @@ const SMPayroll = {
   },
 
   render(el) {
-    const payments = (DB.get('salaryPayments') || []).slice().reverse()
-    const personnel = DB.get('personnel').filter(p => p.status === 'active')
+    const payments = (typeof DB.active === 'function' ? DB.active('salaryPayments') : (DB.get('salaryPayments') || []).filter(p => !p._deleted)).slice().reverse()
+    const personnel = (typeof DB.active === 'function' ? DB.active('personnel') : DB.get('personnel')).filter(p => p.status === 'active' && !p._deleted)
     const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0)
     const thisMonth = Utils.todayJalali().slice(0, 7)
     const paidThisMonth = payments.filter(p => p.month === thisMonth).reduce((s, p) => s + (p.amount || 0), 0)
 
     el.innerHTML = `
       ${SMUI.sectionHead('حقوق', 'محاسبه از پروژه و حقوق ماهانه · پرداخت از بانک', `
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMPayroll.add()"><i class="fas fa-plus"></i> افزودن پرداخت</button>`)}
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMPayroll.add')}><i class="fas fa-plus"></i> افزودن پرداخت</button>`)}
       ${SMUI.statCards([
         { label: 'پرداخت‌ها', value: SM.fmt(payments.length), color: 'var(--sm-accent)' },
         { label: 'مجموع پرداختی', value: SM.fmt(totalPaid), color: 'var(--sm-success)' },
@@ -108,13 +110,13 @@ const SMPayroll = {
         <td>${SM.fmt(p.amount || 0)}</td>
         <td>${SM.esc(p.bankName || '—')}</td>
         <td>${SM.esc(p.date || '—')}</td>
-        ${SMUI.tableActionsCell(null, `SMPayroll.view('${p.id}')`)}
+        ${SMUI.tableActionsCell(null, { fn: 'SMPayroll.view', args: [p.id] })}
       </tr>`)
     )
   },
 
   view(id) {
-    const p = (DB.get('salaryPayments') || []).find(x => x.id === id)
+    const p = (typeof DB.active === 'function' ? DB.active('salaryPayments') : (DB.get('salaryPayments') || []).filter(x => !x._deleted)).find(x => x.id === id)
     if (!p) return
     const b = p.breakdown || {}
     SM.pushSubView(`حقوق ${p.personName}`, () => `
@@ -131,7 +133,7 @@ const SMPayroll = {
   },
 
   add() {
-    const personnel = DB.get('personnel').filter(p => p.status === 'active')
+    const personnel = DB.active('personnel').filter(p => p.status === 'active')
     if (!personnel.length) return SM.toast('پرسنل فعالی نیست', 'error')
     const defaultMonth = Utils.todayJalali().slice(0, 7)
     const defaultPerson = personnel[0]?.id || ''
@@ -217,9 +219,40 @@ const SMPayroll = {
     } else {
       const row = await SecureDB.insert('salaryPayments', payload)
       const paymentId = row.id
-      await this._markProjectsPaid(calc, d['pay-month'])
-      const txId = await this._createLedger(payload)
-      if (txId) await SecureDB.update('salaryPayments', paymentId, { transactionId: txId })
+      let txId
+      try {
+        if (typeof FinanceSync === 'undefined') {
+          throw new Error('ماژول مالی در دسترس نیست')
+        }
+        const res = await FinanceSync.recordWithdrawal({
+          amount: payload.amount,
+          bankId: payload.bankId,
+          date: payload.date,
+          periodMonth: payload.month,
+          personnelId: payload.personId,
+          client: payload.personName,
+          purposeCategory: 'personnel',
+          purpose: `حقوق ${payload.personName} — ${payload.monthLabel || payload.month}`,
+          paymentMethod: payload.paymentMethod || 'transfer',
+          transactionRef: payload.ref || '',
+          accountOrCard: payload.accountOrCard || '',
+          notes: payload.notes || '',
+          desc: `حقوق پرسنل — ${payload.personName}`,
+          salaryPaymentId: paymentId,
+          syncInvoice: true
+        })
+        if (!res.ok) throw new Error(res.error || 'خطا در ثبت دفترکل')
+        txId = res.transactionId
+        await this._markProjectsPaid(calc, d['pay-month'])
+        if (txId) await SecureDB.update('salaryPayments', paymentId, { transactionId: txId })
+      } catch (e) {
+        try { await SecureDB.delete('salaryPayments', paymentId) } catch (re) {
+          if (typeof SMObservability !== 'undefined') {
+            SMObservability.captureError('finance_rollback:payrollPay', re, { rollback: true })
+          }
+        }
+        return SM.toast(e.message || 'خطا در پرداخت حقوق', 'error')
+      }
     }
 
     SMUI.closeModal()
@@ -239,56 +272,6 @@ const SMPayroll = {
         paidAt: Utils.todayJalali()
       })
     }
-  },
-
-  async _createLedger(payment) {
-    const data = {
-      type: 'withdrawal',
-      amount: payment.amount,
-      date: payment.date,
-      periodMonth: payment.month,
-      bankId: payment.bankId,
-      personnelId: payment.personId,
-      client: payment.personName,
-      purposeCategory: 'personnel',
-      purpose: `حقوق ${payment.personName} — ${payment.monthLabel || payment.month}`,
-      paymentMethod: payment.paymentMethod || 'transfer',
-      transactionRef: payment.ref || '',
-      accountOrCard: payment.accountOrCard || '',
-      notes: payment.notes || '',
-      desc: `حقوق پرسنل — ${payment.personName}`
-    }
-    const row = await SecureDB.insert('transactions', data)
-    if (typeof SMAccounting !== 'undefined') {
-      await SMAccounting._applyBankDelta(data.bankId, data.type, data.amount)
-    } else {
-      const b = DB.find('banks', x => x.id === data.bankId)
-      if (b) await SecureDB.update('banks', data.bankId, { balance: (b.balance || 0) - data.amount })
-    }
-    const invNum = typeof SMAccounting !== 'undefined' && SMAccounting._genInvoiceNumber
-      ? SMAccounting._genInvoiceNumber()
-      : `F-OUT-${String((DB.get('invoices') || []).length + 1).padStart(3, '0')}`
-    const inv = await SecureDB.insert('invoices', {
-      type: 'personnel',
-      direction: 'out',
-      title: data.purpose,
-      client: payment.personName,
-      personnelId: payment.personId,
-      amount: payment.amount,
-      date: payment.date,
-      periodMonth: payment.month,
-      bankId: payment.bankId,
-      bankName: payment.bankName,
-      accountOrCard: payment.accountOrCard,
-      paymentMethod: payment.paymentMethod,
-      description: payment.notes || '',
-      status: 'paid',
-      transactionId: row.id,
-      number: invNum,
-      createdAt: Utils.todayJalali()
-    })
-    await SecureDB.update('transactions', row.id, { invoiceId: inv.id })
-    return row.id
   }
 }
 

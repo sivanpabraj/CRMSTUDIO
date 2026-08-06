@@ -39,6 +39,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof SMModules.calendar?.runMorningReminders === 'function') {
       SMModules.calendar.runMorningReminders().catch(() => {})
     }
+    if (typeof ChequeManager !== 'undefined') {
+      ChequeManager.syncNotifications().catch(() => {})
+    }
     if (typeof NotificationTicker !== 'undefined') {
       NotificationTicker.init('studio')
     }

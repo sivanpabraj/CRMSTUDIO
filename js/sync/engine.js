@@ -59,8 +59,9 @@ export const SyncEngine = {
   _rowsSince(collection, sinceIso) {
     const since = sinceIso ? Date.parse(sinceIso) : 0
     return (DB.get(collection) || []).filter(item => {
-      if (!item?.id || item._deleted) return false
-      const t = Date.parse(item.updatedAtIso || item.updated_at || '')
+      if (!item?.id) return false
+      // Include tombstones (_deleted) so peers receive soft-deletes
+      const t = Date.parse(item.updatedAtIso || item.updated_at || item.deletedAtIso || '')
       return !since || !Number.isFinite(t) || t > since
     })
   },
