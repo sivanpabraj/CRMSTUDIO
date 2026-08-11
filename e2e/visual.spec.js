@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test'
 
-const PHONE = '09120000001'
-const PASSWORD = 'VisualQa2026'
+const RUN_ID = String(Date.now())
+const PHONE = `09${RUN_ID.slice(-9)}`
+const PASSWORD = `Visual-${RUN_ID}-A1`
 
 async function createStudio(page) {
   await page.goto('/start.html')
@@ -18,6 +19,7 @@ async function createStudio(page) {
   if (await onboarding.isVisible()) {
     await page.locator('#onb-address').fill('سنندج، بلوار نمونه')
     await page.locator('#onb-keep-pw').uncheck()
+    await page.locator('.sm-onboarding-pw-details summary').click()
     await page.locator('#onb-pw-old').fill(PASSWORD)
     await page.locator('#onb-pw-new').fill(`${PASSWORD}x`)
     await page.locator('#onb-pw2').fill(`${PASSWORD}x`)
