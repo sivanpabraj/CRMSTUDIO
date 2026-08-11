@@ -643,6 +643,11 @@ body.auth-screen .glass-rail {
   background: var(--glass-accent-soft, rgba(245,158,11,.15));
   color: #fff;
 }
+.auth-social-divider { display: flex; align-items: center; gap: 10px; margin: 16px 0 10px; color: rgba(255,255,255,.42); font-size: 11px; }
+.auth-social-divider::before, .auth-social-divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.1); }
+.auth-social-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.auth-btn-social { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: #fff; }
+.auth-btn-social:hover { background: rgba(255,255,255,.11); }
 
 .auth-role-grid { display: grid; gap: 10px; margin-bottom: 8px; }
 .auth-role-card {

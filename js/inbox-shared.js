@@ -89,6 +89,7 @@ const InboxShared = {
       author: entry.author || 'manager',
       authorName: entry.authorName || '',
       text: entry.text || '',
+      attachment: entry.attachment || null,
       action: entry.action || 'reply',
       replyTo: entry.replyTo || '',
       readBy: [entry.author || 'manager']

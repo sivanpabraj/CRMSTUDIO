@@ -2,6 +2,7 @@
 
 const SMInbox = {
   _tab: 'all',
+  _cloudRefreshPending: false,
 
   setTab(tab) {
     this._tab = tab
@@ -27,6 +28,12 @@ const SMInbox = {
 
   render(el) {
     if (SM.state.viewStack.length) return
+    if (!this._cloudRefreshPending && typeof CustomerCloudMessages !== 'undefined') {
+      this._cloudRefreshPending = true
+      CustomerCloudMessages.pullIntoLocal().then(result => {
+        if (result?.applied && !SM.state.viewStack.length) SM.navigate('inbox')
+      }).catch(() => null).finally(() => { this._cloudRefreshPending = false })
+    }
     const user = SM.user()
     const all = typeof Access !== 'undefined' ? Access.filterVisibleRequests(user) : (DB.active('customerRequests') || [])
     const reqs = this._requests(user)
@@ -145,11 +152,12 @@ const SMInbox = {
         <span>${SM.esc(InboxShared.formatWhen(t.date, t.time))}${actionNote}</span>
       </div>
       <p>${SM.esc(t.text || '')}</p>
+      ${t.attachment?.storagePath ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMInbox.openAttachment', [t.attachment.storagePath])}><i class="fas fa-paperclip"></i> ${SM.esc(t.attachment.name || 'نمایش پیوست')}</button>` : ''}
       ${receipt}
     </div>`
   },
 
-  approve(id) {
+  async approve(id) {
     const req = DB.find('customerRequests', r => r.id === id)
     if (!req) return
     const user = SM.user()
@@ -157,7 +165,7 @@ const SMInbox = {
     const typeLabel = InboxShared.typeInfo(req.type).label
     const dest = ['photo_select', 'album', 'print'].includes(req.type) ? 'عکس‌خانه' : 'تدوین'
 
-    InboxShared.appendThread(id, {
+    const entry = InboxShared.appendThread(id, {
       author: 'manager',
       authorName: user?.name || 'مدیر',
       text: `تأیید شد — ارجاع به ${dest}`,
@@ -166,6 +174,7 @@ const SMInbox = {
       read: true
     })
     DB.update('customerRequests', id, { approvedAt: Utils.todayJalali(), approvedBy: user?.name || '' })
+    await CustomerCloudMessages?.send?.(req, entry)
 
     if (['photo_select', 'album', 'print'].includes(req.type) && typeof PhotoHouse !== 'undefined') {
       if (req.type === 'photo_select') {
@@ -191,9 +200,11 @@ const SMInbox = {
     this._refreshView(id)
   },
 
-  reject(id) {
+  async reject(id) {
+    const req = DB.find('customerRequests', r => r.id === id)
+    if (!req) return
     const user = SM.user()
-    InboxShared.appendThread(id, {
+    const entry = InboxShared.appendThread(id, {
       author: 'manager',
       authorName: user?.name || 'مدیر',
       text: 'درخواست رد شد.',
@@ -202,6 +213,7 @@ const SMInbox = {
       read: true
     })
     DB.update('customerRequests', id, { rejectedAt: Utils.todayJalali() })
+    await CustomerCloudMessages?.send?.(req, entry)
     SM.toast('رد شد', 'info')
     this._refreshView(id)
   },
@@ -210,23 +222,43 @@ const SMInbox = {
     const req = DB.find('customerRequests', r => r.id === id)
     if (!req) return
     SMUI.modal('پاسخ مدیر به مشتری', `
-      ${SMUI.formField('پیام', 'inbox-reply', { type: 'textarea', placeholder: 'پاسخ یا توضیح برای مشتری و پرسنل...' })}`, {
+      ${SMUI.formField('پیام', 'inbox-reply', { type: 'textarea', placeholder: 'پاسخ یا توضیح برای مشتری و پرسنل...' })}
+      <div class="sm-field"><label>پیوست خصوصی (اختیاری؛ حداکثر ۵ مگابایت)</label><input class="sm-input" type="file" id="inbox-reply-file" accept="image/jpeg,image/png,image/webp,application/pdf"></div>`, {
       width: 480,
-      onSave: () => {
+      onSave: async () => {
         const text = document.getElementById('inbox-reply')?.value?.trim()
-        if (!text) return SM.toast('متن پاسخ را بنویسید', 'error')
+        const file = document.getElementById('inbox-reply-file')?.files?.[0] || null
+        if (!text && !file) return SM.toast('متن یا پیوست پاسخ را وارد کنید', 'error')
         const user = SM.user()
-        InboxShared.appendThread(id, {
+        let attachment = null
+        if (file) {
+          const uploaded = await FileStorage?.upload?.(file, `customer-reply-${id}-${crypto.randomUUID()}`)
+          if (!uploaded?.ok) return SM.toast(uploaded?.error || 'بارگذاری امن پیوست ناموفق بود', 'error')
+          attachment = { ...uploaded, name: file.name }
+        }
+        const previousThread = InboxShared.ensureThread(req).slice()
+        const entry = InboxShared.appendThread(id, {
           author: 'manager',
           authorName: user?.name || 'مدیر',
-          text,
+          text: text || `پیوست: ${file.name}`,
+          attachment,
           action: 'reply'
         })
+        const result = await CustomerCloudMessages?.send?.(req, entry)
+        if (file && !result?.ok) {
+          await FileStorage.remove(attachment.storagePath).catch(() => null)
+          DB.update('customerRequests', id, { thread: previousThread })
+          return SM.toast(result?.error || 'ثبت امن پاسخ ناموفق بود', 'error')
+        }
         SMUI.closeModal()
         SM.toast('پاسخ ثبت شد', 'success')
         this._refreshView(id)
       }
     })
+  },
+
+  openAttachment(storagePath) {
+    return CustomerCloudMessages?.openAttachment?.(storagePath)
   },
 
   _refreshView(requestId) {

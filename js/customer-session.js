@@ -6,7 +6,7 @@ const CustomerSession = {
   KEY: 'customer_session',
 
   _sessionPayload(session) {
-    return `${session.contractId}|${session.phone}|${session.token}|${session.expiresAt}`
+    return `${session.contractId}|${session.cloudContractId || ''}|${session.studioId || ''}|${session.phone}|${session.token}|${session.expiresAt}`
   },
 
   _contractPhones(contract) {

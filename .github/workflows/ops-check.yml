@@ -15,6 +15,7 @@ jobs:
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       DEPLOYMENT_HEALTH_URL: ${{ secrets.DEPLOYMENT_HEALTH_URL }}
+      DEPLOYMENT_APP_URL: ${{ secrets.DEPLOYMENT_APP_URL }}
     steps:
       - uses: actions/checkout@v4
       - name: Verify database invariants
@@ -25,3 +26,7 @@ jobs:
         run: |
           test -n "$DEPLOYMENT_HEALTH_URL" || { echo "::error::DEPLOYMENT_HEALTH_URL is required"; exit 1; }
           curl --fail --silent --show-error --max-time 15 "$DEPLOYMENT_HEALTH_URL"
+      - name: Verify deployed application and security headers
+        run: |
+          test -n "$DEPLOYMENT_APP_URL" || { echo "::error::DEPLOYMENT_APP_URL is required"; exit 1; }
+          node scripts/deployment-security-smoke.mjs

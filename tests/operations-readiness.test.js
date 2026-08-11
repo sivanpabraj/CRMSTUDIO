@@ -7,6 +7,8 @@ describe('operations readiness', () => {
     const workflow = readFileSync('.github/workflows/ops-check.yml', 'utf8')
     expect(sql).toContain('sum(debit_irr) <> sum(credit_irr)')
     expect(workflow).toContain('SUPABASE_DB_URL')
+    expect(workflow).toContain('DEPLOYMENT_APP_URL')
+    expect(workflow).toContain('deployment-security-smoke.mjs')
     expect(workflow).not.toContain('pg_dump')
   })
 

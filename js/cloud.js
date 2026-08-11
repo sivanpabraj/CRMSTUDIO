@@ -134,6 +134,100 @@ const Cloud = {
     return data.session
   },
 
+  toE164Phone(phone) {
+    const digits = String(phone || '').replace(/\D/g, '')
+    if (/^09\d{9}$/.test(digits)) return `+98${digits.slice(1)}`
+    if (/^989\d{9}$/.test(digits)) return `+${digits}`
+    if (/^9\d{9}$/.test(digits)) return `+98${digits}`
+    return ''
+  },
+
+  async sendPhoneOtp(phone) {
+    const c = await this.client()
+    const normalized = this.toE164Phone(phone)
+    if (!c || !normalized) return { ok: false, error: 'شماره موبایل برای ورود ابری معتبر نیست' }
+    const { error } = await c.auth.signInWithOtp({
+      phone: normalized,
+      options: { shouldCreateUser: true }
+    })
+    return error ? { ok: false, error: this.formatAuthError(error.message) } : { ok: true }
+  },
+
+  async verifyPhoneOtp(phone, token) {
+    const c = await this.client()
+    const normalized = this.toE164Phone(phone)
+    const code = String(token || '').replace(/\D/g, '')
+    if (!c || !normalized || !/^\d{6}$/.test(code)) return { ok: false, error: 'کد ۶ رقمی معتبر نیست' }
+    const { data, error } = await c.auth.verifyOtp({ phone: normalized, token: code, type: 'sms' })
+    if (error || !data?.session) return { ok: false, error: this.formatAuthError(error?.message || 'تأیید پیامک ناموفق بود') }
+    return { ok: true, session: data.session, user: data.user }
+  },
+
+  async claimCustomerContracts() {
+    const c = await this.client()
+    const sess = await this.session()
+    if (!c || !sess?.user) return { ok: false, error: 'ورود پیامکی Supabase لازم است' }
+    const { data, error } = await c.rpc('claim_customer_contracts')
+    return error
+      ? { ok: false, error: this.formatAuthError(error.message) }
+      : { ok: true, contracts: data || [] }
+  },
+
+  async signInWithOAuth(provider) {
+    if (!['google', 'apple'].includes(provider)) return { ok: false, error: 'ارائه‌دهنده ورود مجاز نیست' }
+    const c = await this.client()
+    if (!c) return { ok: false, error: 'Supabase پیکربندی نشده' }
+    const { data, error } = await c.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: this.authRedirectUrl() }
+    })
+    return error ? { ok: false, error: this.formatAuthError(error.message) } : { ok: true, url: data?.url || '' }
+  },
+
+  async _portalContract(localId, cloudContractId = '') {
+    const c = await this.client()
+    if (!c) return null
+    let query = c.from('contracts').select('id, studio_id, local_id')
+    query = cloudContractId ? query.eq('id', cloudContractId) : query.eq('local_id', String(localId || ''))
+    const { data, error } = await query.limit(1).maybeSingle()
+    return error ? null : data
+  },
+
+  async sendPortalMessage(message) {
+    const c = await this.client()
+    const sess = await this.session()
+    if (!c || !sess?.user) return { ok: false, error: 'ورود Supabase لازم است' }
+    const contract = await this._portalContract(message.contractLocalId, message.contractId)
+    if (!contract) return { ok: false, error: 'قرارداد ابری یافت نشد' }
+    const row = {
+      studio_id: contract.studio_id,
+      contract_id: contract.id,
+      contract_local_id: contract.local_id,
+      request_key: String(message.requestKey || ''),
+      request_type: String(message.requestType || 'message'),
+      sender_id: sess.user.id,
+      sender_kind: String(message.senderKind || 'customer'),
+      sender_name: String(message.senderName || '').slice(0, 160),
+      body: String(message.body || '').trim().slice(0, 4000),
+      attachment_path: message.attachment?.storagePath || null,
+      attachment_name: message.attachment?.name || null,
+      attachment_mime: message.attachment?.mime || null,
+      attachment_size: message.attachment?.size || null
+    }
+    const { data, error } = await c.from('customer_portal_messages').insert(row).select('*').single()
+    return error ? { ok: false, error: error.message } : { ok: true, message: data }
+  },
+
+  async listPortalMessages({ contractLocalId = '', since = '' } = {}) {
+    const c = await this.client()
+    if (!c || !await this.session()) return { ok: false, error: 'ورود Supabase لازم است' }
+    let query = c.from('customer_portal_messages').select('*').order('created_at', { ascending: true }).limit(500)
+    if (contractLocalId) query = query.eq('contract_local_id', String(contractLocalId))
+    if (since) query = query.gt('created_at', since)
+    const { data, error } = await query
+    return error ? { ok: false, error: error.message } : { ok: true, messages: data || [] }
+  },
+
   async signUp({ email, password, phone, name, studioName, joinCode }) {
     const c = await this.client()
     if (!c) return { ok: false, error: 'Supabase پیکربندی نشده' }

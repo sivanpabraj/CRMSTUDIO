@@ -99,6 +99,7 @@ export const browserGlobals = {
   MessagingShared: "readonly",
   InboxShared: "readonly",
   FileStorage: "readonly",
+  CustomerCloudMessages: "readonly",
   SiteBridge: "readonly",
   ConsultationBooking: "readonly",
   UiKit: "readonly",

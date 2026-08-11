@@ -6,6 +6,7 @@ Workflow روزانه `Operations integrity` توازن دفترکل، نبود 
 
 - `SUPABASE_DB_URL`: اتصال فقط برای اجرای کنترل‌های عملیاتی
 - `DEPLOYMENT_HEALTH_URL`: آدرس Edge Function سلامت
+- `DEPLOYMENT_APP_URL`: مبدأ HTTPS برنامه، بدون مسیر پایانی؛ دو مسیر عمومی و پنل و هدرهای CSP، ضد MIME sniffing، ضد frame و Referrer Policy روزانه کنترل می‌شوند.
 
 خطای این Workflow باید هشدار عملیاتی ایجاد کند و تا رفع علت، انتشار متوقف بماند.
 

@@ -271,6 +271,18 @@
   color: #fff; font-size: 14px; font-family: inherit; resize: vertical;
   box-sizing: border-box; margin-bottom: 12px;
 }
+.customer-attachment-field {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 8px;
+  color: rgba(255,255,255,0.72); font-size: 12px; cursor: pointer;
+}
+#cust-req-file {
+  width: 100%; box-sizing: border-box; margin: 0 0 12px; padding: 10px;
+  border: 1px dashed rgba(201,169,110,0.35); border-radius: 10px;
+  color: rgba(255,255,255,0.68); background: rgba(255,255,255,0.035);
+}
+.customer-attachment-open {
+  width: auto; margin-top: 8px; padding: 8px 12px; font-size: 11px;
+}
 .req-history-item {
   background: rgba(255,255,255,0.04); border-radius: 12px; padding: 12px;
   margin-bottom: 8px; border-inline-start: 3px solid #C9A96E;

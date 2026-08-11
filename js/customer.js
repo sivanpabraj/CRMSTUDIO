@@ -27,6 +27,9 @@ const CustomerPortal = {
         return
       }
       this.state.contract = live
+      if (typeof CustomerCloudMessages !== 'undefined') {
+        await CustomerCloudMessages.pullIntoLocal({ contractLocalId: live.id, force: true }).catch(() => null)
+      }
       this.renderDashboard()
       return
     }
@@ -152,6 +155,11 @@ const CustomerPortal = {
               ).join('')}
             </div>
             <textarea class="customer-textarea" id="cust-req-text" placeholder="مثال: لطفاً MP3 مراسم تحویل استودیو بدهید&#10;آهنگ درخواستی: ...&#10;سلیقه و توضیحات شخصی..."></textarea>
+            <label class="customer-attachment-field" for="cust-req-file">
+              <i class="fas fa-paperclip"></i>
+              <span>پیوست خصوصی (JPG، PNG، WebP یا PDF؛ حداکثر ۵ مگابایت)</span>
+            </label>
+            <input type="file" id="cust-req-file" accept="image/jpeg,image/png,image/webp,application/pdf" />
             <button class="portal-btn portal-btn-primary" onclick="CustomerPortal.submitRequest()">ارسال درخواست</button>
           </div>
 
@@ -168,6 +176,7 @@ const CustomerPortal = {
                   <div class="customer-thread-msg customer-thread-msg--${t.author || 'customer'}">
                     <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px">${Utils.escapeHtml(t.authorName || (InboxShared?.AUTHOR_LABELS?.[t.author] || 'مشتری'))} · ${Utils.escapeHtml(InboxShared?.formatWhen?.(t.date, t.time) || '')}</div>
                     <div style="font-size:12px;color:rgba(255,255,255,0.75)">${Utils.escapeHtml(t.text || '')}</div>
+                    ${t.attachment?.storagePath ? `<button type="button" class="portal-btn customer-attachment-open" onclick="CustomerPortal.openAttachment('${Utils.escapeHtml(t.attachment.storagePath)}')"><i class="fas fa-paperclip"></i> ${Utils.escapeHtml(t.attachment.name || 'نمایش پیوست')}</button>` : ''}
                     ${t.author === 'customer' ? `<div class="customer-msg-receipt"><i class="fas fa-check-double"></i> ${t.readBy?.some(a => a === 'manager' || a === 'staff') ? 'خوانده‌شده' : 'ارسال‌شده'}</div>` : ''}
                   </div>`).join('')}
                 <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:8px">
@@ -195,12 +204,16 @@ const CustomerPortal = {
     })
   },
 
+  openAttachment(storagePath) {
+    return CustomerCloudMessages?.openAttachment?.(storagePath)
+  },
+
   async replyToRequest(id) {
     const req = DB.find('customerRequests', row => row.id === id)
     if (!req || req.contractId !== this.state.contract?.id) return Utils.toast('گفتگو در دسترس نیست', 'error')
     const text = prompt('پیام شما:')
     if (!text?.trim()) return
-    InboxShared.appendThread(id, {
+    const entry = InboxShared.appendThread(id, {
       author: 'customer',
       authorName: req.customerName || 'مشتری',
       text: text.trim(),
@@ -209,21 +222,47 @@ const CustomerPortal = {
     })
     DB.update('customerRequests', id, { read: false, readByStaff: false, status: req.status === 'rejected' ? 'open' : req.status })
     await DB.flush()
+    await CustomerCloudMessages?.send?.(req, entry)
     Utils.toast('پیام ارسال شد', 'success')
     this.renderDashboard()
   },
 
   async submitRequest() {
     const text = document.getElementById('cust-req-text')?.value?.trim()
-    if (!text) { Utils.toast('متن درخواست را بنویسید', 'error'); return }
+    const file = document.getElementById('cust-req-file')?.files?.[0] || null
+    if (!text && !file) { Utils.toast('متن یا پیوست درخواست را وارد کنید', 'error'); return }
     const c = this.state.contract
     const parts = typeof InboxShared !== 'undefined' ? InboxShared.nowParts() : { date: Utils.todayJalali(), time: '', iso: new Date().toISOString() }
     const coupleName = `${c.bride || ''} و ${c.groom || ''}`.trim()
+    const session = await CustomerSession?.get?.()
+    let attachment = null
+    if (file) {
+      const uploaded = await FileStorage?.uploadCustomer?.(file, {
+        studioId: session?.studioId || c._cloudStudioId,
+        contractId: session?.cloudContractId || c._cloudContractId,
+        assetId: crypto.randomUUID()
+      })
+      if (!uploaded?.ok) return Utils.toast(uploaded?.error || 'بارگذاری امن پیوست ناموفق بود', 'error')
+      attachment = uploaded
+    }
+    const entry = {
+      author: 'customer',
+      authorName: coupleName || 'مشتری',
+      text: text || (file ? `پیوست: ${file.name}` : ''),
+      date: parts.date,
+      time: parts.time,
+      at: parts.iso,
+      action: 'request',
+      attachment,
+      readBy: ['customer']
+    }
     const req = DB.insert('customerRequests', {
       contractId: c.id,
+      _cloudContractId: session?.cloudContractId || c._cloudContractId || '',
+      _cloudStudioId: session?.studioId || c._cloudStudioId || '',
       contractNum: c.contractNum,
       type: this._selectedReqType,
-      text,
+      text: entry.text,
       status: 'pending',
       read: false,
       readByStaff: false,
@@ -235,17 +274,15 @@ const CustomerPortal = {
       createdAt: parts.date,
       createdTime: parts.time,
       lastActivityAt: parts.iso,
-      thread: [{
-        author: 'customer',
-        authorName: coupleName || 'مشتری',
-        text,
-        date: parts.date,
-        time: parts.time,
-        at: parts.iso,
-        action: 'request',
-        readBy: ['customer']
-      }]
+      thread: [entry]
     })
+    const cloudResult = await CustomerCloudMessages?.send?.(req, entry)
+    if (file && !cloudResult?.ok) {
+      await FileStorage.removeCustomer(attachment.storagePath).catch(() => null)
+      DB.delete('customerRequests', req.id)
+      await DB.flush()
+      return Utils.toast(cloudResult?.error || 'ثبت امن پیام ناموفق بود؛ دوباره تلاش کنید', 'error')
+    }
     await NotifyHub.customerRequestSubmitted(req, c)
     await DB.flush()
     Utils.toast('✅ درخواست ثبت شد. پس از تأیید مدیر اطلاع‌رسانی می‌شود.', 'success')

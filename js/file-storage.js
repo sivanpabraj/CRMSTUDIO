@@ -63,8 +63,30 @@ const FileStorage = {
     }
   },
 
+  async uploadCustomer(file, { studioId, contractId, assetId }) {
+    if (typeof Cloud === 'undefined' || !Cloud.isConfigured?.()) return { ok: false, error: 'ابر فعال نیست' }
+    const validation = this.validate(file)
+    if (!validation.ok) return validation
+    if (!/^[0-9a-f-]{36}$/i.test(String(studioId || '')) || !/^[0-9a-f-]{36}$/i.test(String(contractId || ''))) {
+      return { ok: false, error: 'دسترسی ابری قرارداد معتبر نیست' }
+    }
+    const sess = await Cloud.session?.()
+    if (!sess) return { ok: false, error: 'ورود پیامکی Supabase لازم است' }
+    const c = await Cloud.client()
+    const safeId = String(assetId || crypto.randomUUID()).replace(/[^\w-]/g, '')
+    const safeName = String(file.name || 'file').replace(/[^\w.\-()+]/g, '_')
+    const path = `${studioId}/customer/${contractId}/${safeId}/${safeName}`
+    const { error } = await c.storage.from(this.BUCKET).upload(path, file, {
+      upsert: false,
+      contentType: file.type,
+      cacheControl: '3600'
+    })
+    if (error) return { ok: false, error: error.message }
+    return { ok: true, path, storagePath: path, name: file.name, mime: file.type, size: file.size }
+  },
+
   async signedUrl(storagePath, expiresIn = 300) {
-    if (!storagePath || !this.isAvailable()) return { ok: false, error: 'فایل ابری در دسترس نیست' }
+    if (!storagePath || typeof Cloud === 'undefined' || !Cloud.isConfigured?.()) return { ok: false, error: 'فایل ابری در دسترس نیست' }
     const c = await Cloud.client()
     const ttl = Math.min(900, Math.max(60, Number(expiresIn) || 300))
     const { data, error } = await c.storage.from(this.BUCKET).createSignedUrl(storagePath, ttl)
@@ -79,6 +101,14 @@ const FileStorage = {
     const { error } = await c.storage.from(this.BUCKET).remove([storagePath])
     if (error) return { ok: false, error: error.message }
     return { ok: true }
+  },
+
+  async removeCustomer(storagePath) {
+    if (!storagePath || typeof Cloud === 'undefined' || !Cloud.isConfigured?.()) return { ok: true, skipped: true }
+    const c = await Cloud.client()
+    if (!c || !await Cloud.session?.()) return { ok: false, error: 'ورود Supabase لازم است' }
+    const { error } = await c.storage.from(this.BUCKET).remove([storagePath])
+    return error ? { ok: false, error: error.message } : { ok: true }
   }
 }
 
