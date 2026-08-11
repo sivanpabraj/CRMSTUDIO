@@ -57,7 +57,9 @@ const CustomerPortal = {
     const queue = PortalShared.getCustomerQueue(c)
     const congrats = PortalShared.getCustomerCongrats(c)
     const live = PortalShared.getCustomerLiveStatus(c, persProjects)
-    const myReqs = DB.filter('customerRequests', r => r.contractId === c.id)
+    let myReqs = DB.filter('customerRequests', r => r.contractId === c.id)
+    myReqs.forEach(r => InboxShared?.markRead?.(r.id, 'customer'))
+    myReqs = DB.filter('customerRequests', r => r.contractId === c.id)
     const studio = DB.get('studioInfo')?.name || AppConfig.DEFAULT_STUDIO_NAME
 
     const queueDisplay = queue.stage >= 2
@@ -166,10 +168,12 @@ const CustomerPortal = {
                   <div class="customer-thread-msg customer-thread-msg--${t.author || 'customer'}">
                     <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px">${Utils.escapeHtml(t.authorName || (InboxShared?.AUTHOR_LABELS?.[t.author] || 'مشتری'))} · ${Utils.escapeHtml(InboxShared?.formatWhen?.(t.date, t.time) || '')}</div>
                     <div style="font-size:12px;color:rgba(255,255,255,0.75)">${Utils.escapeHtml(t.text || '')}</div>
+                    ${t.author === 'customer' ? `<div class="customer-msg-receipt"><i class="fas fa-check-double"></i> ${t.readBy?.some(a => a === 'manager' || a === 'staff') ? 'خوانده‌شده' : 'ارسال‌شده'}</div>` : ''}
                   </div>`).join('')}
                 <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:8px">
                   ${r.status === 'sent_to_editing' ? '✅ تأیید مدیر — در تدوین' : r.status === 'rejected' ? '❌ رد شده' : '⏳ منتظر تأیید مدیر'}
                 </div>
+                <button type="button" class="portal-btn customer-reply-btn" onclick="CustomerPortal.replyToRequest('${r.id}')"><i class="fas fa-reply"></i> ادامه گفتگو</button>
               </div>`
             }).join('')}
           </div>` : ''}
@@ -189,6 +193,24 @@ const CustomerPortal = {
     document.querySelectorAll('#req-types .request-type-btn').forEach(el => {
       el.classList.toggle('selected', el.dataset.type === type)
     })
+  },
+
+  async replyToRequest(id) {
+    const req = DB.find('customerRequests', row => row.id === id)
+    if (!req || req.contractId !== this.state.contract?.id) return Utils.toast('گفتگو در دسترس نیست', 'error')
+    const text = prompt('پیام شما:')
+    if (!text?.trim()) return
+    InboxShared.appendThread(id, {
+      author: 'customer',
+      authorName: req.customerName || 'مشتری',
+      text: text.trim(),
+      action: 'reply',
+      replyTo: InboxShared.ensureThread(req).at(-1)?.id || ''
+    })
+    DB.update('customerRequests', id, { read: false, readByStaff: false, status: req.status === 'rejected' ? 'open' : req.status })
+    await DB.flush()
+    Utils.toast('پیام ارسال شد', 'success')
+    this.renderDashboard()
   },
 
   async submitRequest() {
@@ -220,7 +242,8 @@ const CustomerPortal = {
         date: parts.date,
         time: parts.time,
         at: parts.iso,
-        action: 'request'
+        action: 'request',
+        readBy: ['customer']
       }]
     })
     await NotifyHub.customerRequestSubmitted(req, c)

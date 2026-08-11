@@ -4,11 +4,20 @@
  */
 
 const SNAPSHOT_SECRET_USER_FIELDS = ['password', 'salt']
-const SNAPSHOT_SECRET_STUDIO_FIELDS = ['smsApiKey', 'licenseKey']
+const SNAPSHOT_SECRET_STUDIO_FIELDS = [
+  'smsApiKey',
+  'smsUsername',
+  'licenseKey',
+  'supabaseAnonKey',
+  'supabaseServiceKey',
+  'supabaseUrl'
+]
 const SNAPSHOT_OMIT_ROOT_KEYS = ['securityState', 'apiKeys']
 
 export function sanitizeSnapshotForCloud(raw) {
-  if (!raw || typeof raw !== 'object') return { _meta: { dbVersion: 20, sanitized: true } }
+  if (!raw || typeof raw !== 'object') {
+    return { _meta: { dbVersion: typeof AppConfig !== 'undefined' ? AppConfig.DB_VERSION : 22, sanitized: true } }
+  }
 
   const out = structuredClone(raw)
 
@@ -20,11 +29,14 @@ export function sanitizeSnapshotForCloud(raw) {
     out.users = out.users.map(u => {
       const copy = { ...u }
       for (const f of SNAPSHOT_SECRET_USER_FIELDS) delete copy[f]
-      if (copy.portalOtp?.code) {
-        copy.portalOtp = { ...copy.portalOtp, code: '[REDACTED]' }
-      }
-      if (copy.portalOtp?.codeHash) {
-        copy.portalOtp = { ...copy.portalOtp, codeHash: '[REDACTED]', codeSalt: '[REDACTED]' }
+      if (copy.portalOtp) {
+        // Never ship OTP secrets — keep verification metadata only
+        copy.portalOtp = {
+          verified: !!copy.portalOtp.verified,
+          verifiedAt: copy.portalOtp.verifiedAt || '',
+          via: copy.portalOtp.via || '',
+          sentAt: copy.portalOtp.sentAt || ''
+        }
       }
       return copy
     })
@@ -57,8 +69,13 @@ export function mergeLocalSecretsAfterPull(remote, local) {
       const copy = { ...u }
       if (loc.password) copy.password = loc.password
       if (loc.salt) copy.salt = loc.salt
-      if (loc.portalOtp?.code && loc.portalOtp.code !== '[REDACTED]') {
-        copy.portalOtp = { ...copy.portalOtp, ...loc.portalOtp }
+      if (loc.portalOtp) {
+        const locOtp = loc.portalOtp
+        const hasPlain = locOtp.code && locOtp.code !== '[REDACTED]'
+        const hasHash = locOtp.codeHash && locOtp.codeHash !== '[REDACTED]'
+        if (hasPlain || hasHash) {
+          copy.portalOtp = { ...(copy.portalOtp || {}), ...locOtp }
+        }
       }
       return copy
     })
@@ -70,9 +87,6 @@ export function mergeLocalSecretsAfterPull(remote, local) {
       if (local.studioInfo[f] && !merged.studioInfo[f]) {
         merged.studioInfo[f] = local.studioInfo[f]
       }
-    }
-    if (local.studioInfo.supabaseAnonKey && !merged.studioInfo.supabaseAnonKey) {
-      merged.studioInfo.supabaseAnonKey = local.studioInfo.supabaseAnonKey
     }
   }
 

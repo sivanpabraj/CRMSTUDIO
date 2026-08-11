@@ -164,6 +164,7 @@
 }
 .portal-inbox-msg-head strong { font-size: 11px; color: rgba(255,255,255,0.75); }
 .portal-inbox-msg p { margin: 0; font-size: 12px; line-height: 1.6; color: rgba(255,255,255,0.7); }
+.portal-inbox-receipt { display:block; margin-top:6px; font-size:10px; color:rgba(255,255,255,.4); }
 
 .customer-thread-msg {
   margin: 8px 0; padding: 8px 10px; border-radius: 10px;
@@ -172,6 +173,8 @@
 .customer-thread-msg--customer { border-inline-start-color: #3B82F6; }
 .customer-thread-msg--manager { border-inline-start-color: #A78BFA; }
 .customer-thread-msg--staff { border-inline-start-color: #22C55E; }
+.customer-msg-receipt { margin-top:6px; font-size:10px; color:rgba(255,255,255,.4); }
+.customer-reply-btn { margin-top:10px; width:auto; padding:8px 12px; font-size:12px; }
 
 /* Modal */
 .portal-modal-overlay {

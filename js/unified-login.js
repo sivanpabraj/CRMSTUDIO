@@ -253,6 +253,18 @@ const UnifiedLogin = {
     }
     const resolved = this.resolvePhone(phone)
 
+    // ورود پرسنل دو مدرک مستقل می‌خواهد: کد ورود یکپارچه و کد دعوت پرتال.
+    // تأیید کد عمومی نباید حساب دعوت‌شده را خودکار فعال کند.
+    if (resolved.user && typeof PortalInvite !== 'undefined' &&
+        PortalInvite.needsOtpVerification(resolved.user)) {
+      pending.portalVerify = true
+      pending.userId = resolved.user.id
+      pending.kind = resolved.kind
+      pending.label = resolved.label
+      this._setPending(pending)
+      return { ok: true, next: 'portal_verify', resolved, pending }
+    }
+
     if (resolved.kind === 'guest') {
       pending.verified = true
       this._setPending(pending)
@@ -281,21 +293,6 @@ const UnifiedLogin = {
 
     const user = resolved.user || DB.find('users', u => u.id === resolved.user?.id)
     if (!user) return { ok: false, error: 'کاربر یافت نشد.' }
-
-    // یک مرحله: تأیید پیامک ورود = فعال‌سازی پرتال (بدون کد دوم)
-    if (typeof PortalInvite !== 'undefined' && PortalInvite.needsOtpVerification(user)) {
-      try {
-        await SecureDB.update('users', user.id, {
-          portalStatus: 'active',
-          portalOtp: {
-            ...(user.portalOtp || {}),
-            verified: true,
-            verifiedAt: new Date().toISOString(),
-            via: 'unified_sms_login'
-          }
-        })
-      } catch { /* */ }
-    }
 
     return this.finishStaffLogin(resolved, user)
   },

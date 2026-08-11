@@ -55,7 +55,7 @@ const SMAttendance = {
   },
 
   _records() {
-    return DB.get('attendance') || []
+    return DB.active('attendance') || []
   },
 
   _forMonth(jy, jm, personId) {
@@ -114,12 +114,12 @@ const SMAttendance = {
     this._initView()
     el.innerHTML = `
       ${SMUI.sectionHead('حضور و غیاب', 'ثبت ورود و خروج · تقویم شمسی · گزارش ماهانه', `
-        <button type="button" class="sm-btn sm-btn-ghost" onclick="SMAttendance.add()"><i class="fas fa-plus"></i> ثبت دستی</button>
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMAttendance.quickCheckIn()"><i class="fas fa-sign-in-alt"></i> ورود امروز</button>`)}
+        <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMAttendance.add')}><i class="fas fa-plus"></i> ثبت دستی</button>
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMAttendance.quickCheckIn')}><i class="fas fa-sign-in-alt"></i> ورود امروز</button>`)}
       ${SMUI.tabs([
-        { id: 'calendar', fa: 'تقویم', en: 'Calendar', icon: 'fa-calendar-days', onclick: "SMAttendance.setTab('calendar')" },
-        { id: 'list', fa: 'لیست', en: 'List', icon: 'fa-list', onclick: "SMAttendance.setTab('list')" },
-        { id: 'stats', fa: 'آمار', en: 'Stats', icon: 'fa-chart-bar', onclick: "SMAttendance.setTab('stats')" }
+        { id: 'calendar', fa: 'تقویم', en: 'Calendar', icon: 'fa-calendar-days', fn: 'SMAttendance.setTab', args: ['calendar'] },
+        { id: 'list', fa: 'لیست', en: 'List', icon: 'fa-list', fn: 'SMAttendance.setTab', args: ['list'] },
+        { id: 'stats', fa: 'آمار', en: 'Stats', icon: 'fa-chart-bar', fn: 'SMAttendance.setTab', args: ['stats'] }
       ], this._tab)}
       <div style="margin-top:16px">${this._renderTab()}</div>`
   },
@@ -130,11 +130,11 @@ const SMAttendance = {
     return this._calendarHtml()
   },
 
-  _personFilterHtml(onchange) {
-    const personnel = DB.get('personnel').filter(p => p.status !== 'inactive')
+  _personFilterHtml() {
+    const personnel = DB.active('personnel').filter(p => p.status !== 'inactive')
     return `<div class="sm-att-filter">
-      <label class="sm-label">پرسنل</label>
-      <select class="sm-input" id="att-filter-person" onchange="${onchange}">
+      <label class="sm-label" for="att-filter-person">پرسنل</label>
+      <select class="sm-input" id="att-filter-person" data-sm-change-fn="SMAttendance.onPersonFilterChange" data-sm-args='[]'>
         <option value="">همه پرسنل</option>
         ${personnel.map(p => `<option value="${p.id}"${this._filterPersonId === p.id ? ' selected' : ''}>${SM.esc(p.name)}</option>`).join('')}
       </select>
@@ -149,11 +149,11 @@ const SMAttendance = {
 
     return `<div class="sm-att-layout">
       <div class="sm-att-side">
-        ${this._personFilterHtml('SMAttendance.setPersonFilter(this.value)')}
+        ${this._personFilterHtml()}
         <div class="sm-cal-nav">
-          <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="SMAttendance.prevMonth()"><i class="fas fa-chevron-right"></i></button>
+          <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" ${SMEvents.attrs('SMAttendance.prevMonth')}><i class="fas fa-chevron-right"></i></button>
           <strong>${Utils.jalaliMonthName(jm)} ${jy.toLocaleString('fa-IR')}</strong>
-          <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="SMAttendance.nextMonth()"><i class="fas fa-chevron-left"></i></button>
+          <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" ${SMEvents.attrs('SMAttendance.nextMonth')}><i class="fas fa-chevron-left"></i></button>
         </div>
         ${this._renderGrid(jy, jm, map)}
         <div class="sm-att-legend">${Object.entries(this.STATUS).map(([_k, v]) =>
@@ -191,7 +191,7 @@ const SMAttendance = {
 
       html += `<button type="button" class="sm-cal-day sm-att-day${isToday ? ' is-today' : ''}${isSelected ? ' is-selected' : ''}${count ? ' has-events' : ''}"
         style="${meta ? `--cal-accent:${meta.color}` : ''}"
-        onclick="SMAttendance.pickDay('${date}')">
+        ${SMEvents.attrs('SMAttendance.pickDay', [date])}>
         <span class="sm-cal-day-num">${d.toLocaleString('fa-IR')}</span>
         ${count ? `<span class="sm-att-day-badge">${count.toLocaleString('fa-IR')}</span>` : ''}
       </button>`
@@ -211,7 +211,7 @@ const SMAttendance = {
           <strong>${SM.esc(title)}</strong>
           <span class="sm-cal-day-panel-sub">${recs.length ? `${recs.length.toLocaleString('fa-IR')} ثبت` : 'ثبت نشده'}</span>
         </div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMAttendance.add('${date}')"><i class="fas fa-plus"></i> ثبت</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMAttendance.add', [date])}><i class="fas fa-plus"></i> ثبت</button>
       </div>
       ${recs.length ? `<div class="sm-att-rec-list">${recs.map(r => this._recordCard(r)).join('')}</div>` :
         `<div class="sm-cal-empty-day">برای این روز حضور ثبت نشده — پرسنل را انتخاب و وضعیت را مشخص کنید.</div>`}
@@ -234,8 +234,8 @@ const SMAttendance = {
         ${r.notes ? `<span><i class="fas fa-sticky-note"></i> ${SM.esc(r.notes)}</span>` : ''}
       </div>
       <div class="sm-att-rec-actions">
-        ${!r.checkOut && r.status !== 'absent' && r.status !== 'leave' ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMAttendance.checkOut('${r.id}')">ثبت خروج</button>` : ''}
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAttendance.edit('${r.id}')">ویرایش</button>
+        ${!r.checkOut && r.status !== 'absent' && r.status !== 'leave' ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMAttendance.checkOut', [r.id])}>ثبت خروج</button>` : ''}
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMAttendance.edit', [r.id])}>ویرایش</button>
       </div>
     </div>`
   },
@@ -246,7 +246,7 @@ const SMAttendance = {
     if (this._filterPersonId) recs = recs.filter(r => r.personnelId === this._filterPersonId)
     if (q) recs = recs.filter(r => JSON.stringify(r).toLowerCase().includes(q))
 
-    return `${this._personFilterHtml('SMAttendance.setPersonFilter(this.value); SM.navigate(\'attendance\')')}
+    return `${this._personFilterHtml()}
       ${SMUI.moduleSearch('attendance', 'جستجو — نام، تاریخ، یادداشت...')}
       ${recs.length ? `<div class="sm-att-rec-list">${recs.slice(0, 80).map(r => this._recordCard(r)).join('')}</div>` :
         SMUI.empty('fa-user-clock', 'ثبت حضور وجود ندارد', 'از تقویم یا «ثبت دستی» استفاده کنید')}`
@@ -255,13 +255,13 @@ const SMAttendance = {
   _statsHtml() {
     const t = Utils.parseJalaliToday()
     const stats = this._monthStats(t.jy, t.jm, this._filterPersonId || null)
-    const personnel = DB.get('personnel').filter(p => p.status === 'active')
+    const personnel = DB.active('personnel').filter(p => p.status === 'active')
     const perPerson = personnel.map(p => {
       const s = this._monthStats(t.jy, t.jm, p.id)
       return { name: p.name, id: p.id, ...s }
     }).filter(x => x.total > 0).sort((a, b) => b.present - a.present)
 
-    return `${this._personFilterHtml('SMAttendance.setPersonFilter(this.value); SM.navigate(\'attendance\')')}
+    return `${this._personFilterHtml()}
       ${SMUI.statCards([
         { label: 'حاضر این ماه', value: stats.present, color: '#34C759' },
         { label: 'غایب', value: stats.absent, color: '#FF3B30' },
@@ -270,7 +270,7 @@ const SMAttendance = {
       ])}
       <div class="sm-card" style="margin-top:16px"><div class="sm-card-head"><div class="sm-card-title">خلاصه پرسنل — ${Utils.jalaliMonthName(t.jm)}</div></div>
         <div class="sm-card-body">${perPerson.length ? perPerson.map(p => `
-          <div class="sm-att-person-stat" onclick="SMAttendance.setPersonFilter('${p.id}'); SMAttendance.setTab('calendar')">
+          <div class="sm-att-person-stat" ${SMEvents.elAttrs('SMAttendance.openPersonCalendar', [p.id])} role="button" tabindex="0">
             <strong>${SM.esc(p.name)}</strong>
             <span>حاضر ${p.present.toLocaleString('fa-IR')} · غایب ${p.absent.toLocaleString('fa-IR')} · ${Math.floor(p.totalMins / 60).toLocaleString('fa-IR')} ساعت</span>
           </div>`).join('') : SMUI.empty('fa-users', 'این ماه ثبت نشده')}</div></div>`
@@ -278,6 +278,16 @@ const SMAttendance = {
 
   setPersonFilter(id) {
     this._filterPersonId = id || ''
+  },
+
+  onPersonFilterChange(value) {
+    this.setPersonFilter(value)
+    SM.navigate('attendance')
+  },
+
+  openPersonCalendar(id) {
+    this.setPersonFilter(id)
+    this.setTab('calendar')
   },
 
   prevMonth() {
@@ -329,7 +339,7 @@ const SMAttendance = {
 
   add(presetDate) {
     const date = presetDate || this._selectedDate || Utils.todayJalali()
-    const personnel = DB.get('personnel').filter(p => p.status !== 'inactive')
+    const personnel = DB.active('personnel').filter(p => p.status !== 'inactive')
     const statusOpts = Object.entries(this.STATUS).map(([k, v]) => ({ value: k, label: v.label }))
     SMUI.modal('ثبت حضور و غیاب', `
       ${SMUI.formField('پرسنل', 'att-person', {
@@ -371,7 +381,7 @@ const SMAttendance = {
   edit(id) {
     const r = DB.find('attendance', x => x.id === id)
     if (!r) return
-    const personnel = DB.get('personnel')
+    const personnel = DB.active('personnel')
     const statusOpts = Object.entries(this.STATUS).map(([k, v]) => ({ value: k, label: v.label }))
     SMUI.modal('ویرایش حضور', `
       ${SMUI.formField('پرسنل', 'att-person', { type: 'select', value: r.personnelId || '', options: personnel.map(p => ({ value: p.id, label: p.name })) })}
@@ -430,7 +440,7 @@ const SMAttendance = {
 
   reportSummary(jy, jm) {
     const stats = this._monthStats(jy, jm, null)
-    const personnel = DB.get('personnel').filter(p => p.status === 'active')
+    const personnel = DB.active('personnel').filter(p => p.status === 'active')
     const withRecords = personnel.filter(p => this._forMonth(jy, jm, p.id).length > 0).length
     return {
       ...stats,

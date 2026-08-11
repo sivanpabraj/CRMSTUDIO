@@ -103,6 +103,23 @@
 
       <div class="section-sep"></div>
 
+      <h3 class="block-title">نوع پروژه یا قرارداد</h3>
+      <p class="block-desc">برای یک مشتری می‌توانید چند نوع خدمت را هم‌زمان انتخاب کنید.</p>
+      <div class="contract-type-grid" id="contract-type-grid">
+        <label><input type="checkbox" name="contract-type" value="عروسی" checked onchange="onContractTypesChange()"/> عروسی</label>
+        <label><input type="checkbox" name="contract-type" value="عقد" onchange="onContractTypesChange()"/> عقد</label>
+        <label><input type="checkbox" name="contract-type" value="فرمالیته" onchange="onContractTypesChange()"/> فرمالیته</label>
+        <label><input type="checkbox" name="contract-type" value="کلیپ" onchange="onContractTypesChange()"/> کلیپ</label>
+        <label><input type="checkbox" name="contract-type" value="آلبوم" onchange="onContractTypesChange()"/> آلبوم</label>
+        <label><input type="checkbox" name="contract-type" value="صنعتی" onchange="onContractTypesChange()"/> صنعتی</label>
+      </div>
+      <div id="industrial-client-fields" class="form-grid-2" hidden>
+        <div class="fg"><label>نام مشتری / مجموعه</label><input id="client-name" class="fi" type="text" placeholder="نام شخص، برند یا شرکت"/></div>
+        <div class="fg"><label>شماره تماس مشتری</label><input id="client-phone" class="fi digit-field" type="tel" inputmode="numeric" maxlength="11" placeholder="۰۹۱۲۱۲۳۴۵۶۷"/></div>
+      </div>
+
+      <div class="section-sep"></div>
+
       <div class="studio-row">
         <div class="fg flex-1"><label>نام استودیو</label><input id="studio-name" class="fi" type="text" placeholder="نام استودیو..." readonly title="از تنظیمات استودیو"/></div>
         <div class="fg flex-1"><label>شماره قرارداد <small class="field-hint">(تاریخ مراسم + ردیف)</small></label><input id="contract-num" class="fi ltr" type="text" dir="ltr" readonly placeholder="پس از انتخاب تاریخ مراسم" title="مثال: 040715-01"/></div>
@@ -450,11 +467,13 @@
 <script src="js/utils.js" defer></script>
 <script src="js/roles.js" defer></script>
 <script src="js/db.js" defer></script>
+<script src="js/secure-db.js" defer></script>
 <script src="js/finance-sync.js" defer></script>
 <script src="js/sms.js" defer></script>
 <script src="js/package-catalog.js" defer></script>
 <script src="js/jalali-picker.js" defer></script>
 <script src="js/lib/signed-proof.js" type="module" defer></script>
+<script src="js/session-sign.js" defer></script>
 <script src="js/auth.js" defer></script>
 <script src="js/page-nav.js" defer></script>
 <script src="js/bootstrap.js" defer></script>

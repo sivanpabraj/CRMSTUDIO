@@ -9,3 +9,4 @@ dist/
 .backups/
 *.tar.gz
 supabase/.temp/
+test-results/

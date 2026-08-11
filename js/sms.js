@@ -22,7 +22,7 @@ const SmsProvider = {
     return !!(cfg.provider && cfg.apiKey)
   },
 
-  async sendStudio(phones, text) {
+  async sendStudio(phones, text, purpose = 'generic') {
     const cfg = this.getStudioConfig()
     const list = (Array.isArray(phones) ? phones : [phones])
       .map(p => Utils.normalizePhone(p))
@@ -30,7 +30,16 @@ const SmsProvider = {
     if (!list.length) return { ok: false, error: 'شماره موبایل معتبر نیست' }
 
     if (cfg.proxyUrl) {
-      return this._sendViaProxy(cfg.proxyUrl, list, text)
+      return this._sendViaProxy(cfg.proxyUrl, list, text, purpose)
+    }
+
+    // Production / non-localhost: client-side API keys are forbidden — proxy only
+    const local = typeof AppConfig !== 'undefined' && AppConfig.isLocalDev?.()
+    if (!local) {
+      return {
+        ok: false,
+        error: 'در محیط واقعی فقط پراکسی Edge (send-sms) مجاز است. smsProxyUrl را در تنظیمات بگذارید.'
+      }
     }
 
     const secure = this._isSecureEnv()
@@ -43,17 +52,28 @@ const SmsProvider = {
     return this.send(cfg.provider, { apiKey: cfg.apiKey, lineNumber: cfg.lineNumber, username: cfg.username }, list, text)
   },
 
-  async _sendViaProxy(proxyUrl, phones, text) {
+  async _sendViaProxy(proxyUrl, phones, text, purpose = 'generic') {
     try {
       const headers = { 'Content-Type': 'application/json' }
+      const studioId = typeof Cloud !== 'undefined'
+        ? String(Cloud.resolvedConfig?.().studioId || '')
+        : ''
+      if (!studioId) return { ok: false, error: 'شناسه استودیو برای ارسال پیامک موجود نیست' }
       if (typeof Cloud !== 'undefined') {
         const sess = await Cloud.session?.()
         if (sess?.access_token) headers.Authorization = `Bearer ${sess.access_token}`
       }
+      const idempotencyKey = `sms:${purpose}:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`}`
       const res = await fetch(String(proxyUrl).replace(/\/+$/, ''), {
         method: 'POST',
         headers,
-        body: JSON.stringify({ phones, text })
+        body: JSON.stringify({
+          studioId,
+          idempotencyKey,
+          phones,
+          text,
+          purpose: purpose || 'generic'
+        })
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) return { ok: false, error: data.error || `proxy ${res.status}` }

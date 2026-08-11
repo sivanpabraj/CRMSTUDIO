@@ -7,6 +7,11 @@ const SMCalendar = {
 
   EVENT_TYPES: {
     wedding: { label: 'عروسی', color: '#E68619', icon: 'fa-heart' },
+    engagement: { label: 'عقد', color: '#EC4899', icon: 'fa-rings-wedding' },
+    formalite: { label: 'فرمالیته', color: '#8B5CF6', icon: 'fa-camera-retro' },
+    clip: { label: 'کلیپ', color: '#0EA5E9', icon: 'fa-film' },
+    album: { label: 'آلبوم', color: '#14B8A6', icon: 'fa-book-open' },
+    industrial: { label: 'صنعتی', color: '#64748B', icon: 'fa-industry' },
     booking: { label: 'رزرو / مشاوره', color: '#0071E3', icon: 'fa-calendar-check' },
     appointment: { label: 'نوبت', color: '#00A3BF', icon: 'fa-clock' },
     reminder: { label: 'یادآوری شخصی', color: '#34C759', icon: 'fa-bell' },
@@ -27,6 +32,16 @@ const SMCalendar = {
     return b && g ? `${b} و ${g}` : b || g || '—'
   },
 
+  _contractEventType(contract) {
+    const raw = String(contract.type || contract.contractType || 'عروسی').toLowerCase()
+    if (raw.includes('عقد') || raw.includes('engagement')) return 'engagement'
+    if (raw.includes('فرمالیته') || raw.includes('formalite')) return 'formalite'
+    if (raw.includes('صنعتی') || raw.includes('industrial')) return 'industrial'
+    if (raw.includes('آلبوم') || raw.includes('album')) return 'album'
+    if (raw.includes('کلیپ') || raw.includes('clip')) return 'clip'
+    return 'wedding'
+  },
+
   _eventsForMonth(jy, jm) {
     const map = {}
     const add = (date, ev) => {
@@ -38,14 +53,15 @@ const SMCalendar = {
       map[key].push(ev)
     }
 
-    DB.get('contracts').forEach(c => {
+    DB.active('contracts').forEach(c => {
       if (c.status === 'cancelled') return
       const d = c.eventDate || c.date
       if (!d) return
+      const eventType = this._contractEventType(c)
       add(d, {
         id: `contract-${c.id}`,
-        type: 'wedding',
-        title: `عروسی ${this._couple(c)}`,
+        type: eventType,
+        title: `${this.EVENT_TYPES[eventType].label} ${this._couple(c)}`,
         date: Utils.normJalali(d),
         time: c.time || '',
         detail: c.venue ? `تالار: ${c.venue}` : '',
@@ -56,7 +72,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('contracts').forEach(c => {
+    DB.active('contracts').forEach(c => {
       if (c.status === 'cancelled') return
       const ed = Utils.parseJalali(c.eventDate || c.date)
       if (!ed) return
@@ -78,7 +94,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('bookings').forEach(b => {
+    DB.active('bookings').forEach(b => {
       if (!b.date) return
       add(b.date, {
         id: `booking-${b.id}`,
@@ -94,7 +110,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('appointments').forEach(a => {
+    DB.active('appointments').forEach(a => {
       if (!a.date) return
       add(a.date, {
         id: `appt-${a.id}`,
@@ -110,7 +126,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('cheques').forEach(ch => {
+    DB.active('cheques').forEach(ch => {
       if (!ch.dueDate || ch.status === 'passed') return
       add(ch.dueDate, {
         id: `cheque-${ch.id}`,
@@ -126,7 +142,7 @@ const SMCalendar = {
       })
     })
 
-    DB.get('calendarReminders').forEach(r => {
+    DB.active('calendarReminders').forEach(r => {
       if (!r.date) return
       const rd = Utils.parseJalali(r.date)
       if (!rd) return
@@ -180,7 +196,7 @@ const SMCalendar = {
   },
 
   _dominantType(events) {
-    const order = ['wedding', 'cheque', 'anniversary', 'booking', 'reminder', 'appointment']
+    const order = ['wedding', 'engagement', 'formalite', 'industrial', 'clip', 'album', 'cheque', 'anniversary', 'booking', 'reminder', 'appointment']
     for (const t of order) {
       if (events.some(e => e.type === t)) return t
     }
@@ -218,7 +234,7 @@ const SMCalendar = {
       html += `<button type="button" class="sm-cal-day${isToday ? ' is-today' : ''}${isSelected ? ' is-selected' : ''}${events.length ? ' has-events' : ''}"
         style="${meta ? `--cal-accent:${meta.color}` : ''}"
         data-date="${date}"
-        onclick="SMCalendar.pickDay('${date}')" aria-label="${date}">
+        ${SMEvents.attrs('SMCalendar.pickDay', [date])} aria-label="${date}">
         <span class="sm-cal-day-num">${d.toLocaleString('fa-IR')}</span>
         ${events.length ? `<span class="sm-cal-dots">${dots}</span>` : ''}
       </button>`
@@ -230,6 +246,7 @@ const SMCalendar = {
 
   _renderDayPanel(date) {
     const events = this.eventsForDate(date)
+    const conflicts = this.personnelConflictsForDate(date)
     const p = Utils.parseJalali(date)
     const title = p ? `${p.jd.toLocaleString('fa-IR')} ${Utils.jalaliMonthName(p.jm)} ${p.jy.toLocaleString('fa-IR')}` : date
 
@@ -239,11 +256,61 @@ const SMCalendar = {
           <strong>${SM.esc(title)}</strong>
           <span class="sm-cal-day-panel-sub">${events.length ? `${events.length.toLocaleString('fa-IR')} رویداد` : 'رویدادی ثبت نشده'}</span>
         </div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMCalendar.addReminder('${date}')"><i class="fas fa-plus"></i> یادآوری</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMCalendar.addReminder', [date])}><i class="fas fa-plus"></i> یادآوری</button>
       </div>
+      ${conflicts.length ? `<div class="sm-cal-conflict-alert"><i class="fas fa-triangle-exclamation"></i><div><strong>تداخل تخصیص پرسنل</strong>${conflicts.map(c => `<p>${SM.esc(c.person)} در ${c.count.toLocaleString('fa-IR')} پروژه این روز ثبت شده است.</p>`).join('')}</div></div>` : ''}
       ${events.length ? `<div class="sm-cal-event-list">${events.map(e => this._eventCard(e)).join('')}</div>` :
         `<div class="sm-cal-empty-day">روی این روز چیزی نیست — یادآوری شخصی (چک، دادگاه، قرار…) اضافه کنید.</div>`}
     </div>`
+  },
+
+  personnelConflictsForDate(date) {
+    const normalized = Utils.normJalali(date)
+    const assignments = new Map()
+    ;(DB.get('contracts') || []).filter(c => c.status !== 'cancelled' &&
+      Utils.normJalali(c.eventDate || c.date) === normalized).forEach(contract => {
+      const rows = Object.values(contract.staffAssignments || contract.staff || {})
+      rows.forEach(row => {
+        const id = typeof row === 'object' ? (row.id || row.name) : row
+        const name = typeof row === 'object' ? (row.name || row.id) : row
+        if (!id && !name) return
+        const key = String(id || name)
+        const current = assignments.get(key) || { person: String(name || id), contracts: [] }
+        if (!current.contracts.some(item => String(item.id) === String(contract.id))) current.contracts.push(contract)
+        assignments.set(key, current)
+      })
+    })
+    return [...assignments.values()]
+      .map(row => {
+        const overlapping = new Set()
+        row.contracts.forEach((first, index) => row.contracts.slice(index + 1).forEach(second => {
+          if (this._contractsOverlap(first, second)) {
+            overlapping.add(String(first.id))
+            overlapping.add(String(second.id))
+          }
+        }))
+        return { person: row.person, count: overlapping.size }
+      })
+      .filter(row => row.count > 1)
+  },
+
+  _timeMinutes(value) {
+    const match = String(value || '').match(/^(\d{1,2}):(\d{2})$/)
+    if (!match) return null
+    const hours = Number(match[1]), minutes = Number(match[2])
+    if (hours > 23 || minutes > 59) return null
+    return hours * 60 + minutes
+  },
+
+  _contractsOverlap(first, second) {
+    const startA = this._timeMinutes(first.time || first.startTime)
+    const startB = this._timeMinutes(second.time || second.startTime)
+    if (startA == null || startB == null) return true
+    const durationA = Math.max(1, Number(first.durationMinutes) || 240)
+    const durationB = Math.max(1, Number(second.durationMinutes) || 240)
+    const endA = this._timeMinutes(first.endTime) ?? startA + durationA
+    const endB = this._timeMinutes(second.endTime) ?? startB + durationB
+    return startA < endB && startB < endA
   },
 
   _eventCard(e) {
@@ -251,15 +318,15 @@ const SMCalendar = {
     const time = e.time ? `<span class="sm-cal-ev-time" dir="ltr">${SM.esc(e.time)}</span>` : ''
     let action = ''
     if (e.src === 'contract') {
-      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMModules.contracts.view('${e.srcId}')">جزئیات عروسی</button>`
+      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMModules.contracts.view', [e.srcId])}>جزئیات عروسی</button>`
     } else if (e.src === 'booking') {
-      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMModules.bookings.view('${e.srcId}')">مشاهده</button>`
+      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMModules.bookings.view', [e.srcId])}>مشاهده</button>`
     } else if (e.src === 'appointment') {
-      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMCalendar.editAppointment('${e.srcId}')">ویرایش</button>`
+      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMCalendar.editAppointment', [e.srcId])}>ویرایش</button>`
     } else if (e.src === 'reminder') {
-      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMCalendar.editReminder('${e.srcId}')">ویرایش</button>`
+      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMCalendar.editReminder', [e.srcId])}>ویرایش</button>`
     } else if (e.src === 'cheque') {
-      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('accounting')">حسابداری</button>`
+      action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SM.navigate', ["accounting"])}>حسابداری</button>`
     }
 
     return `<div class="sm-cal-event" style="--cal-accent:${meta.color}">
@@ -283,15 +350,15 @@ const SMCalendar = {
 
     el.innerHTML = `
       ${SMUI.sectionHead('تقویم شمسی', 'عروسی‌ها، سالگردها، چک‌ها و یادآوری‌های شخصی', `
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMCalendar.addReminder()"><i class="fas fa-bell"></i> یادآوری جدید</button>`)}
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMCalendar.addReminder')}><i class="fas fa-bell"></i> یادآوری جدید</button>`)}
       ${SMUI.moduleSearch('calendar', 'جستجو در تقویم — نام مراسم، یادآوری...')}
       <div class="sm-cal-wrap">
         <div class="sm-cal-main sm-card">
           <div class="sm-cal-toolbar">
-            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMCalendar.prevMonth()"><i class="fas fa-chevron-right"></i></button>
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMCalendar.prevMonth')}><i class="fas fa-chevron-right"></i></button>
             <div class="sm-cal-month-label">${SM.esc(monthLabel)}</div>
-            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMCalendar.nextMonth()"><i class="fas fa-chevron-left"></i></button>
-            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMCalendar.goToday()">امروز</button>
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMCalendar.nextMonth')}><i class="fas fa-chevron-left"></i></button>
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMCalendar.goToday')}>امروز</button>
           </div>
           ${this._renderLegend()}
           ${this._renderGrid(jy, jm, eventMap)}

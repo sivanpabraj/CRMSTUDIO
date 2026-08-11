@@ -1,12 +1,11 @@
 /* Studio M — Service Worker (offline shell + asset cache) */
-const CACHE = 'studio-m-v23'
+const CACHE = 'studio-m-v24'
 
 const ASSETS = [
   './site.html',
   './start.html',
   './join.html',
   './index.html',
-  './admin.html',
   './contract.html',
   './customer.html',
   './studio-m/index.html',

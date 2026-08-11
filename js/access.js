@@ -93,17 +93,6 @@ const Access = {
     return this.isManagement(user)
   },
 
-  canAccessLegacyAdmin(user) {
-    user = user || (typeof Auth !== 'undefined' ? Auth.getUser() : null)
-    if (!user) return false
-    if (this.isSystemAdmin(user) || this.isStudioManager(user)) return true
-    if (this.isStaffOnly(user)) return false
-    const roles = this.roles(user)
-    return roles.some(r => normalizeRole(r) === 'office_secretary') ||
-      roleHasAnyPermission(roles, 'view_all') ||
-      roleHasAnyPermission(roles, 'calendar')
-  },
-
   getRequestTargetRoles(type) {
     return [...(this.REQUEST_TYPE_ROLES[type] || ['coordinator'])]
   },
@@ -140,7 +129,10 @@ const Access = {
   },
 
   filterVisibleRequests(user, list) {
-    const items = list || (typeof DB !== 'undefined' ? DB.get('customerRequests') : []) || []
+    const raw = list || (typeof DB !== 'undefined'
+      ? (typeof DB.active === 'function' ? DB.active('customerRequests') : DB.get('customerRequests'))
+      : []) || []
+    const items = raw.filter(r => r && !r._deleted)
     return items.filter(r => this.canViewCustomerRequest(user, r))
   },
 

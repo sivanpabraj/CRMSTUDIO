@@ -10,7 +10,7 @@ const AppConfig = {
   SW_CACHE: 'studio-m-v23',
 
   DB_KEY: 'studio_db_v5',
-  DB_VERSION: 20,
+  DB_VERSION: 23,
   IDB_NAME: 'talar_studio_v5',
   IDB_STORE: 'main',
   IDB_BACKUP_STORE: 'backups',
@@ -26,9 +26,11 @@ const AppConfig = {
   BACKUP_PREFIX: 'studio_bu_',
 
   MIN_PASSWORD_LENGTH: 8,
-  /** فقط برای seed تست محلی — در production رمز تصادفی ساخته می‌شود */
-  INITIAL_ADMIN_PHONE: '09121000000',
-  INITIAL_ADMIN_PASSWORD: '12345678',
+  /** هیچ credential ثابتی در کد نگهداری نمی‌شود. */
+  generateBootstrapPhone() {
+    const bytes = crypto.getRandomValues(new Uint8Array(9))
+    return `09${Array.from(bytes, value => value % 10).join('')}`
+  },
 
   isLocalDev() {
     try {
