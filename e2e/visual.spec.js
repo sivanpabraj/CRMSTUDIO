@@ -14,6 +14,17 @@ async function createStudio(page) {
   await page.waitForURL(/studio-m\//, { timeout: 20_000 })
   await expect(page.locator('#sm-content')).toBeVisible()
 
+  const onboarding = page.locator('#sm-onboarding-overlay')
+  if (await onboarding.isVisible()) {
+    await page.locator('#onb-address').fill('سنندج، بلوار نمونه')
+    await page.locator('#onb-keep-pw').uncheck()
+    await page.locator('#onb-pw-old').fill(PASSWORD)
+    await page.locator('#onb-pw-new').fill(`${PASSWORD}x`)
+    await page.locator('#onb-pw2').fill(`${PASSWORD}x`)
+    await page.getByRole('button', { name: /ذخیره و ورود به پنل/ }).click()
+    await expect(onboarding).toBeHidden()
+  }
+
   await page.evaluate(async () => {
     PackageCatalog.ensureDefaults()
     const today = Utils.todayJalali()
