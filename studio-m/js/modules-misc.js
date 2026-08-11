@@ -14,6 +14,7 @@ SMModules.files = {
             <div style="font-weight:700;font-size:.85rem;word-break:break-all">${SM.esc(f.name)}</div>
             <div style="font-size:.72rem;color:var(--sm-text-muted)">${SM.esc(f.size || '')} — ${SM.esc(f.createdAt || '')}</div>
             ${f.storagePath ? SMUI.badge('ابر', 'success') : ''}
+            ${f.storagePath ? `<button class="sm-btn sm-btn-sm sm-btn-ghost" style="margin-top:8px" ${SMEvents.attrs('SMModules.files.openSecure', [f.id])}><i class="fas fa-eye"></i> مشاهده امن</button>` : ''}
             <button class="sm-btn sm-btn-sm sm-btn-danger" style="margin-top:8px" ${SMEvents.attrs('SMModules.files.remove', [f.id])}>${SM.t('delete')}</button>
           </div>
         </div>`).join('')}</div>` : SMUI.empty('fa-folder-open', SM.t('no_data'))}`
@@ -47,7 +48,6 @@ SMModules.files = {
         data: '',
         storagePath: up.storagePath,
         mime: up.mime,
-        cloudUrl: up.url || '',
         createdAt: Utils.todayJalali()
       })
       return
@@ -66,6 +66,13 @@ SMModules.files = {
     }
     reader.onerror = () => SM.toast('خطا در خواندن فایل', 'error')
     reader.readAsDataURL(file)
+  },
+  async openSecure(id) {
+    const asset = DB.find('fileAssets', file => file.id === id)
+    if (!asset?.storagePath || typeof FileStorage === 'undefined') return SM.toast('فایل ابری یافت نشد', 'error')
+    const link = await FileStorage.signedUrl(asset.storagePath, 300)
+    if (!link.ok) return SM.toast(link.error, 'error')
+    window.open(link.url, '_blank', 'noopener,noreferrer')
   },
   async remove(id) {
     if (!confirm(SM.t('delete') + '?')) return

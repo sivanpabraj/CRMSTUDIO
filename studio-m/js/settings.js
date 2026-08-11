@@ -1006,7 +1006,12 @@ const SMSettings = {
       if (!v.ok) return SM.toast(v.error || 'رمز اشتباه', 'error')
 
       const text = await file.text()
-      const result = await DB.importJSON(text)
+      const decoded = typeof BackupService !== 'undefined'
+        ? await BackupService.decode(text)
+        : { ok: true, payload: text, legacy: true }
+      if (!decoded.ok) return SM.toast(decoded.error || 'پشتیبان نامعتبر است', 'error')
+      if (decoded.legacy && !confirm('این پشتیبان قدیمی و بدون checksum است. بازیابی ادامه یابد؟')) return
+      const result = await DB.importJSON(decoded.payload)
       if (result.ok) {
         if (typeof DB.log === 'function') DB.log('backup_restore', file.name || 'restore.json')
         SM.toast('بازیابی شد — بارگذاری مجدد', 'success')

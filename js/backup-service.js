@@ -26,13 +26,35 @@ const BackupService = {
     return (await this.checksum(json)) === String(expectedChecksum).toLowerCase()
   },
 
+  async envelope(json) {
+    return JSON.stringify({
+      format: 'studio-m-backup-v1',
+      createdAt: new Date().toISOString(),
+      checksum: await this.checksum(json),
+      payload: String(json || '')
+    })
+  },
+
+  async decode(text) {
+    let parsed
+    try { parsed = JSON.parse(text) } catch { return { ok: false, error: 'فایل JSON معتبر نیست' } }
+    if (parsed?.format !== 'studio-m-backup-v1') {
+      return { ok: true, payload: text, verified: false, legacy: true }
+    }
+    if (typeof parsed.payload !== 'string' || !await this.verify(parsed.payload, parsed.checksum)) {
+      return { ok: false, error: 'صحت پشتیبان تأیید نشد؛ فایل ناقص یا دست‌کاری شده است' }
+    }
+    return { ok: true, payload: parsed.payload, verified: true, legacy: false }
+  },
+
   async run(label = 'manual') {
     try {
       const json = DB.exportJSON()
       const ts = Date.now()
       const key = `${AppConfig.BACKUP_PREFIX}${ts}`
       const checksum = await this.checksum(json)
-      await DB.saveBackup(key, json)
+      const archive = await this.envelope(json)
+      await DB.saveBackup(key, archive)
       const now = new Date().toISOString()
       const prev = this.settings()
       const jalaliAt = typeof Utils !== 'undefined' ? Utils.formatJalaliDateTime(ts) : Utils.todayJalali()
@@ -47,7 +69,7 @@ const BackupService = {
       await DB.flush?.()
 
       if (prev.backupAutoDownload || label === 'manual') {
-        this._download(json, key, label)
+        this._download(archive, key, label)
       }
 
       if (typeof SM !== 'undefined' && SM.log) SM.log('backup_auto', `${label} — ${key}`)

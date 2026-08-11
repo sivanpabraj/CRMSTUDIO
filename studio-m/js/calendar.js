@@ -329,7 +329,9 @@ const SMCalendar = {
       action = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SM.navigate', ["accounting"])}>حسابداری</button>`
     }
 
-    return `<div class="sm-cal-event" style="--cal-accent:${meta.color}">
+    const movable = ['contract', 'booking', 'appointment', 'reminder'].includes(e.src)
+    if (movable) action += `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMCalendar.moveDialog', [e.src, e.srcId, e.date])}><i class="fas fa-calendar-arrow-up"></i> انتقال</button>`
+    return `<div class="sm-cal-event${movable ? ' is-draggable' : ''}" style="--cal-accent:${meta.color}"${movable ? ` draggable="true" data-cal-src="${SM.esc(e.src)}" data-cal-id="${SM.esc(e.srcId)}"` : ''}>
       <div class="sm-cal-event-icon"><i class="fas ${meta.icon}"></i></div>
       <div class="sm-cal-event-body">
         <div class="sm-cal-event-top">${SMUI.badge(meta.label, 'muted')} ${time}</div>
@@ -369,6 +371,75 @@ const SMCalendar = {
         <i class="fas fa-mobile-screen"></i>
         هر صبح (در صورت فعال بودن SMS) برای رویدادهای امروز — عروسی، سالگرد، چک و یادآوری‌های شخصی — پیامک یادآوری ارسال می‌شود.
       </div>`
+    Promise.resolve().then(() => this.bindDragDrop())
+  },
+
+  bindDragDrop() {
+    document.querySelectorAll('.sm-cal-event.is-draggable').forEach(card => {
+      if (card.dataset.dragBound === 'true') return
+      card.dataset.dragBound = 'true'
+      card.addEventListener('dragstart', event => {
+        event.dataTransfer.effectAllowed = 'move'
+        event.dataTransfer.setData('application/json', JSON.stringify({
+          src: card.dataset.calSrc,
+          id: card.dataset.calId
+        }))
+        card.classList.add('is-dragging')
+      })
+      card.addEventListener('dragend', () => card.classList.remove('is-dragging'))
+    })
+    document.querySelectorAll('.sm-cal-day[data-date]').forEach(day => {
+      if (day.dataset.dropBound === 'true') return
+      day.dataset.dropBound = 'true'
+      day.addEventListener('dragover', event => {
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'move'
+        day.classList.add('is-drop-target')
+      })
+      day.addEventListener('dragleave', () => day.classList.remove('is-drop-target'))
+      day.addEventListener('drop', async event => {
+        event.preventDefault()
+        day.classList.remove('is-drop-target')
+        try {
+          const payload = JSON.parse(event.dataTransfer.getData('application/json'))
+          await this.rescheduleEvent(payload.src, payload.id, day.dataset.date)
+        } catch {
+          SM.toast('انتقال رویداد انجام نشد', 'error')
+        }
+      })
+    })
+  },
+
+  async rescheduleEvent(src, id, date) {
+    const target = Utils.normJalali(date)
+    const map = {
+      contract: ['contracts', 'eventDate'],
+      booking: ['bookings', 'date'],
+      appointment: ['appointments', 'date'],
+      reminder: ['calendarReminders', 'date']
+    }
+    const [collection, field] = map[src] || []
+    if (!collection || !target || !DB.find(collection, row => String(row.id) === String(id))) {
+      SM.toast('رویداد قابل انتقال نیست', 'error')
+      return false
+    }
+    await SecureDB.update(collection, id, { [field]: target, updatedAtIso: new Date().toISOString() })
+    this._selectedDate = target
+    const p = Utils.parseJalali(target)
+    if (p) { this._viewYear = p.jy; this._viewMonth = p.jm }
+    SM.toast(`رویداد به ${target} منتقل شد`, 'success')
+    this.refresh()
+    return true
+  },
+
+  moveDialog(src, id, currentDate) {
+    SMUI.modal('انتقال رویداد', `${SMUI.formField('تاریخ جدید', 'cal-move-date', { value: currentDate || Utils.todayJalali() })}`, {
+      width: 420,
+      onSave: async () => {
+        const date = document.getElementById('cal-move-date')?.value
+        if (await this.rescheduleEvent(src, id, date)) SMUI.closeModal()
+      }
+    })
   },
 
   refresh() { SMH.refresh('calendar') },
@@ -400,6 +471,7 @@ const SMCalendar = {
     document.querySelectorAll('.sm-cal-day[data-date]').forEach(el => {
       el.classList.toggle('is-selected', el.dataset.date === date)
     })
+    Promise.resolve().then(() => this.bindDragDrop())
   },
 
   addReminder(presetDate) {

@@ -1193,6 +1193,9 @@ body.sm-sidebar-open { overflow: hidden; }
   border: 1px solid color-mix(in srgb, var(--cal-accent) 28%, var(--sm-border));
   border-inline-start: 4px solid var(--cal-accent);
 }
+.sm-cal-event.is-draggable { cursor:grab; }
+.sm-cal-event.is-dragging { opacity:.45; }
+.sm-cal-day.is-drop-target { outline:2px solid var(--sm-accent); outline-offset:-2px; background:color-mix(in srgb, var(--sm-accent) 12%, transparent); }
 .sm-cal-event-icon {
   width: 36px; height: 36px; border-radius: 10px;
   display: grid; place-items: center;
