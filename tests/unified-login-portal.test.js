@@ -22,7 +22,7 @@ describe('UnifiedLogin portal gate', () => {
       isOtpVerifyLocked: () => 0,
       recordOtpVerifyFail: () => 0
     })
-    vi.stubGlobal('SecureDB', { update: vi.fn() })
+    vi.stubGlobal('SecureDB', { update: vi.fn(async () => {}) })
     vi.stubGlobal('CustomerSession', null)
     vi.stubGlobal('PortalInvite', {
       needsOtpVerification: (u) => u?.portalStatus === 'pending_verify',
@@ -37,7 +37,7 @@ describe('UnifiedLogin portal gate', () => {
     })
   })
 
-  it('requires portal invite code instead of auto-verifying', async () => {
+  it('requires the independent portal invite code before staff login', async () => {
     await import('../js/unified-login.js')
     const UnifiedLogin = window.UnifiedLogin
 

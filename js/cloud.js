@@ -134,6 +134,100 @@ const Cloud = {
     return data.session
   },
 
+  toE164Phone(phone) {
+    const digits = String(phone || '').replace(/\D/g, '')
+    if (/^09\d{9}$/.test(digits)) return `+98${digits.slice(1)}`
+    if (/^989\d{9}$/.test(digits)) return `+${digits}`
+    if (/^9\d{9}$/.test(digits)) return `+98${digits}`
+    return ''
+  },
+
+  async sendPhoneOtp(phone) {
+    const c = await this.client()
+    const normalized = this.toE164Phone(phone)
+    if (!c || !normalized) return { ok: false, error: 'شماره موبایل برای ورود ابری معتبر نیست' }
+    const { error } = await c.auth.signInWithOtp({
+      phone: normalized,
+      options: { shouldCreateUser: true }
+    })
+    return error ? { ok: false, error: this.formatAuthError(error.message) } : { ok: true }
+  },
+
+  async verifyPhoneOtp(phone, token) {
+    const c = await this.client()
+    const normalized = this.toE164Phone(phone)
+    const code = String(token || '').replace(/\D/g, '')
+    if (!c || !normalized || !/^\d{6}$/.test(code)) return { ok: false, error: 'کد ۶ رقمی معتبر نیست' }
+    const { data, error } = await c.auth.verifyOtp({ phone: normalized, token: code, type: 'sms' })
+    if (error || !data?.session) return { ok: false, error: this.formatAuthError(error?.message || 'تأیید پیامک ناموفق بود') }
+    return { ok: true, session: data.session, user: data.user }
+  },
+
+  async claimCustomerContracts() {
+    const c = await this.client()
+    const sess = await this.session()
+    if (!c || !sess?.user) return { ok: false, error: 'ورود پیامکی Supabase لازم است' }
+    const { data, error } = await c.rpc('claim_customer_contracts')
+    return error
+      ? { ok: false, error: this.formatAuthError(error.message) }
+      : { ok: true, contracts: data || [] }
+  },
+
+  async signInWithOAuth(provider) {
+    if (!['google', 'apple'].includes(provider)) return { ok: false, error: 'ارائه‌دهنده ورود مجاز نیست' }
+    const c = await this.client()
+    if (!c) return { ok: false, error: 'Supabase پیکربندی نشده' }
+    const { data, error } = await c.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: this.authRedirectUrl() }
+    })
+    return error ? { ok: false, error: this.formatAuthError(error.message) } : { ok: true, url: data?.url || '' }
+  },
+
+  async _portalContract(localId, cloudContractId = '') {
+    const c = await this.client()
+    if (!c) return null
+    let query = c.from('contracts').select('id, studio_id, local_id')
+    query = cloudContractId ? query.eq('id', cloudContractId) : query.eq('local_id', String(localId || ''))
+    const { data, error } = await query.limit(1).maybeSingle()
+    return error ? null : data
+  },
+
+  async sendPortalMessage(message) {
+    const c = await this.client()
+    const sess = await this.session()
+    if (!c || !sess?.user) return { ok: false, error: 'ورود Supabase لازم است' }
+    const contract = await this._portalContract(message.contractLocalId, message.contractId)
+    if (!contract) return { ok: false, error: 'قرارداد ابری یافت نشد' }
+    const row = {
+      studio_id: contract.studio_id,
+      contract_id: contract.id,
+      contract_local_id: contract.local_id,
+      request_key: String(message.requestKey || ''),
+      request_type: String(message.requestType || 'message'),
+      sender_id: sess.user.id,
+      sender_kind: String(message.senderKind || 'customer'),
+      sender_name: String(message.senderName || '').slice(0, 160),
+      body: String(message.body || '').trim().slice(0, 4000),
+      attachment_path: message.attachment?.storagePath || null,
+      attachment_name: message.attachment?.name || null,
+      attachment_mime: message.attachment?.mime || null,
+      attachment_size: message.attachment?.size || null
+    }
+    const { data, error } = await c.from('customer_portal_messages').insert(row).select('*').single()
+    return error ? { ok: false, error: error.message } : { ok: true, message: data }
+  },
+
+  async listPortalMessages({ contractLocalId = '', since = '' } = {}) {
+    const c = await this.client()
+    if (!c || !await this.session()) return { ok: false, error: 'ورود Supabase لازم است' }
+    let query = c.from('customer_portal_messages').select('*').order('created_at', { ascending: true }).limit(500)
+    if (contractLocalId) query = query.eq('contract_local_id', String(contractLocalId))
+    if (since) query = query.gt('created_at', since)
+    const { data, error } = await query
+    return error ? { ok: false, error: error.message } : { ok: true, messages: data || [] }
+  },
+
   async signUp({ email, password, phone, name, studioName, joinCode }) {
     const c = await this.client()
     if (!c) return { ok: false, error: 'Supabase پیکربندی نشده' }
@@ -166,6 +260,11 @@ const Cloud = {
     if (error) return { ok: false, error: this.formatAuthError(error.message) }
     await this._loadMemberStudioId()
     await RealtimeSync.start(this)
+    try {
+      if (typeof FinanceOutbox !== 'undefined' && FinanceOutbox.flush) {
+        await FinanceOutbox.flush()
+      }
+    } catch { /* outbox best-effort */ }
     return { ok: true, session: data.session, user: data.user }
   },
 
@@ -178,11 +277,25 @@ const Cloud = {
 
   async _registerStudio(studioName, phone, name, joinCode) {
     const c = await this.client()
+    if (joinCode) {
+      const { data, error } = await c.rpc('request_studio_join', {
+        p_token: String(joinCode).trim(),
+        p_display_name: name || 'عضو',
+        p_phone: Utils.normalizePhone(phone)
+      })
+      if (error) return { ok: false, error: this.formatAuthError(error.message) }
+      return {
+        ok: true,
+        pendingApproval: true,
+        requestId: data,
+        message: 'درخواست عضویت ثبت شد و پس از تأیید مدیر فعال می‌شود.'
+      }
+    }
     const { data, error } = await c.rpc('register_studio', {
       p_studio_name: studioName || AppConfig.DEFAULT_STUDIO_NAME,
       p_phone: Utils.normalizePhone(phone),
       p_display_name: name || 'مدیر',
-      p_join_code: joinCode || null
+      p_join_code: null
     })
     if (error) return { ok: false, error: error.message }
     await this._saveStudioLink(data)
@@ -216,6 +329,29 @@ const Cloud = {
       supabaseStudioId: studioId,
       cloudLastSyncAt: info.cloudLastSyncAt || ''
     })
+  },
+
+  async createStudioInvitation(roles = ['office_secretary'], expiresInMinutes = 1440) {
+    const c = await this.client()
+    const studioId = this.resolvedConfig().studioId
+    if (!c || !studioId) return { ok: false, error: 'اتصال ابری یا شناسه استودیو موجود نیست' }
+    const { data, error } = await c.rpc('create_studio_invitation', {
+      p_studio_id: studioId,
+      p_roles: roles,
+      p_expires_in_minutes: expiresInMinutes,
+      p_max_uses: 1
+    })
+    return error ? { ok: false, error: this.formatAuthError(error.message) } : { ok: true, token: data }
+  },
+
+  async reviewStudioJoin(requestId, approve) {
+    const c = await this.client()
+    if (!c) return { ok: false, error: 'اتصال ابری موجود نیست' }
+    const { data, error } = await c.rpc('review_studio_join', {
+      p_request_id: requestId,
+      p_approve: !!approve
+    })
+    return error ? { ok: false, error: this.formatAuthError(error.message) } : { ok: true, studioId: data }
   },
 
   async enableCloud({ url, anonKey }) {
@@ -302,6 +438,50 @@ const Cloud = {
     })
     await DB.flush?.()
     return { ok: true, at: data }
+  },
+
+  async createBackupArchive(label = 'manual') {
+    if (!this.isEnabled()) return { ok: false, skipped: true, error: 'پشتیبان ابری غیرفعال است' }
+    const sess = await this.session()
+    if (!sess?.user) return { ok: false, error: 'برای پشتیبان ابری باید وارد Supabase شوید' }
+
+    let studioId = this.studioCloudConfig().studioId
+    if (!studioId) studioId = await this._loadMemberStudioId()
+    if (!studioId) return { ok: false, error: 'استودیوی ابری یافت نشد' }
+
+    const raw = typeof DB !== 'undefined' ? JSON.parse(DB.exportJSON()) : {}
+    const payload = sanitizeSnapshotForCloud(raw)
+    const serialized = JSON.stringify(payload)
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(serialized))
+    const checksum = [...new Uint8Array(digest)]
+      .map(byte => byte.toString(16).padStart(2, '0')).join('')
+    const c = await this.client()
+    const { data, error } = await c.rpc('create_studio_backup', {
+      p_studio_id: studioId,
+      p_payload: payload,
+      p_checksum: checksum,
+      p_source: String(label || 'manual').slice(0, 32),
+      p_db_version: payload._meta?.dbVersion || AppConfig.DB_VERSION,
+      p_app_version: AppConfig.APP_VERSION
+    })
+    return error
+      ? { ok: false, error: this.formatAuthError(error.message) }
+      : { ok: true, id: data, checksum }
+  },
+
+  async listBackupArchives(limit = 20) {
+    if (!this.isEnabled()) return { ok: false, skipped: true, backups: [] }
+    const studioId = this.studioCloudConfig().studioId || await this._loadMemberStudioId()
+    const c = await this.client()
+    if (!studioId || !c || !await this.session()) return { ok: false, error: 'ورود ابری لازم است', backups: [] }
+    const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20))
+    const { data, error } = await c
+      .from('studio_backup_archives')
+      .select('id, source, checksum, size_bytes, db_version, app_version, created_at, created_by')
+      .eq('studio_id', studioId)
+      .order('created_at', { ascending: false })
+      .limit(safeLimit)
+    return error ? { ok: false, error: error.message, backups: [] } : { ok: true, backups: data || [] }
   },
 
   async pullSnapshot({ force = false } = {}) {
@@ -444,6 +624,11 @@ const Cloud = {
       this._notifyCloudError(pull.error || entityPull.error || 'دریافت از ابر ناموفق')
     }
     if (this.isEnabled()) await RealtimeSync.start(this)
+    try {
+      if (typeof FinanceOutbox !== 'undefined' && FinanceOutbox.flush) {
+        await FinanceOutbox.flush()
+      }
+    } catch { /* */ }
     return pull.ok ? pull : entityPull
   }
 }

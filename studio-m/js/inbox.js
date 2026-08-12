@@ -2,6 +2,7 @@
 
 const SMInbox = {
   _tab: 'all',
+  _cloudRefreshPending: false,
 
   setTab(tab) {
     this._tab = tab
@@ -11,7 +12,7 @@ const SMInbox = {
   _requests(user) {
     let list = typeof Access !== 'undefined'
       ? Access.filterVisibleRequests(user)
-      : (DB.get('customerRequests') || [])
+      : (DB.active('customerRequests') || [])
     if (this._tab === 'pending') list = list.filter(r => r.status === 'pending')
     else if (this._tab === 'done') list = list.filter(r => r.status === 'sent_to_editing')
     else if (this._tab === 'rejected') list = list.filter(r => r.status === 'rejected')
@@ -27,8 +28,14 @@ const SMInbox = {
 
   render(el) {
     if (SM.state.viewStack.length) return
+    if (!this._cloudRefreshPending && typeof CustomerCloudMessages !== 'undefined') {
+      this._cloudRefreshPending = true
+      CustomerCloudMessages.pullIntoLocal().then(result => {
+        if (result?.applied && !SM.state.viewStack.length) SM.navigate('inbox')
+      }).catch(() => null).finally(() => { this._cloudRefreshPending = false })
+    }
     const user = SM.user()
-    const all = typeof Access !== 'undefined' ? Access.filterVisibleRequests(user) : (DB.get('customerRequests') || [])
+    const all = typeof Access !== 'undefined' ? Access.filterVisibleRequests(user) : (DB.active('customerRequests') || [])
     const reqs = this._requests(user)
     const groups = typeof InboxShared !== 'undefined' ? InboxShared.groupByCouple(reqs) : []
     const pending = all.filter(r => r.status === 'pending').length
@@ -42,10 +49,10 @@ const SMInbox = {
         { label: 'تأیید‌شده', value: SM.fmt(all.filter(r => r.status === 'sent_to_editing').length), color: 'var(--sm-success)' }
       ])}
       ${SMUI.tabs([
-        { id: 'all', fa: 'همه', en: 'All', icon: 'fa-inbox', onclick: "SMInbox.setTab('all')" },
-        { id: 'pending', fa: 'منتظر تأیید', en: 'Pending', icon: 'fa-clock', onclick: "SMInbox.setTab('pending')" },
-        { id: 'done', fa: 'تأییدشده', en: 'Approved', icon: 'fa-check', onclick: "SMInbox.setTab('done')" },
-        { id: 'rejected', fa: 'رد شده', en: 'Rejected', icon: 'fa-times', onclick: "SMInbox.setTab('rejected')" }
+        { id: 'all', fa: 'همه', en: 'All', icon: 'fa-inbox', fn: 'SMInbox.setTab', args: ['all'] },
+        { id: 'pending', fa: 'منتظر تأیید', en: 'Pending', icon: 'fa-clock', fn: 'SMInbox.setTab', args: ['pending'] },
+        { id: 'done', fa: 'تأییدشده', en: 'Approved', icon: 'fa-check', fn: 'SMInbox.setTab', args: ['done'] },
+        { id: 'rejected', fa: 'رد شده', en: 'Rejected', icon: 'fa-times', fn: 'SMInbox.setTab', args: ['rejected'] }
       ], this._tab)}
       ${SMUI.moduleSearch('inbox', 'جستجو — نام زوج، قرارداد، متن...')}
       <div style="margin-top:16px">${groups.length ? groups.map(g => this._coupleCard(g)).join('') :
@@ -58,7 +65,7 @@ const SMInbox = {
     const type = InboxShared.typeInfo(latest?.type)
     const when = InboxShared.formatWhen(latest?.createdAt, latest?.createdTime)
 
-    return `<div class="sm-inbox-couple" onclick="SMInbox.viewCouple('${g.contractId || g.key}')">
+    return `<div class="sm-inbox-couple" ${SMEvents.attrs('SMInbox.viewCouple', [g.contractId || g.key])}>
       <div class="sm-inbox-couple-head">
         <div>
           <div class="sm-inbox-couple-name">${SM.esc(g.couple)}</div>
@@ -86,7 +93,7 @@ const SMInbox = {
     const user = SM.user()
     const reqs = this._requests(user).filter(r => (r.contractId || r.customerName) === contractKey || r.contractId === contractKey)
     if (!reqs.length) {
-      const all = (typeof Access !== 'undefined' ? Access.filterVisibleRequests(user) : DB.get('customerRequests'))
+      const all = (typeof Access !== 'undefined' ? Access.filterVisibleRequests(user) : DB.active('customerRequests'))
         .filter(r => r.contractId === contractKey || r.customerName === contractKey)
       if (!all.length) return
       reqs.push(...all)
@@ -105,6 +112,8 @@ const SMInbox = {
   },
 
   _requestBlock(r) {
+    InboxShared.markRead(r.id, 'manager')
+    r = DB.find('customerRequests', row => row.id === r.id) || r
     const type = InboxShared.typeInfo(r.type)
     const st = InboxShared.statusInfo(r.status)
     const thread = InboxShared.ensureThread(r)
@@ -121,9 +130,9 @@ const SMInbox = {
       </div>
       ${canManage ? `<div class="sm-inbox-actions">
         ${r.status === 'pending' ? `
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMInbox.approve('${r.id}')">تأیید → تدوین</button>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMInbox.reject('${r.id}')">رد</button>` : ''}
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMInbox.reply('${r.id}')"><i class="fas fa-reply"></i> پاسخ مدیر</button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMInbox.approve', [r.id])}>تأیید → تدوین</button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMInbox.reject', [r.id])}>رد</button>` : ''}
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMInbox.reply', [r.id])}><i class="fas fa-reply"></i> پاسخ مدیر</button>
       </div>` : ''}
     </div>`
   },
@@ -134,16 +143,21 @@ const SMInbox = {
     const actionNote = t.action === 'approve' ? ' · تأیید'
       : t.action === 'reject' ? ' · رد'
       : t.action === 'staff_read' ? ' · مشاهده پرسنل' : ''
+    const receipt = ['manager', 'staff'].includes(t.author)
+      ? `<span class="sm-inbox-receipt"><i class="fas fa-check-double"></i> ${t.readBy?.includes('customer') ? 'خوانده‌شده توسط مشتری' : 'ارسال‌شده'}</span>`
+      : ''
     return `<div class="sm-inbox-msg sm-inbox-msg--${cls}">
       <div class="sm-inbox-msg-head">
         <strong>${SM.esc(t.authorName || author)}</strong>
         <span>${SM.esc(InboxShared.formatWhen(t.date, t.time))}${actionNote}</span>
       </div>
       <p>${SM.esc(t.text || '')}</p>
+      ${t.attachment?.storagePath ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMInbox.openAttachment', [t.attachment.storagePath])}><i class="fas fa-paperclip"></i> ${SM.esc(t.attachment.name || 'نمایش پیوست')}</button>` : ''}
+      ${receipt}
     </div>`
   },
 
-  approve(id) {
+  async approve(id) {
     const req = DB.find('customerRequests', r => r.id === id)
     if (!req) return
     const user = SM.user()
@@ -151,7 +165,7 @@ const SMInbox = {
     const typeLabel = InboxShared.typeInfo(req.type).label
     const dest = ['photo_select', 'album', 'print'].includes(req.type) ? 'عکس‌خانه' : 'تدوین'
 
-    InboxShared.appendThread(id, {
+    const entry = InboxShared.appendThread(id, {
       author: 'manager',
       authorName: user?.name || 'مدیر',
       text: `تأیید شد — ارجاع به ${dest}`,
@@ -160,6 +174,7 @@ const SMInbox = {
       read: true
     })
     DB.update('customerRequests', id, { approvedAt: Utils.todayJalali(), approvedBy: user?.name || '' })
+    await CustomerCloudMessages?.send?.(req, entry)
 
     if (['photo_select', 'album', 'print'].includes(req.type) && typeof PhotoHouse !== 'undefined') {
       if (req.type === 'photo_select') {
@@ -185,9 +200,11 @@ const SMInbox = {
     this._refreshView(id)
   },
 
-  reject(id) {
+  async reject(id) {
+    const req = DB.find('customerRequests', r => r.id === id)
+    if (!req) return
     const user = SM.user()
-    InboxShared.appendThread(id, {
+    const entry = InboxShared.appendThread(id, {
       author: 'manager',
       authorName: user?.name || 'مدیر',
       text: 'درخواست رد شد.',
@@ -196,6 +213,7 @@ const SMInbox = {
       read: true
     })
     DB.update('customerRequests', id, { rejectedAt: Utils.todayJalali() })
+    await CustomerCloudMessages?.send?.(req, entry)
     SM.toast('رد شد', 'info')
     this._refreshView(id)
   },
@@ -204,23 +222,43 @@ const SMInbox = {
     const req = DB.find('customerRequests', r => r.id === id)
     if (!req) return
     SMUI.modal('پاسخ مدیر به مشتری', `
-      ${SMUI.formField('پیام', 'inbox-reply', { type: 'textarea', placeholder: 'پاسخ یا توضیح برای مشتری و پرسنل...' })}`, {
+      ${SMUI.formField('پیام', 'inbox-reply', { type: 'textarea', placeholder: 'پاسخ یا توضیح برای مشتری و پرسنل...' })}
+      <div class="sm-field"><label>پیوست خصوصی (اختیاری؛ حداکثر ۵ مگابایت)</label><input class="sm-input" type="file" id="inbox-reply-file" accept="image/jpeg,image/png,image/webp,application/pdf"></div>`, {
       width: 480,
-      onSave: () => {
+      onSave: async () => {
         const text = document.getElementById('inbox-reply')?.value?.trim()
-        if (!text) return SM.toast('متن پاسخ را بنویسید', 'error')
+        const file = document.getElementById('inbox-reply-file')?.files?.[0] || null
+        if (!text && !file) return SM.toast('متن یا پیوست پاسخ را وارد کنید', 'error')
         const user = SM.user()
-        InboxShared.appendThread(id, {
+        let attachment = null
+        if (file) {
+          const uploaded = await FileStorage?.upload?.(file, `customer-reply-${id}-${crypto.randomUUID()}`)
+          if (!uploaded?.ok) return SM.toast(uploaded?.error || 'بارگذاری امن پیوست ناموفق بود', 'error')
+          attachment = { ...uploaded, name: file.name }
+        }
+        const previousThread = InboxShared.ensureThread(req).slice()
+        const entry = InboxShared.appendThread(id, {
           author: 'manager',
           authorName: user?.name || 'مدیر',
-          text,
+          text: text || `پیوست: ${file.name}`,
+          attachment,
           action: 'reply'
         })
+        const result = await CustomerCloudMessages?.send?.(req, entry)
+        if (file && !result?.ok) {
+          await FileStorage.remove(attachment.storagePath).catch(() => null)
+          DB.update('customerRequests', id, { thread: previousThread })
+          return SM.toast(result?.error || 'ثبت امن پاسخ ناموفق بود', 'error')
+        }
         SMUI.closeModal()
         SM.toast('پاسخ ثبت شد', 'success')
         this._refreshView(id)
       }
     })
+  },
+
+  openAttachment(storagePath) {
+    return CustomerCloudMessages?.openAttachment?.(storagePath)
   },
 
   _refreshView(requestId) {

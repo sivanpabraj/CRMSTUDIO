@@ -16,7 +16,7 @@ export default [
     },
   },
   {
-    files: ["contract.js", "admin.js"],
+    files: ["contract.js"],
     languageOptions: { sourceType: "script", globals: browserGlobals },
     rules: {
       "no-unused-vars": "off",

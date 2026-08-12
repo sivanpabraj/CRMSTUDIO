@@ -55,6 +55,16 @@ describe('entities registry', () => {
     expect(isSyncEntity('contracts')).toBe(true)
   })
 
+  it.each([
+    'persProjects',
+    'persContracts',
+    'calendarReminders',
+    'galleries',
+    'customerCustody'
+  ])('row-syncs operational collection %s', collection => {
+    expect(isSyncEntity(collection)).toBe(true)
+  })
+
   it('excludes users', () => {
     expect(isSyncEntity('users')).toBe(false)
   })

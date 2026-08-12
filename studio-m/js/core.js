@@ -59,6 +59,11 @@ const SM = {
     if (typeof Access !== 'undefined') {
       if (perm === 'manage_users') return Access.canManageUsers(user)
       if (perm === 'manage_system' || perm === 'all') return Access.isSystemAdmin(user)
+      // Finance writes/views require manage_finance — not granted by view_all alone
+      if (perm === 'manage_finance') {
+        return Access.isSystemAdmin(user) || Access.isStudioManager(user) ||
+          !!Auth.userHasPermission?.('manage_finance')
+      }
       if (Access.isSystemAdmin(user) || Access.isStudioManager(user)) return true
     } else if (Auth.isAdmin?.()) return true
     return Auth.userHasPermission?.(perm) || Auth.userHasPermission?.('view_all') || false
@@ -107,13 +112,13 @@ const SM = {
       { id: 'timeline', icon: 'fa-clock', group: 'main', perm: 'view_contract' },
       { id: 'contracts', icon: 'fa-file-signature', group: 'business', perm: 'view_contract' },
       { id: 'packages', icon: 'fa-box-open', group: 'business', perm: 'view_all' },
-      { id: 'invoices', icon: 'fa-file-invoice-dollar', group: 'finance', perm: 'view_all' },
-      { id: 'accounting', icon: 'fa-calculator', group: 'finance', perm: 'view_all' },
-      { id: 'expenses', icon: 'fa-receipt', group: 'finance', perm: 'view_all' },
-      { id: 'reports', icon: 'fa-chart-pie', group: 'finance', perm: 'view_all' },
+      { id: 'invoices', icon: 'fa-file-invoice-dollar', group: 'finance', perm: 'manage_finance' },
+      { id: 'accounting', icon: 'fa-calculator', group: 'finance', perm: 'manage_finance' },
+      { id: 'expenses', icon: 'fa-receipt', group: 'finance', perm: 'manage_finance' },
+      { id: 'reports', icon: 'fa-chart-pie', group: 'finance', perm: 'manage_finance' },
       { id: 'employees', icon: 'fa-users', group: 'hr', perm: 'view_all' },
       { id: 'attendance', icon: 'fa-user-clock', group: 'hr', perm: 'view_all' },
-      { id: 'payroll', icon: 'fa-money-check-alt', group: 'hr', perm: 'view_all' },
+      { id: 'payroll', icon: 'fa-money-check-alt', group: 'hr', perm: 'manage_finance' },
       { id: 'equipment', icon: 'fa-camera', group: 'assets', perm: 'view_all' },
       { id: 'custody', icon: 'fa-right-left', group: 'assets', perm: 'view_all' },
       { id: 'files', icon: 'fa-folder-open', group: 'assets', perm: 'view_all' },
@@ -163,6 +168,12 @@ const SM = {
   },
 
   navigate(route) {
+    const routes = this.getRoutes()
+    const meta = routes.find(r => r.id === route)
+    if (meta?.perm && !this.can(meta.perm) && !this.can('all')) {
+      if (typeof SM !== 'undefined' && SM.toast) SM.toast('دسترسی به این بخش ندارید', 'error')
+      route = 'dashboard'
+    }
     this.state.route = route
     this.state.viewStack = []
     location.hash = route
@@ -182,6 +193,7 @@ const SM = {
         main.innerHTML = `<div class="sm-empty"><i class="fas fa-puzzle-piece"></i><div class="sm-empty-title">${this.t(route)}</div></div>`
       }
     }
+    this._focusMain(main)
     const faTitles = {
       dashboard: ['داشبورد', ''],
       crm: ['CRM', ''],
@@ -234,11 +246,22 @@ const SM = {
     else this.navigate(this.state.route)
   },
 
+  _focusMain(main = document.getElementById('sm-content')) {
+    if (!main) return
+    if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1')
+    try {
+      main.focus({ preventScroll: true })
+    } catch {
+      try { main.focus() } catch { /* older browsers */ }
+    }
+  },
+
   _renderSubView() {
     const view = this.state.viewStack[this.state.viewStack.length - 1]
     const main = document.getElementById('sm-content')
     if (!main || !view) return
-    main.innerHTML = `${SMUI.backBar(view.title, 'SM.popSubView()')}${view.html}`
+    main.innerHTML = `${SMUI.backBar(view.title)}${view.html}`
+    this._focusMain(main)
     this._updateHeaderBack()
     const ht = document.getElementById('sm-header-title')
     const hs = document.getElementById('sm-header-sub')
@@ -269,7 +292,9 @@ const SM = {
       comms: this.t('group_comms'),
       system: this.t('group_system')
     }
-    const unread = (typeof DB !== 'undefined' ? DB.get('notifications') : []).filter(n => !n.read).length
+    const unread = (typeof DB !== 'undefined'
+      ? (typeof DB.active === 'function' ? DB.active('notifications') : DB.get('notifications'))
+      : []).filter(n => !n.read && !n._deleted).length
 
     let navHtml = ''
     for (const [gid, label] of Object.entries(groups)) {
@@ -278,8 +303,9 @@ const SM = {
       navHtml += `<div class="sm-nav-group"><div class="sm-nav-label">${label}</div>`
       navHtml += items.map(r => {
         const off = this.isModuleDisabled(r.id)
+        const navAttrs = SMEvents.attrs('SM.navigate', [r.id])
         return `
-        <button type="button" class="sm-nav-item${this.state.route === r.id ? ' active' : ''}${off ? ' sm-nav-item--off' : ''}" data-route="${r.id}" onclick="SM.navigate('${r.id}')">
+        <button ${navAttrs} class="sm-nav-item${this.state.route === r.id ? ' active' : ''}${off ? ' sm-nav-item--off' : ''}" data-route="${r.id}">
           <i class="fas ${r.icon}"></i><span>${this.t(r.id)}</span>
           ${off ? '<span class="sm-nav-soon">به‌زودی</span>' : ''}
           ${r.id === 'notifications' && unread ? `<span class="sm-nav-badge">${unread}</span>` : ''}
@@ -292,7 +318,7 @@ const SM = {
 
     document.getElementById('sm-root').innerHTML = `
       <div class="sm-shell">
-        <div class="sm-sidebar-overlay" id="sm-sidebar-overlay" onclick="SM.closeSidebar()" aria-hidden="true"></div>
+        <div class="sm-sidebar-overlay" id="sm-sidebar-overlay" ${SMEvents.elAttrs('SM.closeSidebar')} aria-hidden="true"></div>
         <aside class="sm-sidebar" id="sm-sidebar">
           <div class="sm-sidebar-head">
             <div class="sm-brand">
@@ -307,7 +333,7 @@ const SM = {
           </div>
           <nav class="sm-nav">${navHtml}</nav>
           <div class="sm-sidebar-foot">
-            <button type="button" class="sm-sidebar-foot-btn" onclick="SM.openProfile()" title="پروفایل و تنظیمات">
+            <button type="button" class="sm-sidebar-foot-btn" ${SMEvents.attrs('SM.openProfile')} title="پروفایل و تنظیمات">
               <div class="sm-user-avatar">${studio.logo
                 ? (Utils.safeImgHtml(studio.logo, 'class="sm-user-avatar-img"') || this.esc((user?.name || '?').charAt(0)))
                 : this.esc((user?.name || '?').charAt(0))}</div>
@@ -317,22 +343,22 @@ const SM = {
               </div>
               <i class="fas fa-chevron-left sm-user-chevron"></i>
             </button>
-            <button type="button" class="sm-btn-icon" onclick="SM.logout()" title="${this.t('logout')}"><i class="fas fa-right-from-bracket"></i></button>
+            <button type="button" class="sm-btn-icon" ${SMEvents.attrs('SM.logout')} title="${this.t('logout')}"><i class="fas fa-right-from-bracket"></i></button>
           </div>
         </aside>
         <div class="sm-main">
           <header class="sm-header">
-            <button type="button" class="sm-btn-icon sm-menu-toggle" onclick="SM.toggleSidebar()" aria-label="${this.t('menu')}"><i class="fas fa-bars"></i></button>
-            <button type="button" class="sm-btn-icon sm-header-back" id="sm-header-back" hidden onclick="SM.goBack()" title="${this.t('back')}"><i class="fas fa-arrow-right"></i></button>
+            <button type="button" class="sm-btn-icon sm-menu-toggle" ${SMEvents.attrs('SM.toggleSidebar')} aria-label="${this.t('menu')}"><i class="fas fa-bars"></i></button>
+            <button type="button" class="sm-btn-icon sm-header-back" id="sm-header-back" hidden ${SMEvents.attrs('SM.goBack')} title="${this.t('back')}"><i class="fas fa-arrow-right"></i></button>
             <div class="sm-header-titles">
               <div class="sm-header-title" id="sm-header-title">${this.t('dashboard')}</div>
               <div class="sm-header-sub" id="sm-header-sub" hidden></div>
             </div>
             <div class="sm-header-actions">
-              <button type="button" class="sm-btn-icon" onclick="SM.toggleTheme()" title="${this.t('theme')}"><i class="fas fa-${this.state.theme === 'light' ? 'moon' : 'sun'}"></i></button>
+              <button type="button" class="sm-btn-icon" ${SMEvents.attrs('SM.toggleTheme')} title="${this.t('theme')}"><i class="fas fa-${this.state.theme === 'light' ? 'moon' : 'sun'}"></i></button>
             </div>
           </header>
-          <main class="sm-content" id="sm-content"></main>
+          <main class="sm-content" id="sm-content" tabindex="-1"></main>
         </div>
       </div>`
   },
@@ -348,10 +374,12 @@ const SM = {
       if (!main) return
       if (this.isModuleDisabled(route)) {
         main.innerHTML = SMUI.moduleDisabled(route)
+        this._focusMain(main)
         return
       }
       const mod = SMModules[route]
       if (mod?.render) mod.render(main)
+      this._focusMain(main)
     }
   },
 
@@ -369,6 +397,11 @@ const SM = {
       SMSettings.setTab('profile')
       return
     }
+    SM.navigate('settings')
+  },
+
+  openSettingsTab(tab) {
+    if (typeof SMSettings !== 'undefined' && tab) SMSettings.setTab(tab)
     SM.navigate('settings')
   },
 

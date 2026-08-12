@@ -8,7 +8,11 @@
     "dev": "vite",
     "build": "vite build && node scripts/copy-static.mjs",
     "preview": "vite preview",
-    "lint": "eslint js/ studio-m/js/ admin.js contract.js eslint.config.js eslint.globals.js --max-warnings 0 --no-warn-ignored",
+    "lint": "eslint js/ studio-m/js/ contract.js eslint.config.js eslint.globals.js --max-warnings 0 --no-warn-ignored",
+    "validate:repo": "node scripts/validate-repository.mjs",
+    "ci:verify": "npm run validate:repo && npm run security:scan && npm run lint && npm test && npm run build",
+    "security:scan": "node scripts/security-scan.mjs",
+    "test:load": "node scripts/load-smoke.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test",
@@ -16,7 +20,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@playwright/test": "^1.52.0",
+    "@playwright/test": "^1.61.1",
     "eslint": "^10.6.0",
     "vite": "^6.3.5",
     "vitest": "^3.2.4"

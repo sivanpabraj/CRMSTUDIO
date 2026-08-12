@@ -154,6 +154,23 @@ const UnifiedLogin = {
 
     const resolved = this.resolvePhone(phone)
 
+    // Customer/unknown phones use Supabase Auth OTP in cloud mode. The OTP is
+    // generated and verified server-side, never stored in browser storage.
+    if (typeof Cloud !== 'undefined' && Cloud.isConfigured?.() &&
+        ['customer', 'guest'].includes(resolved.kind)) {
+      const cloudOtp = await Cloud.sendPhoneOtp(phone)
+      if (!cloudOtp.ok) return cloudOtp
+      this._setPending({
+        phone,
+        cloudOtp: true,
+        kind: resolved.kind,
+        label: resolved.label,
+        expires: Date.now() + this.OTP_TTL_MS
+      })
+      this._recordSend(phone)
+      return { ok: true, resolved, cloudOtp: true }
+    }
+
     // پرسنل/ادمین دعوت‌شده: همان کد دعوت مدیر را دوباره بفرست / نشان بده (کد دوم نساز)
     if (resolved.user && typeof PortalInvite !== 'undefined' &&
         PortalInvite.needsOtpVerification(resolved.user)) {
@@ -228,6 +245,45 @@ const UnifiedLogin = {
       return { ok: false, error: 'کد منقضی شده — دوباره درخواست دهید.' }
     }
 
+    if (pending.cloudOtp) {
+      if (typeof Cloud === 'undefined') return { ok: false, error: 'ورود ابری در دسترس نیست' }
+      const verified = await Cloud.verifyPhoneOtp(phone, inputCode)
+      if (!verified.ok) return verified
+      const claimed = await Cloud.claimCustomerContracts()
+      if (!claimed.ok) return claimed
+      if (!claimed.contracts.length) {
+        pending.verified = true
+        this._setPending(pending)
+        return { ok: true, next: 'consultation', resolved: { kind: 'guest', phone }, pending }
+      }
+
+      const row = claimed.contracts[0]
+      const payload = row.payload && typeof row.payload === 'object' ? row.payload : {}
+      const localId = String(row.local_id || payload.id || row.contract_id)
+      const contractData = {
+        ...payload,
+        id: localId,
+        contractNum: payload.contractNum || row.contract_num || '',
+        groom: payload.groom || row.groom || '',
+        bride: payload.bride || row.bride || '',
+        eventDate: payload.eventDate || row.event_date || '',
+        status: row.status || payload.status || 'active',
+        _cloudContractId: row.contract_id,
+        _cloudStudioId: row.studio_id
+      }
+      const existing = DB.find('contracts', c => String(c.id) === localId)
+      const contract = existing
+        ? DB.update('contracts', localId, contractData)
+        : DB.insert('contracts', contractData)
+      const session = CustomerSession.create(contract, phone)
+      session.cloudContractId = row.contract_id
+      session.studioId = row.studio_id
+      await CustomerSession.save(session)
+      await DB.flush?.()
+      this.clearPending()
+      return { ok: true, next: 'redirect', url: 'customer.html', resolved: { kind: 'customer', contract } }
+    }
+
     const code = Utils.faToEn(String(inputCode || '')).replace(/\D/g, '')
     const verifyKey = `unified:${phone}`
     const otpLocked = typeof Auth !== 'undefined' ? Auth.isOtpVerifyLocked(verifyKey) : 0
@@ -252,6 +308,18 @@ const UnifiedLogin = {
       CustomerSession?.clearAttempts?.(phone)
     }
     const resolved = this.resolvePhone(phone)
+
+    // ورود پرسنل دو مدرک مستقل می‌خواهد: کد ورود یکپارچه و کد دعوت پرتال.
+    // تأیید کد عمومی نباید حساب دعوت‌شده را خودکار فعال کند.
+    if (resolved.user && typeof PortalInvite !== 'undefined' &&
+        PortalInvite.needsOtpVerification(resolved.user)) {
+      pending.portalVerify = true
+      pending.userId = resolved.user.id
+      pending.kind = resolved.kind
+      pending.label = resolved.label
+      this._setPending(pending)
+      return { ok: true, next: 'portal_verify', resolved, pending }
+    }
 
     if (resolved.kind === 'guest') {
       pending.verified = true
@@ -281,21 +349,6 @@ const UnifiedLogin = {
 
     const user = resolved.user || DB.find('users', u => u.id === resolved.user?.id)
     if (!user) return { ok: false, error: 'کاربر یافت نشد.' }
-
-    // یک مرحله: تأیید پیامک ورود = فعال‌سازی پرتال (بدون کد دوم)
-    if (typeof PortalInvite !== 'undefined' && PortalInvite.needsOtpVerification(user)) {
-      try {
-        await SecureDB.update('users', user.id, {
-          portalStatus: 'active',
-          portalOtp: {
-            ...(user.portalOtp || {}),
-            verified: true,
-            verifiedAt: new Date().toISOString(),
-            via: 'unified_sms_login'
-          }
-        })
-      } catch { /* */ }
-    }
 
     return this.finishStaffLogin(resolved, user)
   },

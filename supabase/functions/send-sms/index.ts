@@ -1,249 +1,205 @@
-// Supabase Edge Function — SMS proxy (API keys stay server-side)
-// Deploy: supabase functions deploy send-sms
-// Secrets: SMS_PROVIDER, SMS_API_KEY, SMS_LINE_NUMBER (optional)
-
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0'
 
 const MAX_TEXT_LEN = 500
 const MAX_PHONES = 10
-const RATE_WINDOW_MS = 60_000
-const RATE_MAX_PER_USER = 5
-
-const rateBuckets = new Map()
-
-const corsHeaders = (origin: string | null) => ({
-  'Access-Control-Allow-Origin': origin || '',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Vary': 'Origin',
-})
+const PURPOSES = new Set([
+  'otp_login', 'portal_invite', 'password_reset', 'contract_verify',
+  'cheque_reminder', 'generic',
+])
 
 function allowedOrigin(req: Request): string | null {
-  const reqOrigin = req.headers.get('Origin')
+  const requestOrigin = req.headers.get('Origin')
   const allowList = (Deno.env.get('ALLOWED_ORIGINS') || '')
     .split(',')
-    .map(s => s.trim())
+    .map((value) => value.trim())
     .filter(Boolean)
-  if (!reqOrigin) return allowList[0] || null
-  if (allowList.length === 0) return reqOrigin
-  return allowList.includes(reqOrigin) ? reqOrigin : null
+  if (!requestOrigin) return null
+  return allowList.includes(requestOrigin) ? requestOrigin : null
+}
+
+function headers(origin: string | null) {
+  return {
+    ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}),
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Cache-Control': 'no-store',
+    'Content-Type': 'application/json',
+    'Vary': 'Origin',
+    'X-Content-Type-Options': 'nosniff',
+  }
+}
+
+function json(body: unknown, status: number, origin: string | null) {
+  return new Response(JSON.stringify(body), { status, headers: headers(origin) })
 }
 
 function normalizePhone(raw: string): string | null {
   const digits = String(raw || '').replace(/\D/g, '')
   if (/^09\d{9}$/.test(digits)) return digits
-  if (/^989\d{9}$/.test(digits)) return '0' + digits.slice(2)
-  if (/^9\d{9}$/.test(digits)) return '0' + digits
+  if (/^989\d{9}$/.test(digits)) return `0${digits.slice(2)}`
+  if (/^9\d{9}$/.test(digits)) return `0${digits}`
   return null
 }
 
-function checkRate(userId: string): boolean {
-  const now = Date.now()
-  const bucket = rateBuckets.get(userId) || { count: 0, resetAt: now + RATE_WINDOW_MS }
-  if (now > bucket.resetAt) {
-    bucket.count = 0
-    bucket.resetAt = now + RATE_WINDOW_MS
-  }
-  bucket.count += 1
-  rateBuckets.set(userId, bucket)
-  return bucket.count <= RATE_MAX_PER_USER
-}
-
 Deno.serve(async (req) => {
+  const requestOrigin = req.headers.get('Origin')
   const origin = allowedOrigin(req)
-  const headers = corsHeaders(origin)
 
   if (req.method === 'OPTIONS') {
-    if (!origin) return new Response('forbidden', { status: 403 })
-    return new Response('ok', { headers })
+    return origin
+      ? new Response(null, { status: 204, headers: headers(origin) })
+      : json({ ok: false, error: 'origin_not_allowed' }, 403, null)
+  }
+  if (req.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, origin)
+  if (requestOrigin && !origin) return json({ ok: false, error: 'origin_not_allowed' }, 403, null)
+
+  const authorization = req.headers.get('Authorization')
+  if (!authorization?.startsWith('Bearer ')) {
+    return json({ ok: false, error: 'unauthorized' }, 401, origin)
   }
 
+  const url = Deno.env.get('SUPABASE_URL')
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
+  if (!url || !anonKey) return json({ ok: false, error: 'server_not_configured' }, 503, origin)
+
   try {
-    if (!origin && (Deno.env.get('ALLOWED_ORIGINS') || '').trim()) {
-      return json({ ok: false, error: 'origin not allowed' }, 403, origin)
-    }
-
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return json({ ok: false, error: 'unauthorized' }, 401, origin)
-    }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    )
-    const { data: { user }, error: userErr } = await supabase.auth.getUser()
-    if (userErr || !user) {
-      return json({ ok: false, error: 'not authenticated' }, 401, origin)
-    }
-
-    if (!checkRate(user.id)) {
-      return json({ ok: false, error: 'rate limit exceeded' }, 429, origin)
-    }
-
     const body = await req.json()
-    const rawPhones = Array.isArray(body.phones) ? body.phones : [body.phone].filter(Boolean)
-    if (rawPhones.length > MAX_PHONES) {
-      return json({ ok: false, error: `max ${MAX_PHONES} phones per request` }, 400, origin)
-    }
+    const studioId = String(body?.studioId || '')
+    const purpose = String(body?.purpose || 'generic').toLowerCase()
+    const idempotencyKey = String(body?.idempotencyKey || '')
+    const rawPhones = Array.isArray(body?.phones) ? body.phones : [body?.phone].filter(Boolean)
+    const phones = [...new Set(rawPhones.map(normalizePhone).filter(Boolean))] as string[]
+    const text = String(body?.text || '').trim()
 
-    const phones = rawPhones.map(normalizePhone).filter(Boolean) as string[]
-    const text = String(body.text || '').trim()
-    if (!phones.length || !text) {
-      return json({ ok: false, error: 'phones and text required' }, 400, origin)
+    if (!/^[0-9a-f-]{36}$/i.test(studioId)) return json({ ok: false, error: 'invalid_studio_id' }, 400, origin)
+    if (!PURPOSES.has(purpose)) return json({ ok: false, error: 'purpose_not_allowed' }, 400, origin)
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 128) {
+      return json({ ok: false, error: 'invalid_idempotency_key' }, 400, origin)
     }
-    if (text.length > MAX_TEXT_LEN) {
-      return json({ ok: false, error: `text max ${MAX_TEXT_LEN} chars` }, 400, origin)
+    if (!phones.length || phones.length > MAX_PHONES || phones.length !== rawPhones.length) {
+      return json({ ok: false, error: 'invalid_recipients' }, 400, origin)
+    }
+    if (!text || text.length > MAX_TEXT_LEN) return json({ ok: false, error: 'invalid_text' }, 400, origin)
+
+    const supabase = createClient(url, anonKey, {
+      global: { headers: { Authorization: authorization } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) return json({ ok: false, error: 'unauthorized' }, 401, origin)
+
+    const { data: reservation, error: reserveError } = await supabase.rpc('reserve_sms_dispatch', {
+      p_studio_id: studioId,
+      p_purpose: purpose,
+      p_recipient_count: phones.length,
+      p_idempotency_key: idempotencyKey,
+    })
+    if (reserveError) {
+      const message = String(reserveError.message || '')
+      if (/permission|membership|denied|42501/i.test(message)) {
+        return json({ ok: false, error: 'sms_permission_denied' }, 403, origin)
+      }
+      if (/rate_limit|daily_quota/i.test(message)) {
+        return json({ ok: false, error: message.includes('daily') ? 'studio_daily_quota' : 'rate_limit_exceeded' }, 429, origin)
+      }
+      console.error('sms_reservation_failed', { userId: user.id, code: reserveError.code })
+      return json({ ok: false, error: 'sms_reservation_failed' }, 500, origin)
+    }
+    if (reservation?.deduped) {
+      return reservation.status === 'sent'
+        ? json({ ok: true, deduped: true }, 200, origin)
+        : json({ ok: false, error: `duplicate_${reservation.status}` }, 409, origin)
     }
 
     const provider = Deno.env.get('SMS_PROVIDER') || 'kavenegar'
-    const apiKey = Deno.env.get('SMS_API_KEY') || ''
-    const lineNumber = Deno.env.get('SMS_LINE_NUMBER') || ''
-    const username = Deno.env.get('SMS_USERNAME') || ''
-    if (provider === 'melipayamak') {
-      const { user, pass } = parseMeliCreds(username, apiKey)
-      const isConsoleToken = !user && !!apiKey && !String(apiKey).includes(':')
-      if (!isConsoleToken && (!user || !pass)) {
-        return json({ ok: false, error: 'Melipayamak: SMS_API_KEY=console-token یا SMS_USERNAME+رمز، یا user:pass' }, 503, origin)
-      }
-      if (!lineNumber) {
-        return json({ ok: false, error: 'SMS_LINE_NUMBER (شماره خط ملی پیامک) الزامی است' }, 503, origin)
-      }
-    } else if (!apiKey) {
-      return json({ ok: false, error: 'SMS not configured on server' }, 503, origin)
+    const config = {
+      apiKey: Deno.env.get('SMS_API_KEY') || '',
+      lineNumber: Deno.env.get('SMS_LINE_NUMBER') || '',
+      username: Deno.env.get('SMS_USERNAME') || '',
     }
-
-    const result = await sendSms(provider, { apiKey, lineNumber, username }, phones, text)
+    const result = await sendSms(provider, config, phones, text)
+    const { error: completionError } = await supabase.rpc('complete_sms_dispatch', {
+      p_dispatch_id: reservation.dispatchId,
+      p_success: result.ok,
+      p_failure_code: result.ok ? null : String(result.error || 'provider_failed').slice(0, 120),
+    })
+    if (completionError) {
+      console.error('sms_completion_failed', { userId: user.id, code: completionError.code })
+    }
     return json(result, result.ok ? 200 : 502, origin)
-  } catch (e) {
-    return json({ ok: false, error: String(e?.message || e) }, 500, origin)
+  } catch {
+    return json({ ok: false, error: 'invalid_request' }, 400, origin)
   }
 })
 
-function json(data: Record<string, unknown>, status = 200, origin: string | null = null) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
-  })
-}
-
-function parseMeliCreds(username: string, apiKey: string): { user: string; pass: string } {
+function parseMeliCreds(username: string, apiKey: string) {
   if (username && apiKey) return { user: username, pass: apiKey }
-  const raw = String(apiKey || '')
-  const idx = raw.indexOf(':')
-  if (idx > 0) return { user: raw.slice(0, idx), pass: raw.slice(idx + 1) }
-  return { user: '', pass: '' }
-}
-
-/** Melipayamak RetStatus=1 is success; Value is RecId or negative error code */
-function meliOk(data: { RetStatus?: number; Value?: string | number; StrRetStatus?: string }): { ok: boolean; error?: string } {
-  if (data?.RetStatus === 1) return { ok: true }
-  const code = data?.Value != null ? String(data.Value) : ''
-  const msg = data?.StrRetStatus || 'melipayamak error'
-  return { ok: false, error: code ? `${msg} (${code})` : msg }
+  const split = String(apiKey || '').indexOf(':')
+  return split > 0
+    ? { user: apiKey.slice(0, split), pass: apiKey.slice(split + 1) }
+    : { user: '', pass: '' }
 }
 
 async function sendSms(
   provider: string,
-  config: { apiKey: string; lineNumber: string; username?: string },
+  config: { apiKey: string; lineNumber: string; username: string },
   phones: string[],
-  text: string
+  text: string,
 ): Promise<{ ok: boolean; error?: string }> {
+  if (!config.apiKey) return { ok: false, error: 'sms_not_configured' }
   switch (provider) {
     case 'melipayamak': {
-      const { user, pass } = parseMeliCreds(config.username || '', config.apiKey)
-      const from = config.lineNumber || ''
-      if (!from) return { ok: false, error: 'SMS_LINE_NUMBER (شماره خط ملی پیامک) الزامی است' }
-
-      // کنسول ملی پیامک: توکن در URL — https://console.melipayamak.com/api/send/simple/{token}
-      if (!user && config.apiKey && !String(config.apiKey).includes(':')) {
+      const { user, pass } = parseMeliCreds(config.username, config.apiKey)
+      if (!config.lineNumber) return { ok: false, error: 'line_number_required' }
+      if (!user && !config.apiKey.includes(':')) {
         for (const phone of phones) {
-          const res = await fetch(
-            `https://console.melipayamak.com/api/send/simple/${encodeURIComponent(config.apiKey)}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-              body: JSON.stringify({ from, to: phone, text }),
-            }
-          )
+          const res = await fetch(`https://console.melipayamak.com/api/send/simple/${encodeURIComponent(config.apiKey)}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from: config.lineNumber, to: phone, text }),
+          })
           const data = await res.json().catch(() => ({}))
-          // status خالی/موفق و recId مثبت = ok؛ status متن خطا می‌دهد
-          const errMsg = typeof data?.status === 'string' ? data.status.trim() : ''
-          const recId = data?.recId
-          const badRec = recId == null || recId === '' || Number(recId) < 0
-          if (!res.ok || (errMsg && badRec) || badRec) {
-            return { ok: false, error: errMsg || `melipayamak console ${res.status}` }
-          }
+          if (!res.ok || !data?.recId || Number(data.recId) < 0) return { ok: false, error: 'melipayamak_failed' }
         }
         return { ok: true }
       }
-
+      if (!user || !pass) return { ok: false, error: 'melipayamak_credentials_invalid' }
       for (const phone of phones) {
-        const body = new URLSearchParams({
-          username: user,
-          password: pass,
-          to: phone,
-          from,
-          text,
-          isFlash: 'false',
-        })
+        const form = new URLSearchParams({ username: user, password: pass, to: phone, from: config.lineNumber, text, isFlash: 'false' })
         const res = await fetch('https://rest.payamak-panel.com/api/SendSMS/SendSMS', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body,
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form,
         })
         const data = await res.json().catch(() => ({}))
-        const check = meliOk(data)
-        if (!check.ok) return check
+        if (!res.ok || data?.RetStatus !== 1) return { ok: false, error: 'melipayamak_failed' }
       }
       return { ok: true }
     }
     case 'kavenegar':
       for (const phone of phones) {
-        const res = await fetch(`https://api.kavenegar.com/v1/${config.apiKey}/sms/send.json`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `receptor=${encodeURIComponent(phone)}&sender=${encodeURIComponent(config.lineNumber)}&message=${encodeURIComponent(text)}`,
+        const res = await fetch(`https://api.kavenegar.com/v1/${encodeURIComponent(config.apiKey)}/sms/send.json`, {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ receptor: phone, sender: config.lineNumber, message: text }),
         })
-        const data = await res.json()
-        if (!data.return || data.return.status !== 200) {
-          return { ok: false, error: data.return?.message || 'kavenegar error' }
-        }
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok || data?.return?.status !== 200) return { ok: false, error: 'kavenegar_failed' }
       }
       return { ok: true }
     case 'smsir': {
       const res = await fetch('https://api.sms.ir/v1/send/bulk', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-KEY': config.apiKey,
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          Message: text,
-          MobileNumbers: phones,
-          LineNumber: config.lineNumber,
-          SendDate: '',
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-KEY': config.apiKey },
+        body: JSON.stringify({ Message: text, MobileNumbers: phones, LineNumber: config.lineNumber, SendDate: '' }),
       })
-      const data = await res.json()
-      return data.IsSuccessful ? { ok: true } : { ok: false, error: data.Message || 'smsir error' }
+      const data = await res.json().catch(() => ({}))
+      return res.ok && data?.IsSuccessful ? { ok: true } : { ok: false, error: 'smsir_failed' }
     }
     case 'farazsms': {
       const res = await fetch('https://api.iranpayamak.com/ws/v1/sms/simple', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Api-Key': config.apiKey },
-        body: JSON.stringify({
-          text,
-          recipients: phones,
-          line_number: config.lineNumber || '90008361',
-          number_format: 'english',
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Api-Key': config.apiKey },
+        body: JSON.stringify({ text, recipients: phones, line_number: config.lineNumber, number_format: 'english' }),
       })
-      const data = await res.json()
-      return data.status === 'success' ? { ok: true } : { ok: false, error: data.message || 'faraz error' }
+      const data = await res.json().catch(() => ({}))
+      return res.ok && data?.status === 'success' ? { ok: true } : { ok: false, error: 'farazsms_failed' }
     }
     default:
-      return { ok: false, error: 'unknown provider' }
+      return { ok: false, error: 'unknown_provider' }
   }
 }

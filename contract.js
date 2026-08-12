@@ -43,6 +43,7 @@ const state = {
   lineItems: [],
   selectedPackageId: null,
   selectedPackageName: '',
+  selectedPackageSnapshot: null,
   packageExtras: [],
   verify: {
     groom: { code: '', sentAt: null, verified: false, verifiedAt: null, phone: '' },
@@ -83,13 +84,28 @@ function gotoStep(n) {
   document.querySelector('.form-col')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+function selectedContractTypes() {
+  return [...document.querySelectorAll('input[name="contract-type"]:checked')].map(el => el.value)
+}
+
+function onContractTypesChange() {
+  const types = selectedContractTypes()
+  const industrialFields = document.getElementById('industrial-client-fields')
+  if (industrialFields) industrialFields.hidden = !types.includes('صنعتی')
+}
+
 function validateStep(s) {
   if (s === 1) {
-    if (!gv('groom-name')) { toast('نام داماد الزامی است', 'error'); return false }
-    if (!gv('bride-name')) { toast('نام عروس الزامی است', 'error'); return false }
+    const types = selectedContractTypes()
+    if (!types.length) { toast('حداقل یک نوع پروژه را انتخاب کنید', 'error'); return false }
+    const industrialOnly = types.length === 1 && types[0] === 'صنعتی'
+    if (industrialOnly && !gv('client-name')) { toast('نام مشتری یا مجموعه الزامی است', 'error'); return false }
+    if (!industrialOnly && !gv('groom-name')) { toast('نام داماد الزامی است', 'error'); return false }
+    if (!industrialOnly && !gv('bride-name')) { toast('نام عروس الزامی است', 'error'); return false }
     if (!gv('event-date')) { toast('تاریخ مراسم را وارد کنید', 'error'); return false }
-    if (!gv('groom-phone')) { toast('شماره تماس داماد الزامی است', 'error'); return false }
-    if (!isVerifyValid('groom')) {
+    const primaryPhone = industrialOnly ? gv('client-phone') : gv('groom-phone')
+    if (!primaryPhone) { toast('شماره تماس اصلی الزامی است', 'error'); return false }
+    if (!industrialOnly && !isVerifyValid('groom')) {
       toast('شماره داماد باید با پیامک تأیید شود', 'error')
       return false
     }
@@ -464,6 +480,7 @@ function applyContractPackage(id) {
   const pkg = DB.find('packages', p => p.id === id)
   if (!pkg || typeof PackageCatalog === 'undefined') return
   PackageCatalog.applyToContractForm(pkg, state)
+  state.selectedPackageSnapshot = PackageCatalog.snapshot(pkg)
   renderPackagePicker()
   calcTotals()
   toast(`پکیج «${pkg.name}» اعمال شد`, 'success')
@@ -477,6 +494,7 @@ function clearContractPackage() {
     state.selectedPackageName = ''
     state.packageExtras = []
   }
+  state.selectedPackageSnapshot = null
   renderPackagePicker()
   calcTotals()
 }
@@ -1039,13 +1057,22 @@ function buildContractObject(isFinalized) {
   const phoneBride = gv('bride-phone') || gv('c-phone-b');
   const phoneGroom = gv('groom-phone') || gv('c-phone-g');
 
-  if (!bride || !groom) {
+  const contractTypes = selectedContractTypes()
+  const industrialOnly = contractTypes.length === 1 && contractTypes[0] === 'صنعتی'
+  const clientName = gv('client-name')
+  const clientPhone = normalizePhoneField('client-phone')
+
+  if ((!industrialOnly && (!bride || !groom)) || (industrialOnly && !clientName)) {
     toast('نام عروس و داماد الزامی است', 'error');
     return null;
   }
 
   const total = state.total || 0
   const depositVal = parseMoney(gv('deposit'))
+  if (depositVal < 0 || depositVal > total) {
+    toast('بیعانه نمی‌تواند منفی یا بیشتر از مبلغ کل قرارداد باشد', 'error')
+    return null
+  }
   const contractId = gv('contract-num') || generateContractNum(gv('event-date')) || ('TMP-' + Date.now())
   const venue = gv('event-venue') || '—'
   const eventDate = gv('event-date') || todayFa()
@@ -1057,7 +1084,9 @@ function buildContractObject(isFinalized) {
   const assignedStaff = getAssignedStaff()
   return {
     id: contractId,
-    couple: bride + ' و ' + groom,
+    couple: industrialOnly ? clientName : bride + ' و ' + groom,
+    clientName: clientName || '',
+    phone: clientPhone || '',
     bride: bride,
     groom: groom,
     phoneBride: normalizePhoneField('bride-phone'),
@@ -1067,7 +1096,8 @@ function buildContractObject(isFinalized) {
     date: eventDate,
     contractDate,
     venue,
-    type: 'عروسی',
+    type: contractTypes[0] || 'عروسی',
+    types: contractTypes,
     makeup: gv('event-makeup') || '',
     music: gv('event-music') || '',
     tailor: gv('event-tailor') || '',
@@ -1104,6 +1134,7 @@ function buildContractObject(isFinalized) {
     }, {}),
     packageId: state.selectedPackageId || '',
     packageName: state.selectedPackageName || '',
+    packageSnapshot: state.selectedPackageSnapshot || null,
     verification: getVerificationSnapshot(!isFinalized),
     createdAt: todayFa()
   };

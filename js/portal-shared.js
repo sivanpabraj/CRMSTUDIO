@@ -242,7 +242,7 @@ const PortalShared = {
     })
 
     if (person.payMonthlyPercent && person.monthlyProjectPercent) {
-      const contracts = (DB.get('contracts') || []).filter(c => {
+      const contracts = (typeof DB.active === 'function' ? DB.active('contracts') : (DB.get('contracts') || []).filter(c => !c._deleted)).filter(c => {
         if (c.status === 'cancelled') return false
         const d = Utils.normJalali(c.eventDate || c.date || '')
         return d && d.startsWith(monthKey)
@@ -253,7 +253,10 @@ const PortalShared = {
 
     breakdown.total = breakdown.monthly + breakdown.projectTotal + breakdown.percent
 
-    const existing = (DB.get('salaryPayments') || []).find(s => s.personId === person.id && s.month === monthKey)
+    const existing = (typeof DB.active === 'function'
+      ? DB.active('salaryPayments')
+      : (DB.get('salaryPayments') || []).filter(s => !s._deleted)
+    ).find(s => s.personId === person.id && s.month === monthKey)
     breakdown.alreadyPaid = !!existing
     breakdown.paymentRecord = existing || null
 
@@ -261,7 +264,7 @@ const PortalShared = {
   },
 
   getPayrollPayments(personnelId) {
-    return (DB.get('salaryPayments') || [])
+    return (typeof DB.active === 'function' ? DB.active('salaryPayments') : (DB.get('salaryPayments') || []).filter(p => !p._deleted))
       .filter(p => p.personId === personnelId)
       .sort((a, b) => String(b.month || '').localeCompare(String(a.month || '')))
   }

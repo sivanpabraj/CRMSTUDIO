@@ -2,50 +2,54 @@
 
 const SMReports = {
   collect() {
-    const contracts = DB.get('contracts')
+    const rows = (name) => (typeof DB.active === 'function'
+      ? DB.active(name)
+      : (DB.get(name) || []).filter(i => i && !i._deleted))
+
+    const contracts = rows('contracts')
     const activeContracts = contracts.filter(c => c.status !== 'cancelled')
     const cancelled = contracts.filter(c => c.status === 'cancelled')
     const contractTotal = contracts.reduce((s, c) => s + (c.total || 0), 0)
     const outstanding = contracts.reduce((s, c) => s + Math.max(0, (c.total || 0) - (c.deposit || 0) - (c.paid || 0)), 0)
 
-    const tx = DB.get('transactions')
+    const tx = rows('transactions')
     const deposits = tx.filter(t => t.type === 'deposit')
     const withdrawals = tx.filter(t => t.type === 'withdrawal')
     const depositSum = deposits.reduce((s, t) => s + (t.amount || 0), 0)
     const withdrawalSum = withdrawals.reduce((s, t) => s + (t.amount || 0), 0)
 
-    const invoices = DB.get('invoices')
+    const invoices = rows('invoices')
     const invIn = invoices.filter(i => (i.direction || 'in') === 'in').reduce((s, i) => s + (i.amount || 0), 0)
     const _invOut = invoices.filter(i => i.direction === 'out').reduce((s, i) => s + (i.amount || 0), 0)
 
-    const personnel = DB.get('personnel')
+    const personnel = rows('personnel')
     const activeStaff = personnel.filter(p => p.status === 'active')
-    const cheques = DB.get('cheques') || []
+    const cheques = rows('cheques')
     const pendingCheques = cheques.filter(c => c.status === 'pending' || !c.status)
 
-    const bookings = DB.get('bookings')
+    const bookings = rows('bookings')
     const confirmedBookings = bookings.filter(b => b.status === 'confirmed')
-    const timelines = DB.get('timelines')
-    const packages = DB.get('packages')
-    const expenses = DB.get('expenses')
+    const timelines = rows('timelines')
+    const packages = rows('packages')
+    const expenses = rows('expenses')
     const expenseSum = expenses.reduce((s, e) => s + (e.amount || 0), 0)
-    const banks = DB.get('banks')
+    const banks = rows('banks')
     const bankBalance = banks.reduce((s, b) => s + (b.balance || 0), 0)
 
-    const printOrders = DB.get('printOrders') || []
-    const equipment = DB.get('equipment')
-    const customerRequests = DB.get('customerRequests') || []
+    const printOrders = rows('printOrders')
+    const equipment = rows('equipment')
+    const customerRequests = rows('customerRequests')
     const pendingRequests = customerRequests.filter(r => r.status === 'pending' || r.status === 'open')
     const resolvedRequests = customerRequests.filter(r => r.status === 'done' || r.status === 'resolved' || r.status === 'completed')
-    const attendance = DB.get('attendance') || []
+    const attendance = rows('attendance')
     const attMonth = typeof SMAttendance !== 'undefined'
       ? SMAttendance.reportSummary(Utils.parseJalaliToday().jy, Utils.parseJalaliToday().jm)
       : { present: 0, absent: 0, hours: 0, total: attendance.length, staffWithRecords: 0 }
-    const persProjects = DB.get('persProjects') || []
-    const reminders = DB.get('calendarReminders') || []
-    const appointments = DB.get('appointments') || []
-    const workflows = DB.get('workflows') || []
-    const albums = DB.get('albums') || []
+    const persProjects = rows('persProjects')
+    const reminders = rows('calendarReminders')
+    const appointments = rows('appointments')
+    const workflows = rows('workflows')
+    const albums = rows('albums')
 
     const upcomingEvents = contracts.filter(c => {
       if (c.status === 'cancelled') return false
@@ -127,7 +131,7 @@ const SMReports = {
           items: [
             { label: 'سفارش چاپ', value: printOrders.length, sub: 'چاپخانه / آلبوم' },
             { label: 'تجهیزات', value: equipment.length, sub: 'استودیو' },
-            { label: 'امانات مشتری', value: (DB.get('customerCustody') || []).filter(c => c.status !== 'returned' && !c.returnedAt).length, sub: 'در استودیو' },
+            { label: 'امانات مشتری', value: (typeof DB.active === 'function' ? DB.active('customerCustody') : (DB.get('customerCustody') || []).filter(c => !c._deleted)).filter(c => c.status !== 'returned' && !c.returnedAt).length, sub: 'در استودیو' },
             { label: 'گردش کار تدوین', value: workflows.length, sub: 'پایپ‌لاین' }
           ]
         }
@@ -140,11 +144,11 @@ const SMReports = {
     el.innerHTML = `
       ${SMUI.sectionHead('گزارش‌ها', `خلاصه صفر تا صد استودیو — ${data.generatedAt}`, `
         <div class="sm-rep-export-btns">
-          <button type="button" class="sm-btn sm-btn-primary" onclick="SMReports.exportPDF()"><i class="fas fa-file-pdf"></i> خروجی PDF</button>
-          <button type="button" class="sm-btn sm-btn-ghost" onclick="SMReports.exportJPG()"><i class="fas fa-image"></i> خروجی JPG</button>
+          <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMReports.exportPDF')}><i class="fas fa-file-pdf"></i> خروجی PDF</button>
+          <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMReports.exportJPG')}><i class="fas fa-image"></i> خروجی JPG</button>
         </div>`)}
       <p class="sm-rep-intro">گزارش لحظه‌ای از همه بخش‌های برنامه: رزرو، تقویم، قرارداد، پکیج، فاکتور، حسابداری، پرسنل، مشتری و چاپ.
-      برای ذخیرهٔ فایل داده (پشتیبان) به <button type="button" class="sm-link-btn" onclick="SM.navigate('settings');SMSettings.setTab('backup')">تنظیمات → پشتیبان</button> بروید.</p>
+      برای ذخیرهٔ فایل داده (پشتیبان) به <button type="button" class="sm-link-btn" ${SMEvents.attrs('SM.openSettingsTab', ['backup'])}>تنظیمات → پشتیبان</button> بروید.</p>
       <div id="sm-report-screen">${this._screenHtml(data)}</div>
       <div id="sm-report-doc-wrap" class="sm-rep-doc-hidden" aria-hidden="true">${this._docHtml(data)}</div>`
   },
@@ -210,7 +214,10 @@ const SMReports = {
   exportPDF() {
     const el = this._getDocEl()
     const fname = `گزارش-استودیو-${Utils.todayJalali().replace(/\//g, '')}.pdf`
-    if (typeof html2pdf !== 'undefined') {
+    const run = () => {
+      if (typeof html2pdf === 'undefined') {
+        return SM.toast('ابزار PDF بارگذاری نشد', 'error')
+      }
       html2pdf().set({
         margin: [10, 10, 10, 10],
         filename: fname,
@@ -219,9 +226,10 @@ const SMReports = {
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       }).from(el).save().then(() => SM.toast('PDF ذخیره شد', 'success'))
         .catch(() => SM.toast('خطا در ساخت PDF', 'error'))
-    } else {
-      SM.toast('ابزار PDF بارگذاری نشده — صفحه را رفرش کنید', 'error')
     }
+    if (typeof SMExport !== 'undefined' && SMExport.ensurePdfLibs) {
+      SMExport.ensurePdfLibs().then(run).catch(() => SM.toast('بارگذاری ابزار PDF ناموفق بود', 'error'))
+    } else run()
   },
 
   exportJPG() {
@@ -234,16 +242,21 @@ const SMReports = {
       a.click()
       SM.toast('عکس JPG ذخیره شد', 'success')
     }
-    if (typeof html2canvas !== 'undefined') {
-      html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }).then(save)
-        .catch(() => SM.toast('خطا در ساخت تصویر', 'error'))
-    } else if (typeof html2pdf !== 'undefined') {
-      html2pdf().set({ html2canvas: { scale: 2, backgroundColor: '#fff' } }).from(el).toCanvas()
-        .then(canvas => save(canvas))
-        .catch(() => SM.toast('خطا در ساخت تصویر', 'error'))
-    } else {
-      SM.toast('ابزار تصویر بارگذاری نشده', 'error')
+    const run = () => {
+      if (typeof html2canvas !== 'undefined') {
+        html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }).then(save)
+          .catch(() => SM.toast('خطا در ساخت تصویر', 'error'))
+      } else if (typeof html2pdf !== 'undefined') {
+        html2pdf().set({ html2canvas: { scale: 2, backgroundColor: '#fff' } }).from(el).toCanvas()
+          .then(canvas => save(canvas))
+          .catch(() => SM.toast('خطا در ساخت تصویر', 'error'))
+      } else {
+        SM.toast('ابزار تصویر بارگذاری نشد', 'error')
+      }
     }
+    if (typeof SMExport !== 'undefined' && SMExport.ensurePdfLibs) {
+      SMExport.ensurePdfLibs().then(run).catch(() => SM.toast('بارگذاری ابزار تصویر ناموفق بود', 'error'))
+    } else run()
   }
 }
 

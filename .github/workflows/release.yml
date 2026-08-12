@@ -1,0 +1,36 @@
+name: Release package
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run ci:verify
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Package immutable static release
+        run: tar -czf studio-m-release.tar.gz -C dist .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: studio-m-release-${{ github.ref_name }}
+          path: studio-m-release.tar.gz
+          if-no-files-found: error
+          retention-days: 30

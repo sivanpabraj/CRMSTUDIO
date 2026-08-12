@@ -42,7 +42,7 @@ const SMOnboarding = {
         </details>
         <label class="sm-check-row" style="margin:12px 0"><input type="checkbox" id="onb-keep-pw" checked/> فعلاً همان رمز فعلی بماند (تغییر رمز اختیاری است)</label>
         <p class="sm-onboarding-error" id="onb-error"></p>
-        <button type="button" class="sm-btn sm-btn-primary sm-onboarding-submit" onclick="SMOnboarding.complete()">
+        <button type="button" class="sm-btn sm-btn-primary sm-onboarding-submit" ${SMEvents.attrs('SMOnboarding.complete')}>
           <i class="fas fa-check"></i> ذخیره و ورود به پنل
         </button>
       </div>`

@@ -3,10 +3,19 @@
 const SMAccounting = {
   _tab: 'banks',
   _flowFilter: 'all',
+  _chequeFilter: 'all',
+  _chequePage: 0,
+  _chequePageSize: 40,
+  _ledgerPage: 0,
+  _ledgerPageSize: 40,
 
   MONTHS: ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'],
 
-  BANK_COLORS: ['#0071E3', '#5856D6', '#009688', '#E68619', '#34C759', '#00A3BF', '#FF375F'],
+  BANK_THEMES: [
+    ['#2f6fed', '#70c8ff'], ['#4f46e5', '#a78bfa'], ['#00796b', '#42d3bd'],
+    ['#b45309', '#fbbf24'], ['#166534', '#4ade80'], ['#0e7490', '#67e8f9'],
+    ['#be123c', '#fb7185']
+  ],
 
   SOURCE_TYPES: {
     customer: 'مشتری / قرارداد',
@@ -21,7 +30,8 @@ const SMAccounting = {
     other_income: 'درآمد متفرقه',
     rent: 'دریافت اجاره',
     equipment_rent: 'کرایه تجهیزات',
-    refund_received: 'بازگشت وجه دریافتی'
+    refund_received: 'بازگشت وجه دریافتی',
+    transfer: 'انتقال بین حساب'
   },
 
   WITHDRAWAL_CATS: {
@@ -52,6 +62,23 @@ const SMAccounting = {
 
   setFlowFilter(f) {
     this._flowFilter = f
+    this._ledgerPage = 0
+    SM.navigate('accounting')
+  },
+
+  setLedgerPage(p) {
+    this._ledgerPage = Math.max(0, Number(p) || 0)
+    SM.navigate('accounting')
+  },
+
+  setChequeFilter(f) {
+    this._chequeFilter = f
+    this._chequePage = 0
+    SM.navigate('accounting')
+  },
+
+  setChequePage(p) {
+    this._chequePage = Math.max(0, Number(p) || 0)
     SM.navigate('accounting')
   },
 
@@ -68,6 +95,26 @@ const SMAccounting = {
   _bankName(id) {
     const b = DB.find('banks', x => x.id === id)
     return b ? (b.name || b.bank || 'حساب') : '—'
+  },
+
+  _bankAccount(b) {
+    return b?.account || b?.accountNumber || ''
+  },
+
+  _bankIban(b) {
+    return b?.iban || b?.shaba || ''
+  },
+
+  _chequeType(c) {
+    return c?.type || c?.direction || 'incoming'
+  },
+
+  _chequeNumber(c) {
+    return c?.number || c?.chequeNumber || ''
+  },
+
+  _chequeParty(c) {
+    return c?.client || c?.drawer || c?.party || ''
   },
 
   _maskCard(num) {
@@ -94,76 +141,12 @@ const SMAccounting = {
     return parts.join(' — ') || t.desc || '—'
   },
 
-  _genInvoiceNumber() {
-    const t = Utils.todayJalali().replace(/\//g, '')
-    const n = DB.get('invoices').length + 1
-    return `F-${t}-${String(n).padStart(3, '0')}`
-  },
-
-  _mapInvoiceType(tx) {
-    if (tx.type === 'deposit') {
-      if (tx.purposeCategory === 'contract_deposit') return 'customer_deposit'
-      if (tx.purposeCategory === 'contract_payment') return 'customer_payment'
-      return 'other'
-    }
-    if (tx.purposeCategory === 'personnel') return 'personnel'
-    if (tx.purposeCategory === 'utility') return 'utility_electric'
-    if (tx.purposeCategory === 'print') return 'expense'
-    if (tx.purposeCategory === 'equipment') return 'expense'
-    if (tx.purposeCategory === 'cancellation_refund') return 'transfer'
-    return 'expense'
-  },
-
-  async _syncInvoice(txData, txId, existingInvoiceId) {
-    if (!document.getElementById('tx-sync-inv')?.checked && !existingInvoiceId) return null
-    if (typeof FinanceSync !== 'undefined') {
-      return FinanceSync.createInvoiceFromTx(txData, txId, existingInvoiceId)
-    }
-    const bank = DB.find('banks', b => b.id === txData.bankId)
-    const contract = txData.contractId ? DB.find('contracts', c => c.id === txData.contractId) : null
-    const cats = txData.type === 'deposit' ? this.DEPOSIT_CATS : this.WITHDRAWAL_CATS
-    const catLabel = cats[txData.purposeCategory] || ''
-    let client = txData.client || ''
-    if (txData.personnelId) client = this._personName(txData.personnelId)
-    else if (contract && !client) client = this._couple(contract)
-
-    const invPayload = {
-      type: this._mapInvoiceType(txData),
-      direction: txData.type === 'deposit' ? 'in' : 'out',
-      title: txData.purpose || `${catLabel}${client ? ' — ' + client : ''}`,
-      client,
-      contractId: txData.contractId || '',
-      personnelId: txData.personnelId || '',
-      amount: txData.amount,
-      date: txData.date,
-      purpose: txData.purpose || catLabel,
-      periodMonth: txData.periodMonth || '',
-      bankId: txData.bankId || '',
-      bankName: bank ? (bank.name || bank.bank || '') : '',
-      accountOrCard: txData.accountOrCard || '',
-      paymentMethod: txData.paymentMethod || 'transfer',
-      description: txData.notes || '',
-      status: 'paid',
-      transactionId: txId,
-      syncLedger: false
-    }
-
-    if (existingInvoiceId) {
-      const ex = DB.find('invoices', i => i.id === existingInvoiceId)
-      if (ex) await SecureDB.update('invoices', existingInvoiceId, { ...invPayload, number: ex.number })
-      return existingInvoiceId
-    }
-    const num = this._genInvoiceNumber()
-    const inv = await SecureDB.insert('invoices', { ...invPayload, number: num, createdAt: Utils.todayJalali() })
-    return inv.id
-  },
-
   render(el) {
     const q = SM.getModuleSearch('accounting')
-    const allTx = DB.get('transactions')
-    const income = allTx.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0)
-    const expense = allTx.filter(t => t.type === 'withdrawal').reduce((s, t) => s + (t.amount || 0), 0)
-    const cheques = DB.get('cheques') || []
+    const allTx = (typeof DB.active === 'function' ? DB.active('transactions') : (DB.get('transactions') || []).filter(t => !t._deleted))
+    const income = allTx.filter(t => t.type === 'deposit' && t.purposeCategory !== 'transfer').reduce((s, t) => s + (t.amount || 0), 0)
+    const expense = allTx.filter(t => t.type === 'withdrawal' && t.purposeCategory !== 'transfer').reduce((s, t) => s + (t.amount || 0), 0)
+    const cheques = (typeof DB.active === 'function' ? DB.active('cheques') : (DB.get('cheques') || []).filter(c => !c._deleted))
 
     el.innerHTML = `
       ${SMUI.sectionHead('حسابداری', 'بانک · رفت‌وبرگشت · چک', this._headActions())}
@@ -175,20 +158,20 @@ const SMAccounting = {
         { label: 'چک فعال', value: SM.fmt(cheques.filter(c => c.status !== 'passed' && c.status !== 'cancelled').length), icon: 'fa-money-check', color: 'var(--sm-warning)' }
       ])}
       ${SMUI.tabs([
-        { id: 'banks', fa: 'بانک', en: 'Banks', icon: 'fa-building-columns', onclick: "SMAccounting.setTab('banks')" },
-        { id: 'ledger', fa: 'رفت‌وبرگشت', en: 'Ledger', icon: 'fa-book', onclick: "SMAccounting.setTab('ledger')" },
-        { id: 'cheques', fa: 'چک', en: 'Cheques', icon: 'fa-money-check-alt', onclick: "SMAccounting.setTab('cheques')" }
+        { id: 'banks', label: 'بانک', icon: 'fa-building-columns', fn: 'SMAccounting.setTab', args: ['banks'] },
+        { id: 'ledger', label: 'رفت‌وبرگشت', icon: 'fa-book', fn: 'SMAccounting.setTab', args: ['ledger'] },
+        { id: 'cheques', label: 'چک', icon: 'fa-money-check-alt', fn: 'SMAccounting.setTab', args: ['cheques'] }
       ], this._tab)}
       <div class="sm-acc-body">${this._renderTab(q)}</div>`
   },
 
   _headActions() {
-    const flow = `<button type="button" class="sm-btn sm-btn-primary" onclick="SMAccounting.openFlowMenu()"><i class="fas fa-right-left"></i> واریز و برداشت</button>`
+    const flow = `<button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMAccounting.openFlowMenu')}><i class="fas fa-right-left"></i> واریز و برداشت</button>`
     let extra = ''
     if (this._tab === 'banks') {
-      extra = `<button type="button" class="sm-btn sm-btn-ghost" onclick="SMAccounting.addBank()"><i class="fas fa-plus"></i> افزودن بانک</button>`
+      extra = `<button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMAccounting.addBank')}><i class="fas fa-plus"></i> افزودن بانک</button>`
     } else if (this._tab === 'cheques') {
-      extra = `<button type="button" class="sm-btn sm-btn-ghost" onclick="SMAccounting.addCheque()"><i class="fas fa-plus"></i> ثبت چک</button>`
+      extra = `<button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMAccounting.addCheque')}><i class="fas fa-plus"></i> ثبت چک</button>`
     }
     return `<div class="sm-acc-head-actions">${flow}${extra}</div>`
   },
@@ -197,16 +180,24 @@ const SMAccounting = {
     SMUI.modal('واریز و برداشت', `
       <p class="sm-acc-flow-hint">نوع تراکنش را انتخاب کنید — جزئیات در فرم بعدی ثبت می‌شود و در فاکتورها هم می‌آید.</p>
       <div class="sm-acc-flow-pick">
-        <button type="button" class="sm-acc-flow-btn is-in" onclick="SMUI.closeModal();SMAccounting.addDeposit()">
+        <button type="button" class="sm-acc-flow-btn is-in" ${SMEvents.attrs('SMAccounting.flowDeposit')}>
           <i class="fas fa-arrow-down"></i>
           <div><strong>ثبت واریز</strong><span>مشتری، بیعانه، قرارداد، درآمد</span></div>
         </button>
-        <button type="button" class="sm-acc-flow-btn is-out" onclick="SMUI.closeModal();SMAccounting.addWithdrawal()">
+        <button type="button" class="sm-acc-flow-btn is-out" ${SMEvents.attrs('SMAccounting.flowWithdrawal')}>
           <i class="fas fa-arrow-up"></i>
           <div><strong>ثبت برداشت</strong><span>کنسلی، پرسنل، اجاره، هزینه</span></div>
         </button>
+        <button type="button" class="sm-acc-flow-btn" ${SMEvents.attrs('SMAccounting.flowTransfer')}>
+          <i class="fas fa-exchange-alt"></i>
+          <div><strong>انتقال بین حساب</strong><span>از یک بانک/صندوق به دیگری</span></div>
+        </button>
       </div>`, { width: 440 })
   },
+
+  flowDeposit() { SMUI.closeModal(); this.addDeposit() },
+  flowWithdrawal() { SMUI.closeModal(); this.addWithdrawal() },
+  flowTransfer() { SMUI.closeModal(); this.addTransfer() },
 
   _renderTab(q) {
     if (this._tab === 'banks') return this._banksView(q)
@@ -215,43 +206,76 @@ const SMAccounting = {
   },
 
   _banksView(q) {
-    let banks = DB.get('banks')
+    let banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
     if (q) {
       banks = banks.filter(b =>
-        [b.name, b.bank, b.account, b.card, b.iban, b.holder, b.balance].join(' ').toLowerCase().includes(q)
+        [b.name, b.bank, b.account, b.accountNumber, b.card, b.iban, b.shaba, b.holder, b.balance].join(' ').toLowerCase().includes(q)
       )
     }
     if (!banks.length) {
       return `${SMUI.empty('fa-building-columns', q ? 'بانکی یافت نشد' : 'هنوز حساب بانکی ثبت نشده', 'نام بانک، کارت، شبا و حساب را اضافه کنید')}
-        ${!q ? `<div style="text-align:center;margin-top:12px"><button type="button" class="sm-btn sm-btn-primary" onclick="SMAccounting.addBank()"><i class="fas fa-plus"></i> اولین بانک</button></div>` : ''}`
+        ${!q ? `<div style="text-align:center;margin-top:12px"><button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMAccounting.addBank')}><i class="fas fa-plus"></i> اولین بانک</button></div>` : ''}`
     }
     return `<div class="sm-acc-bank-grid">${banks.map((b, i) => this._bankCard(b, i)).join('')}</div>`
   },
 
   _bankCard(b, i) {
-    const color = this.BANK_COLORS[i % this.BANK_COLORS.length]
-    return `<div class="sm-acc-bank" style="--bank-color:${color}">
-      <div class="sm-acc-bank-top">
-        <div class="sm-acc-bank-icon"><i class="fas fa-building-columns"></i></div>
-        <div class="sm-acc-bank-title">
-          <strong>${SM.esc(b.name || b.bank || 'حساب بانکی')}</strong>
-          <span>${SM.esc(b.bank || '')}${b.holder ? ` · ${SM.esc(b.holder)}` : ''}</span>
+    const theme = this.BANK_THEMES[i % this.BANK_THEMES.length]
+    const account = this._bankAccount(b)
+    const iban = this._bankIban(b)
+    const title = b.name || b.bank || 'حساب بانکی'
+    const bank = b.bank || title
+    return `<article class="sm-acc-bank" style="--bank-from:${theme[0]};--bank-to:${theme[1]}" data-bank-card="${SM.esc(b.id)}">
+      <div class="sm-bank-card-scene">
+        <div class="sm-bank-card-3d">
+          <section class="sm-bank-card-face sm-bank-card-front" aria-label="روی کارت ${SM.esc(title)}">
+            <div class="sm-bank-card-head">
+              <span class="sm-bank-brand"><i class="fas fa-building-columns"></i> ${SM.esc(bank)}</span>
+              <span class="sm-bank-contactless" aria-hidden="true"><i class="fas fa-wifi"></i></span>
+            </div>
+            <div class="sm-bank-chip" aria-hidden="true"><span></span><span></span><span></span></div>
+            <code class="sm-bank-number" dir="ltr">${SM.esc(b.card ? this._maskCard(b.card) : '•••• •••• •••• ••••')}</code>
+            <div class="sm-bank-card-foot">
+              <span><small>صاحب حساب</small><strong>${SM.esc(b.holder || title)}</strong></span>
+              <span class="sm-bank-card-balance"><small>موجودی</small><strong>${SM.fmt(b.balance || 0)} <em>تومان</em></strong></span>
+            </div>
+          </section>
+          <section class="sm-bank-card-face sm-bank-card-back" aria-label="پشت کارت ${SM.esc(title)}">
+            <div class="sm-bank-magstripe"></div>
+            <div class="sm-bank-back-content">
+              <span class="sm-bank-back-label">شماره حساب</span><code dir="ltr">${SM.esc(account || '—')}</code>
+              <span class="sm-bank-back-label">شماره شبا</span><code class="sm-bank-iban" dir="ltr">${SM.esc(this._fmtSheba(iban))}</code>
+              <div class="sm-bank-back-brand"><i class="fas fa-building-columns"></i><strong>${SM.esc(bank)}</strong></div>
+            </div>
+          </section>
         </div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.editBank('${b.id}')" title="ویرایش"><i class="fas fa-pen"></i></button>
       </div>
-      <div class="sm-acc-bank-balance">${SM.fmt(b.balance || 0)} <small>تومان</small></div>
-      <div class="sm-acc-bank-fields">
-        <div class="sm-acc-bank-field"><span>شماره کارت</span><code dir="ltr">${SM.esc(b.card ? this._maskCard(b.card) : '—')}</code></div>
-        <div class="sm-acc-bank-field"><span>شماره حساب</span><code dir="ltr">${SM.esc(b.account || '—')}</code></div>
-        <div class="sm-acc-bank-field sm-acc-bank-field--full"><span>شماره شبا</span><code dir="ltr">${SM.esc(this._fmtSheba(b.iban))}</code></div>
+      <div class="sm-bank-card-actions">
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost sm-bank-flip-btn" ${SMEvents.attrs('SMAccounting.toggleBankCard', [b.id])} aria-pressed="false"><i class="fas fa-rotate"></i> نمایش پشت کارت</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMAccounting.editBank', [b.id])}><i class="fas fa-pen"></i> ویرایش</button>
       </div>
-    </div>`
+    </article>`
+  },
+
+  toggleBankCard(id) {
+    const card = [...document.querySelectorAll('[data-bank-card]')]
+      .find(el => el.dataset.bankCard === String(id))
+    if (!card) return
+    const flipped = card.classList.toggle('is-flipped')
+    const button = card.querySelector('.sm-bank-flip-btn')
+    if (button) {
+      button.setAttribute('aria-pressed', String(flipped))
+      button.innerHTML = flipped
+        ? '<i class="fas fa-rotate-left"></i> نمایش روی کارت'
+        : '<i class="fas fa-rotate"></i> نمایش پشت کارت'
+    }
   },
 
   _ledgerView(q) {
-    let tx = DB.get('transactions').slice().reverse()
+    let tx = (typeof DB.active === 'function' ? DB.active('transactions') : (DB.get('transactions') || []).filter(t => !t._deleted)).slice().reverse()
     if (this._flowFilter === 'deposit') tx = tx.filter(t => t.type === 'deposit')
     if (this._flowFilter === 'withdrawal') tx = tx.filter(t => t.type === 'withdrawal')
+    if (this._flowFilter === 'transfer') tx = tx.filter(t => t.purposeCategory === 'transfer')
     if (q) {
       tx = tx.filter(t => {
         const c = t.contractId ? DB.find('contracts', x => x.id === t.contractId) : null
@@ -260,21 +284,36 @@ const SMAccounting = {
       })
     }
 
+    const pageFn = (typeof paginate === 'function')
+      ? paginate
+      : (typeof ListPage !== 'undefined' ? ListPage.paginate : null)
+    const page = pageFn
+      ? pageFn(tx, this._ledgerPage, this._ledgerPageSize)
+      : { items: tx.slice(0, this._ledgerPageSize), page: 0, pages: 1, total: tx.length, hasPrev: false, hasNext: tx.length > this._ledgerPageSize }
+
     const filters = [
       { id: 'all', label: 'همه' },
       { id: 'deposit', label: 'واریز', cls: 'is-in' },
-      { id: 'withdrawal', label: 'برداشت', cls: 'is-out' }
+      { id: 'withdrawal', label: 'برداشت', cls: 'is-out' },
+      { id: 'transfer', label: 'انتقال' }
     ]
 
     return `
       <div class="sm-inv-cats">
         ${filters.map(f => `
           <button type="button" class="sm-inv-cat ${f.cls || ''}${this._flowFilter === f.id ? ' active' : ''}"
-            onclick="SMAccounting.setFlowFilter('${f.id}')">${f.label}</button>`).join('')}
+            ${SMEvents.attrs('SMAccounting.setFlowFilter', [f.id])}>${f.label}</button>`).join('')}
       </div>
       <div class="sm-acc-tx-list">
-        ${tx.length ? tx.map(t => this._txRow(t)).join('') : SMUI.empty('fa-book', q ? 'تراکنشی یافت نشد' : 'تراکنشی ثبت نشده — از دکمه «واریز و برداشت» بالا استفاده کنید')}
-      </div>`
+        ${page.items.length ? page.items.map(t => this._txRow(t)).join('') : SMUI.empty('fa-book', q ? 'تراکنشی یافت نشد' : 'تراکنشی ثبت نشده — از دکمه «واریز و برداشت» بالا استفاده کنید')}
+      </div>
+      ${page.pages > 1 ? `<div class="sm-pager" style="display:flex;gap:8px;justify-content:center;margin-top:12px;align-items:center">
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${page.hasPrev ? '' : 'disabled '}
+          ${SMEvents.attrs('SMAccounting.setLedgerPage', [page.page - 1])}>قبلی</button>
+        <span style="font-size:.85rem;color:var(--sm-text-muted)">${(page.page + 1).toLocaleString('fa-IR')} / ${page.pages.toLocaleString('fa-IR')} — ${page.total.toLocaleString('fa-IR')} مورد</span>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${page.hasNext ? '' : 'disabled '}
+          ${SMEvents.attrs('SMAccounting.setLedgerPage', [page.page + 1])}>بعدی</button>
+      </div>` : ''}`
   },
 
   _txRow(t) {
@@ -283,15 +322,17 @@ const SMAccounting = {
     const cats = isIn ? this.DEPOSIT_CATS : this.WITHDRAWAL_CATS
     const catLabel = cats[t.purposeCategory] || (isIn ? 'واریز' : 'برداشت')
     const srcLabel = this.SOURCE_TYPES[t.sourceType]
+    const isTransfer = t.purposeCategory === 'transfer'
 
     return `<div class="sm-acc-tx${isIn ? ' is-in' : ' is-out'}">
       <div class="sm-acc-tx-stripe"></div>
-      <div class="sm-acc-tx-icon"><i class="fas fa-${isIn ? 'arrow-down' : 'arrow-up'}"></i></div>
+      <div class="sm-acc-tx-icon"><i class="fas fa-${isTransfer ? 'exchange-alt' : (isIn ? 'arrow-down' : 'arrow-up')}"></i></div>
       <div class="sm-acc-tx-body">
         <div class="sm-acc-tx-top">
-          ${SMUI.badge(catLabel, isIn ? 'success' : 'danger')}
+          ${SMUI.badge(catLabel, isTransfer ? 'info' : (isIn ? 'success' : 'danger'))}
           ${srcLabel ? SMUI.badge(srcLabel, 'muted') : ''}
           ${t.invoiceId ? SMUI.badge('در فاکتور', 'info') : ''}
+          ${t.chequeId ? SMUI.badge('از چک', 'warning') : ''}
           <span class="sm-acc-tx-date">${SM.esc(t.date || '—')}</span>
         </div>
         <div class="sm-acc-tx-title">${SM.esc(this._txSummary(t))}</div>
@@ -307,8 +348,10 @@ const SMAccounting = {
       <div class="sm-acc-tx-side">
         <div class="sm-acc-tx-amt">${isIn ? '+' : '−'} ${SM.fmt(t.amount || 0)} <small>تومان</small></div>
         <div class="sm-acc-tx-btns">
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.printReceipt('${t.id}')" title="PDF"><i class="fas fa-file-pdf"></i></button>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.editTx('${t.id}')"><i class="fas fa-pen"></i></button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="PDF"
+            ${SMEvents.attrs('SMAccounting.printReceipt', [t.id])}><i class="fas fa-file-pdf"></i></button>
+          ${!isTransfer ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost"
+            ${SMEvents.attrs('SMAccounting.editTx', [t.id])}><i class="fas fa-pen"></i></button>` : ''}
         </div>
       </div>
     </div>`
@@ -319,29 +362,82 @@ const SMAccounting = {
   },
 
   _chequesView(q) {
-    let cheques = (DB.get('cheques') || []).slice().reverse()
+    const all = typeof DB.active === 'function' ? DB.active('cheques') : (DB.get('cheques') || []).filter(c => !c._deleted)
+    let cheques = all.slice().reverse()
+    if (this._chequeFilter === 'incoming') cheques = cheques.filter(c => this._chequeType(c) === 'incoming')
+    if (this._chequeFilter === 'outgoing') cheques = cheques.filter(c => this._chequeType(c) === 'outgoing')
+    if (this._chequeFilter === 'pending') cheques = cheques.filter(c => (c.status || 'pending') === 'pending')
     if (q) {
       cheques = cheques.filter(c =>
-        [c.number, c.bank, c.amount, c.dueDate, c.purpose, c.client, c.transactionRef, c.iban, c.drawer].join(' ').toLowerCase().includes(q)
+        [this._chequeNumber(c), c.bank, c.amount, c.dueDate, c.purpose, this._chequeParty(c), c.transactionRef, c.iban].join(' ').toLowerCase().includes(q)
       )
     }
-    const incoming = cheques.filter(c => c.type === 'incoming')
-    const outgoing = cheques.filter(c => c.type === 'outgoing')
+    const incoming = all.filter(c => this._chequeType(c) === 'incoming')
+    const outgoing = all.filter(c => this._chequeType(c) === 'outgoing')
+    const pendingAmt = all.filter(c => (c.status || 'pending') === 'pending').reduce((s, c) => s + (c.amount || 0), 0)
+
+    const filters = [
+      { id: 'all', label: 'همه' },
+      { id: 'incoming', label: 'دریافتی', cls: 'is-in' },
+      { id: 'outgoing', label: 'پرداختی', cls: 'is-out' },
+      { id: 'pending', label: 'در انتظار' }
+    ]
 
     return `
       <div class="sm-acc-chq-summary">
         <div class="sm-acc-chq-sum is-in"><span>چک دریافتی</span><strong>${incoming.length.toLocaleString('fa-IR')}</strong><small>${SM.fmt(incoming.reduce((s, c) => s + (c.amount || 0), 0))} ت</small></div>
         <div class="sm-acc-chq-sum is-out"><span>چک پرداختی</span><strong>${outgoing.length.toLocaleString('fa-IR')}</strong><small>${SM.fmt(outgoing.reduce((s, c) => s + (c.amount || 0), 0))} ت</small></div>
+        <div class="sm-acc-chq-sum"><span>در انتظار پاس</span><strong>${SM.fmt(pendingAmt)}</strong><small>تومان</small></div>
       </div>
+      <div class="sm-inv-cats">
+        ${filters.map(f => `
+          <button type="button" class="sm-inv-cat ${f.cls || ''}${this._chequeFilter === f.id ? ' active' : ''}"
+            ${SMEvents.attrs('SMAccounting.setChequeFilter', [f.id])}>${f.label}</button>`).join('')}
+      </div>
+      ${(() => {
+        const pageFn = (typeof ListPage !== 'undefined' && ListPage.paginate) || (typeof paginate === 'function' ? paginate : null)
+        const page = pageFn
+          ? pageFn(cheques, this._chequePage, this._chequePageSize)
+          : { items: cheques.slice(0, this._chequePageSize), page: 0, pages: 1, total: cheques.length, hasPrev: false, hasNext: cheques.length > this._chequePageSize }
+        return `
       <div class="sm-acc-tx-list">
-        ${cheques.length ? cheques.map(c => this._chequeRow(c)).join('') : SMUI.empty('fa-money-check', q ? 'چکی یافت نشد' : 'چکی ثبت نشده')}
-      </div>`
+        ${page.items.length ? page.items.map(c => this._chequeRow(c)).join('') : SMUI.empty('fa-money-check', q ? 'چکی یافت نشد' : 'چکی ثبت نشده')}
+      </div>
+      ${page.pages > 1 ? `<div class="sm-acc-pager">
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${page.hasPrev ? '' : 'disabled '}
+          ${SMEvents.attrs('SMAccounting.setChequePage', [page.page - 1])}>قبلی</button>
+        <span>${page.page + 1} / ${page.pages} · ${page.total.toLocaleString('fa-IR')} چک</span>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${page.hasNext ? '' : 'disabled '}
+          ${SMEvents.attrs('SMAccounting.setChequePage', [page.page + 1])}>بعدی</button>
+      </div>` : ''}`
+      })()}`
   },
 
   _chequeRow(c) {
-    const isIn = c.type === 'incoming'
+    const isIn = this._chequeType(c) === 'incoming'
     const purpose = this.CHEQUE_PURPOSES[c.purposeCategory] || c.purpose || '—'
     const st = { pending: 'در انتظار', passed: 'وصول شده', bounced: 'برگشتی', cancelled: 'ابطال' }[c.status] || c.status
+    const status = c.status || 'pending'
+    const party = this._chequeParty(c)
+    const num = this._chequeNumber(c)
+
+    let actions = `<button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="ویرایش"
+      ${SMEvents.attrs('SMAccounting.editCheque', [c.id])}><i class="fas fa-pen"></i></button>`
+    if (status === 'pending') {
+      actions = `
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" title="وصول / پاس"
+          ${SMEvents.attrs('SMAccounting.passCheque', [c.id])}><i class="fas fa-check"></i></button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="برگشتی"
+          ${SMEvents.attrs('SMAccounting.bounceCheque', [c.id])}><i class="fas fa-undo"></i></button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="ابطال"
+          ${SMEvents.attrs('SMAccounting.cancelCheque', [c.id])}><i class="fas fa-ban"></i></button>
+        ${actions}`
+    } else if (status === 'passed') {
+      actions = `
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="لغو پاس"
+          ${SMEvents.attrs('SMAccounting.revertPassCheque', [c.id])}><i class="fas fa-rotate-left"></i></button>
+        ${actions}`
+    }
 
     return `<div class="sm-acc-tx sm-acc-chq${isIn ? ' is-in' : ' is-out'}">
       <div class="sm-acc-tx-stripe"></div>
@@ -349,19 +445,20 @@ const SMAccounting = {
       <div class="sm-acc-tx-body">
         <div class="sm-acc-tx-top">
           ${SMUI.badge(isIn ? 'دریافت چک' : 'صدور چک', isIn ? 'success' : 'danger')}
-          ${SMUI.badge(st, c.status === 'passed' ? 'success' : c.status === 'bounced' ? 'danger' : 'warning')}
+          ${SMUI.badge(st, status === 'passed' ? 'success' : status === 'bounced' ? 'danger' : 'warning')}
           <span class="sm-acc-tx-date">${SM.esc(c.dueDate || c.issueDate || '—')}</span>
         </div>
-        <div class="sm-acc-tx-title"><span dir="ltr">${SM.esc(c.number || '—')}</span> · ${SM.esc(c.bank || this._bankName(c.bankId))}</div>
+        <div class="sm-acc-tx-title"><span dir="ltr">${SM.esc(num || '—')}</span> · ${SM.esc(c.bank || this._bankName(c.bankId))}</div>
         <div class="sm-acc-tx-meta">
           <span>📋 ${SM.esc(purpose)}</span>
-          ${c.client || c.drawer ? `<span>👤 ${SM.esc(c.client || c.drawer)}</span>` : ''}
+          ${party ? `<span>👤 ${SM.esc(party)}</span>` : ''}
+          ${c.bankId ? `<span>🏦 ${SM.esc(this._bankName(c.bankId))}</span>` : ''}
           ${c.transactionRef ? `<span dir="ltr">🔖 ${SM.esc(c.transactionRef)}</span>` : ''}
         </div>
       </div>
       <div class="sm-acc-tx-side">
         <div class="sm-acc-tx-amt">${isIn ? '+' : '−'} ${SM.fmt(c.amount || 0)} <small>تومان</small></div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.editCheque('${c.id}')"><i class="fas fa-pen"></i></button>
+        <div class="sm-acc-tx-btns">${actions}</div>
       </div>
     </div>`
   },
@@ -408,28 +505,42 @@ const SMAccounting = {
 
     const done = () => { wrap.remove() }
 
-    if (typeof html2pdf !== 'undefined') {
-      html2pdf().set({
-        margin: 12,
-        filename: fname,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a5', orientation: 'portrait' }
-      }).from(el).save().then(done).catch(() => { window.print(); done() })
-    } else {
+    const runPdf = () => {
+      if (typeof html2pdf !== 'undefined') {
+        html2pdf().set({
+          margin: 12,
+          filename: fname,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: 'mm', format: 'a5', orientation: 'portrait' }
+        }).from(el).save().then(done).catch(() => { window.print(); done() })
+        return
+      }
       const w = window.open('', '_blank')
       if (w) {
-        w.document.write(`<html dir="rtl"><head><title>${fname}</title><style>
+        const doc = w.document
+        doc.open()
+        const root = doc.documentElement
+        root.setAttribute('dir', 'rtl')
+        doc.head.innerHTML = `<meta charset="UTF-8"/><style>
           body{font-family:Vazirmatn,Tahoma,sans-serif;padding:24px;color:#111}
           .sm-receipt-amt{font-size:28px;font-weight:800;margin:16px 0}
           .sm-receipt-amt.in{color:#34C759}.sm-receipt-amt.out{color:#FF3B30}
           table{width:100%;border-collapse:collapse} td{padding:8px;border-bottom:1px solid #eee;font-size:13px}
           td:first-child{color:#666;width:35%;font-weight:600}
-        </style></head><body>${html}</body></html>`)
-        w.document.close()
+        </style>`
+        doc.title = fname
+        doc.body.innerHTML = html
+        doc.close()
         w.print()
       }
       done()
+    }
+
+    if (typeof SMExport !== 'undefined' && SMExport.ensurePdfLibs) {
+      SMExport.ensurePdfLibs().then(runPdf).catch(runPdf)
+    } else {
+      runPdf()
     }
   },
 
@@ -443,22 +554,75 @@ const SMAccounting = {
       ${SMUI.formField('نام بانک', 'ab-bank', { value: item?.bank || '', placeholder: 'ملت، ملی، پاسارگاد...' })}
       ${SMUI.formField('نام صاحب حساب', 'ab-holder', { value: item?.holder || '' })}
       ${SMUI.formField('شماره کارت', 'ab-card', { value: item?.card || '', dir: 'ltr', placeholder: '6037…' })}
-      ${SMUI.formField('شماره حساب', 'ab-account', { value: item?.account || '', dir: 'ltr' })}
-      ${SMUI.formField('شماره شبا', 'ab-iban', { value: item?.iban || '', dir: 'ltr', placeholder: 'IR…' })}
-      ${SMUI.formField('موجودی فعلی (تومان)', 'ab-balance', { type: 'number', value: item?.balance ?? '', dir: 'ltr' })}`, {
+      ${SMUI.formField('شماره حساب', 'ab-account', { value: this._bankAccount(item) || '', dir: 'ltr' })}
+      ${SMUI.formField('شماره شبا', 'ab-iban', { value: this._bankIban(item) || '', dir: 'ltr', placeholder: 'IR…' })}
+      ${item
+        ? `<p class="sm-hint" style="font-size:.78rem;color:var(--sm-text-muted);margin:0 0 8px">موجودی از طریق دفترکل (واریز/برداشت/انتقال) به‌روز می‌شود و از اینجا قابل ویرایش نیست.</p>
+           <div class="sm-form-field"><label>موجودی فعلی</label><div dir="ltr">${SM.fmt(item.balance || 0)} تومان</div></div>`
+        : SMUI.formField('موجودی اولیه (تومان)', 'ab-balance', { type: 'number', value: '', dir: 'ltr' })}`, {
       onSave: async () => {
         const d = SMUI.readForm(['ab-title', 'ab-bank', 'ab-holder', 'ab-card', 'ab-account', 'ab-iban', 'ab-balance'])
         if (!d['ab-title'] && !d['ab-bank']) return SM.toast('نام بانک یا عنوان حساب الزامی است', 'error')
-        const data = {
+        const fields = {
           name: d['ab-title'], bank: d['ab-bank'], holder: d['ab-holder'],
-          card: d['ab-card'], account: d['ab-account'], iban: d['ab-iban'],
-          balance: +d['ab-balance'] || 0
+          card: d['ab-card'], account: d['ab-account'] || '', iban: d['ab-iban'] || '',
+          balance: d['ab-balance']
         }
-        if (item) await SecureDB.update('banks', item.id, data)
-        else await SecureDB.insert('banks', data)
+        const plan = (typeof bankSavePlan === 'function')
+          ? bankSavePlan(item, fields)
+          : (item
+            ? { mode: 'update', id: item.id, patch: { name: fields.name, bank: fields.bank, holder: fields.holder, card: fields.card, account: fields.account, accountNumber: fields.account, iban: fields.iban, shaba: fields.iban } }
+            : { mode: 'insert', row: { name: fields.name, bank: fields.bank, holder: fields.holder, card: fields.card, account: fields.account, accountNumber: fields.account, iban: fields.iban, shaba: fields.iban, balance: +fields.balance || 0 } })
+        if (plan.mode === 'update') await SecureDB.update('banks', plan.id, plan.patch)
+        else await SecureDB.insert('banks', plan.row)
         SMH.refresh('accounting')
       },
       onDelete: item ? () => SMH.remove('banks', item.id, 'accounting') : null,
+      width: 480
+    })
+  },
+
+  /* ── Transfer ── */
+  addTransfer() {
+    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
+    if (banks.length < 2) {
+      return SM.toast('برای انتقال حداقل دو حساب بانکی نیاز است', 'error')
+    }
+    const bankOpts = banks.map(b => ({
+      value: b.id,
+      label: `${b.name || b.bank || 'حساب'} — ${SM.fmt(b.balance || 0)} ت`
+    }))
+    const monthOpts = this.MONTHS.map(m => ({ value: m, label: m }))
+
+    SMUI.modal('انتقال بین حساب', `
+      ${SMUI.formField('از حساب', 'xf-from', { type: 'select', value: bankOpts[0]?.value || '', options: bankOpts })}
+      ${SMUI.formField('به حساب', 'xf-to', { type: 'select', value: bankOpts[1]?.value || '', options: bankOpts })}
+      ${SMUI.formField('مبلغ (تومان)', 'xf-amt', { type: 'number', value: '', dir: 'ltr' })}
+      ${SMUI.formField('تاریخ', 'xf-date', { value: Utils.todayJalali() })}
+      ${SMUI.formField('ماه / دوره', 'xf-month', { type: 'select', value: '', options: [{ value: '', label: '—' }, ...monthOpts] })}
+      ${SMUI.formField('شماره پیگیری', 'xf-ref', { value: '', dir: 'ltr' })}
+      ${SMUI.formField('شرح', 'xf-notes', { type: 'textarea', value: '', placeholder: 'مثلاً: شارژ صندوق نقدی' })}`, {
+      onSave: async () => {
+        const d = SMUI.readForm(['xf-from', 'xf-to', 'xf-amt', 'xf-date', 'xf-month', 'xf-ref', 'xf-notes'])
+        const amount = +d['xf-amt'] || 0
+        if (!amount) return SM.toast('مبلغ الزامی است', 'error')
+        if (typeof FinanceSync === 'undefined') return SM.toast('ماژول مالی در دسترس نیست', 'error')
+        const res = await FinanceSync.transferBetweenBanks({
+          fromBankId: d['xf-from'],
+          toBankId: d['xf-to'],
+          amount,
+          date: d['xf-date'] || Utils.todayJalali(),
+          periodMonth: d['xf-month'] || '',
+          transactionRef: d['xf-ref'] || '',
+          notes: d['xf-notes'] || '',
+          purpose: d['xf-notes'] || 'انتقال بین حساب'
+        })
+        if (!res.ok) return SM.toast(res.error || 'خطا در انتقال', 'error')
+        SM.toast('انتقال بین حساب‌ها ثبت شد', 'success')
+        this._tab = 'ledger'
+        this._flowFilter = 'transfer'
+        SMH.refresh('accounting')
+      },
       width: 480
     })
   },
@@ -495,12 +659,12 @@ const SMAccounting = {
 
   _txForm(item, type) {
     const isIn = type === 'deposit'
-    const banks = DB.get('banks')
-    const contracts = DB.get('contracts').filter(c => c.status !== 'cancelled')
-    const personnel = DB.get('personnel').filter(p => p.status !== 'inactive')
+    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
+    const contracts = (typeof DB.active === 'function' ? DB.active('contracts') : DB.get('contracts')).filter(c => c.status !== 'cancelled' && !c._deleted)
+    const personnel = (typeof DB.active === 'function' ? DB.active('personnel') : DB.get('personnel')).filter(p => p.status !== 'inactive' && !p._deleted)
     const cats = isIn ? this.DEPOSIT_CATS : this.WITHDRAWAL_CATS
     const bankOpts = [{ value: '', label: '— انتخاب حساب بانکی —' }, ...banks.map(b => ({
-      value: b.id, label: `${b.name || b.bank} — ${b.account || this._maskCard(b.card) || ''}`
+      value: b.id, label: `${b.name || b.bank} — ${this._bankAccount(b) || this._maskCard(b.card) || ''}`
     }))]
     const contractOpts = [{ value: '', label: '— انتخاب قرارداد —' }, ...contracts.map(c => ({
       value: c.id, label: `${this._couple(c)} (${c.contractNum || c.id})`
@@ -508,11 +672,16 @@ const SMAccounting = {
     const personnelOpts = [{ value: '', label: '— انتخاب پرسنل —' }, ...personnel.map(p => ({
       value: p.id, label: p.name
     }))]
-    const catOpts = Object.entries(cats).map(([k, v]) => ({ value: k, label: v }))
+    const catOpts = Object.entries(cats)
+      .filter(([k]) => k !== 'transfer')
+      .map(([k, v]) => ({ value: k, label: v }))
     const monthOpts = this.MONTHS.map(m => ({ value: m, label: m }))
     const srcOpts = Object.entries(this.SOURCE_TYPES).map(([k, v]) => ({ value: k, label: v }))
-    const src = item?.sourceType || (isIn ? 'customer' : 'customer')
+    const src = item?.sourceType || (isIn ? 'customer' : 'other')
     const showPers = src === 'personnel' || item?.purposeCategory === 'personnel'
+    const defaultCat = item?.purposeCategory && item.purposeCategory !== 'transfer'
+      ? item.purposeCategory
+      : (catOpts[0]?.value || '')
 
     SMUI.modal(isIn ? 'ثبت واریز' : 'ثبت برداشت', `
       ${SMUI.formField('مبلغ (تومان)', 'tx-amt', { type: 'number', value: item?.amount || '', dir: 'ltr' })}
@@ -530,7 +699,7 @@ const SMAccounting = {
       <div id="tx-rent-fields"${src !== 'rent' ? ' style="display:none"' : ''}>
         ${SMUI.formField('بابت اجاره / کرایه', 'tx-rent-desc', { value: item?.sourceType === 'rent' ? (item?.purpose || '') : '', placeholder: 'مثلاً: اجاره تالار، کرایه وسیله' })}
       </div>
-      ${SMUI.formField('دسته / بابت', 'tx-cat', { type: 'select', value: item?.purposeCategory || Object.keys(cats)[0], options: catOpts })}
+      ${SMUI.formField('دسته / بابت', 'tx-cat', { type: 'select', value: defaultCat, options: catOpts })}
       ${SMUI.formField('شرح دقیق', 'tx-purpose', { value: item?.purpose || '', placeholder: isIn ? 'مثلاً: بیعانه مراسم' : 'مثلاً: استرداد کنسلی' })}
       ${SMUI.formField('روش پرداخت', 'tx-method', { type: 'select', value: item?.paymentMethod || 'transfer', options: [
         { value: 'transfer', label: 'کارت به کارت / انتقال' },
@@ -578,26 +747,58 @@ const SMAccounting = {
           desc: purpose || d['tx-notes'] || catLabel
         }
 
-        let txId
-        if (item) {
-          await SecureDB.update('transactions', item.id, data)
-          await this._adjustBankBalance(item, data)
-          txId = item.id
-        } else {
-          const row = await SecureDB.insert('transactions', data)
-          txId = row.id
-          await this._applyBankDelta(data.bankId, data.type, data.amount)
+        const syncInv = !!document.getElementById('tx-sync-inv')?.checked
+
+        // EDIT — atomic FinanceSync path
+        if (item && typeof FinanceSync !== 'undefined') {
+          const res = await FinanceSync.updateTransaction(item.id, data, {
+            syncInvoice: syncInv,
+            allowOverdraft: true
+          })
+          if (!res.ok) return SM.toast(res.error || 'خطا در ویرایش', 'error')
+          SM.toast(res.invoiceId ? 'ویرایش شد و فاکتور به‌روز شد' : 'تراکنش ویرایش شد', 'success')
+          SMH.refresh('accounting')
+          return
         }
 
-        const invId = await this._syncInvoice(data, txId, item?.invoiceId)
-        if (invId) await SecureDB.update('transactions', txId, { invoiceId: invId })
+        // CREATE — atomic FinanceSync path (bank required by validation above)
+        if (!item) {
+          if (typeof FinanceSync === 'undefined') {
+            return SM.toast('ماژول مالی در دسترس نیست', 'error')
+          }
+          const res = isIn
+            ? await FinanceSync.recordDeposit({
+              ...data,
+              syncInvoice: syncInv,
+              sourceType: data.sourceType
+            })
+            : await FinanceSync.recordWithdrawal({
+              ...data,
+              syncInvoice: syncInv,
+              allowOverdraft: true
+            })
+          if (!res.ok) return SM.toast(res.error || 'خطا در ثبت', 'error')
+          SM.toast(res.invoiceId ? 'ثبت شد و در فاکتورها قرار گرفت' : 'تراکنش ثبت شد', 'success')
+          SMH.refresh('accounting')
+          return
+        }
 
-        SM.toast(invId ? 'ثبت شد و در فاکتورها قرار گرفت' : 'تراکنش ثبت شد', 'success')
-        SMH.refresh('accounting')
+        // EDIT without FinanceSync should never happen in Pro shell
+        return SM.toast('ماژول مالی در دسترس نیست', 'error')
       },
-      onDelete: item ? () => {
-        if (item.invoiceId) DB.delete('invoices', item.invoiceId)
-        SMH.remove('transactions', item.id, 'accounting')
+      onDelete: item ? async () => {
+        if (!SMH.confirmDelete()) return
+        try {
+          if (typeof FinanceSync === 'undefined') {
+            return SM.toast('ماژول مالی در دسترس نیست', 'error')
+          }
+          const res = await FinanceSync.deleteTransaction(item.id)
+          if (!res.ok) return SM.toast(res.error || 'خطا در حذف', 'error')
+          SM.toast('تراکنش حذف و موجودی اصلاح شد', 'success')
+          SMH.refresh('accounting')
+        } catch (e) {
+          SM.toast(e.message || 'خطا در حذف', 'error')
+        }
       } : null,
       width: 540
     })
@@ -605,44 +806,66 @@ const SMAccounting = {
     this._bindTxFormFields(contracts, personnel)
   },
 
-  async _applyBankDelta(bankId, type, amount) {
-    if (typeof FinanceSync !== 'undefined') return FinanceSync.applyBankDelta(bankId, type, amount)
-    if (!bankId || !amount) return
-    const b = DB.find('banks', x => x.id === bankId)
-    if (!b) return
-    await SecureDB.update('banks', bankId, { balance: (b.balance || 0) + (type === 'deposit' ? amount : -amount) })
-  },
-
-  async _adjustBankBalance(oldItem, newItem) {
-    if (oldItem.bankId) {
-      const b = DB.find('banks', x => x.id === oldItem.bankId)
-      if (b) {
-        const rev = oldItem.type === 'deposit' ? -(oldItem.amount || 0) : (oldItem.amount || 0)
-        await SecureDB.update('banks', oldItem.bankId, { balance: (b.balance || 0) + rev })
-      }
-    }
-    await this._applyBankDelta(newItem.bankId, newItem.type, newItem.amount)
-  },
-
   /* ── Cheques ── */
   addCheque() { this._chequeForm(null) },
-  editCheque(id) { this._chequeForm((DB.get('cheques') || []).find(c => c.id === id)) },
+  editCheque(id) {
+    const rows = typeof DB.active === 'function' ? DB.active('cheques') : (DB.get('cheques') || []).filter(c => !c._deleted)
+    this._chequeForm(rows.find(c => c.id === id))
+  },
+
+  async passCheque(id) {
+    if (typeof ChequeManager === 'undefined') return SM.toast('ماژول چک در دسترس نیست', 'error')
+    if (!confirm('وصول این چک موجودی بانک و دفترکل را به‌روز می‌کند. ادامه؟')) return
+    const res = await ChequeManager.passCheque(id)
+    if (!res.ok) return SM.toast(res.msg || 'خطا', 'error')
+    SM.toast('چک وصول و در حسابداری ثبت شد', 'success')
+    SMH.refresh('accounting')
+  },
+
+  async bounceCheque(id) {
+    if (typeof ChequeManager === 'undefined') return SM.toast('ماژول چک در دسترس نیست', 'error')
+    const reason = prompt('دلیل برگشت چک (اختیاری):') ?? ''
+    const res = await ChequeManager.bounceCheque(id, reason)
+    if (!res.ok) return SM.toast(res.msg || 'خطا', 'error')
+    SM.toast('وضعیت چک: برگشتی', 'warning')
+    SMH.refresh('accounting')
+  },
+
+  async cancelCheque(id) {
+    if (typeof ChequeManager === 'undefined') return SM.toast('ماژول چک در دسترس نیست', 'error')
+    if (!confirm('این چک ابطال شود؟')) return
+    const res = await ChequeManager.cancelCheque(id)
+    if (!res.ok) return SM.toast(res.msg || 'خطا', 'error')
+    SM.toast('چک ابطال شد', 'success')
+    SMH.refresh('accounting')
+  },
+
+  async revertPassCheque(id) {
+    if (typeof ChequeManager === 'undefined') return SM.toast('ماژول چک در دسترس نیست', 'error')
+    if (!confirm('لغو پاس چک — موجودی بانک برمی‌گردد. ادامه؟')) return
+    const res = await ChequeManager.revertPass(id)
+    if (!res?.ok) return SM.toast(res?.msg || 'خطا', 'error')
+    SM.toast('پاس چک لغو شد', 'success')
+    SMH.refresh('accounting')
+  },
 
   _chequeForm(item) {
-    const banks = DB.get('banks')
-    const contracts = DB.get('contracts').filter(c => c.status !== 'cancelled')
+    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
+    const contracts = (typeof DB.active === 'function' ? DB.active('contracts') : DB.get('contracts')).filter(c => c.status !== 'cancelled' && !c._deleted)
     const bankOpts = [{ value: '', label: '—' }, ...banks.map(b => ({ value: b.id, label: b.name || b.bank }))]
     const contractOpts = [{ value: '', label: '—' }, ...contracts.map(c => ({ value: c.id, label: this._couple(c) }))]
     const purposeOpts = Object.entries(this.CHEQUE_PURPOSES).map(([k, v]) => ({ value: k, label: v }))
     const monthOpts = this.MONTHS.map(m => ({ value: m, label: m }))
-    const type = item?.type || 'incoming'
+    const type = this._chequeType(item) || 'incoming'
+    const lockedStatus = item && (item.status === 'passed' || item.status === 'bounced')
 
     SMUI.modal(item ? 'ویرایش چک' : 'ثبت چک', `
+      ${lockedStatus ? `<p class="sm-acc-flow-hint">وضعیت این چک با اکشن‌های وصول / برگشت / لغو پاس کنترل می‌شود.</p>` : ''}
       ${SMUI.formField('نوع چک', 'ch-type', { type: 'select', value: type, options: [
         { value: 'incoming', label: 'چک دریافتی' },
         { value: 'outgoing', label: 'چک پرداختی (صدور)' }
       ]})}
-      ${SMUI.formField('شماره چک', 'ch-num', { value: item?.number || '', dir: 'ltr' })}
+      ${SMUI.formField('شماره چک', 'ch-num', { value: this._chequeNumber(item) || '', dir: 'ltr' })}
       ${SMUI.formField('حساب بانکی', 'ch-bank-sel', { type: 'select', value: item?.bankId || '', options: bankOpts })}
       ${SMUI.formField('نام بانک', 'ch-bank', { value: item?.bank || '' })}
       ${SMUI.formField('مبلغ (تومان)', 'ch-amt', { type: 'number', value: item?.amount || '', dir: 'ltr' })}
@@ -652,25 +875,25 @@ const SMAccounting = {
       ${SMUI.formField('بابت', 'ch-cat', { type: 'select', value: item?.purposeCategory || 'other', options: purposeOpts })}
       ${SMUI.formField('شرح', 'ch-purpose', { value: item?.purpose || '', placeholder: 'چاپ آلبوم، خرید دوربین...' })}
       ${SMUI.formField('قرارداد', 'ch-contract', { type: 'select', value: item?.contractId || '', options: contractOpts })}
-      ${SMUI.formField('مشتری / طرف', 'ch-client', { value: item?.client || item?.drawer || '' })}
+      ${SMUI.formField('مشتری / طرف', 'ch-client', { value: this._chequeParty(item) || '' })}
       ${SMUI.formField('شماره پیگیری', 'ch-ref', { value: item?.transactionRef || '', dir: 'ltr' })}
       ${SMUI.formField('شماره شبا', 'ch-iban', { value: item?.iban || '', dir: 'ltr' })}
       ${SMUI.formField('شماره کارت', 'ch-card', { value: item?.cardNumber || '', dir: 'ltr' })}
-      ${SMUI.formField('وضعیت', 'ch-status', { type: 'select', value: item?.status || 'pending', options: [
-        { value: 'pending', label: 'در انتظار' },
-        { value: 'passed', label: 'وصول شده' },
-        { value: 'bounced', label: 'برگشتی' },
-        { value: 'cancelled', label: 'ابطال' }
-      ]})}
       ${SMUI.formField('توضیحات', 'ch-notes', { type: 'textarea', value: item?.notes || '' })}`, {
       onSave: async () => {
-        const d = SMUI.readForm(['ch-type', 'ch-num', 'ch-bank-sel', 'ch-bank', 'ch-amt', 'ch-due', 'ch-issue', 'ch-month', 'ch-cat', 'ch-purpose', 'ch-contract', 'ch-client', 'ch-ref', 'ch-iban', 'ch-card', 'ch-status', 'ch-notes'])
+        const d = SMUI.readForm(['ch-type', 'ch-num', 'ch-bank-sel', 'ch-bank', 'ch-amt', 'ch-due', 'ch-issue', 'ch-month', 'ch-cat', 'ch-purpose', 'ch-contract', 'ch-client', 'ch-ref', 'ch-iban', 'ch-card', 'ch-notes'])
         const amount = +d['ch-amt'] || 0
         if (!amount) return SM.toast('مبلغ الزامی است', 'error')
+        if (!d['ch-bank-sel']) return SM.toast('انتخاب حساب بانکی الزامی است', 'error')
         const selBank = banks.find(b => b.id === d['ch-bank-sel'])
+        const chType = d['ch-type'] || 'incoming'
+        const number = d['ch-num'] || ''
+        const client = d['ch-client'] || ''
         const data = {
-          type: d['ch-type'] || 'incoming',
-          number: d['ch-num'],
+          type: chType,
+          direction: chType,
+          number,
+          chequeNumber: number,
           bankId: d['ch-bank-sel'] || '',
           bank: d['ch-bank'] || (selBank ? (selBank.bank || selBank.name) : ''),
           amount,
@@ -680,19 +903,23 @@ const SMAccounting = {
           purposeCategory: d['ch-cat'],
           purpose: d['ch-purpose'],
           contractId: d['ch-contract'] || '',
-          client: d['ch-client'],
-          drawer: d['ch-client'],
+          client,
+          drawer: client,
+          party: client,
           transactionRef: d['ch-ref'],
           iban: d['ch-iban'],
           cardNumber: d['ch-card'],
-          status: d['ch-status'] || 'pending',
           notes: d['ch-notes']
         }
+        if (!item) data.status = 'pending'
         if (item) await SecureDB.update('cheques', item.id, data)
         else await SecureDB.insert('cheques', data)
+        if (typeof ChequeManager !== 'undefined') ChequeManager.syncNotifications().catch(() => {})
         SMH.refresh('accounting')
       },
-      onDelete: item ? () => SMH.remove('cheques', item.id, 'accounting') : null,
+      onDelete: item && (item.status || 'pending') === 'pending'
+        ? () => SMH.remove('cheques', item.id, 'accounting')
+        : null,
       width: 540
     })
   }
@@ -706,7 +933,12 @@ SMModules.accounting = {
   addTx() { SMAccounting.openFlowMenu() },
   editTx(id) { SMAccounting.editTx(id) },
   addCheque() { SMAccounting.addCheque() },
-  editCheque(id) { SMAccounting.editCheque(id) }
+  editCheque(id) { SMAccounting.editCheque(id) },
+  addTransfer() { SMAccounting.addTransfer() },
+  passCheque(id) { SMAccounting.passCheque(id) },
+  bounceCheque(id) { SMAccounting.bounceCheque(id) },
+  cancelCheque(id) { SMAccounting.cancelCheque(id) },
+  revertPassCheque(id) { SMAccounting.revertPassCheque(id) }
 }
 
 window.SMAccounting = SMAccounting

@@ -181,6 +181,12 @@ const Portal = {
         <button type="button" class="auth-btn auth-btn-primary" id="login-btn" onclick="Portal.${isPw ? 'loginPassword' : 'sendOtp'}()">
           <i class="fas fa-${isPw ? 'sign-in-alt' : 'paper-plane'}"></i> ${isPw ? 'ورود' : 'ارسال کد'}
         </button>
+        ${typeof Cloud !== 'undefined' && Cloud.isConfigured?.() ? `
+        <div class="auth-social-divider"><span>یا ورود امن تیم با</span></div>
+        <div class="auth-social-grid">
+          <button type="button" class="auth-btn auth-btn-social" onclick="Portal.oauthLogin('google')"><i class="fab fa-google"></i> Google</button>
+          <button type="button" class="auth-btn auth-btn-social" onclick="Portal.oauthLogin('apple')"><i class="fab fa-apple"></i> Apple</button>
+        </div>` : ''}
         <p class="auth-hint">سیستم بر اساس شماره شما را شناسایی و به پنل مربوط هدایت می‌کند.</p>
       </div>`
   },
@@ -255,6 +261,13 @@ const Portal = {
   setLoginMethod(method) {
     this.state.loginMethod = method
     this.renderAuth()
+  },
+
+  async oauthLogin(provider) {
+    const errorEl = document.getElementById('login-error')
+    if (errorEl) errorEl.textContent = ''
+    const result = await Cloud?.signInWithOAuth?.(provider)
+    if (!result?.ok && errorEl) errorEl.textContent = result?.error || 'شروع ورود امن ناموفق بود'
   },
 
   _bindStepKeys(step) {
