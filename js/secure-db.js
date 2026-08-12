@@ -18,7 +18,8 @@ const SecureDB = {
     'contracts', 'transactions', 'invoices', 'bookings', 'personnel', 'equipment',
     'workflows', 'packages', 'expenses', 'leads', 'banks', 'cheques',
     'appointments', 'customerRequests', 'fileAssets', 'salaryPayments',
-    'attendance', 'notifications'
+    'attendance', 'notifications', 'persProjects', 'persContracts',
+    'calendarReminders', 'galleries', 'customerCustody'
   ]),
 
   _token() {

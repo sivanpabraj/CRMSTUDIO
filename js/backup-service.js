@@ -68,12 +68,20 @@ const BackupService = {
       })
       await DB.flush?.()
 
+      let cloud = { ok: false, skipped: true }
+      if (typeof Cloud !== 'undefined' && Cloud.isEnabled?.() && Cloud.createBackupArchive) {
+        cloud = await Cloud.createBackupArchive(label)
+        if (!cloud.ok && !cloud.skipped) {
+          console.warn('Cloud backup failed:', cloud.error)
+        }
+      }
+
       if (prev.backupAutoDownload || label === 'manual') {
         this._download(archive, key, label)
       }
 
       if (typeof SM !== 'undefined' && SM.log) SM.log('backup_auto', `${label} — ${key}`)
-      return { ok: true, key, at: now, checksum }
+      return { ok: true, key, at: now, checksum, cloud }
     } catch (e) {
       console.warn('Backup failed:', e)
       return { ok: false, error: String(e) }

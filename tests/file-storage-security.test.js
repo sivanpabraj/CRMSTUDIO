@@ -10,9 +10,12 @@ describe('FileStorage security', () => {
   it('accepts only matched safe MIME and extensions', () => {
     const storage = window.FileStorage
     expect(storage.validate({ name: 'photo.jpg', type: 'image/jpeg', size: 100 }).ok).toBe(true)
+    expect(storage.validate({ name: 'clip.mp4', type: 'video/mp4', size: 10 * 1024 * 1024 }).ok).toBe(true)
+    expect(storage.validate({ name: 'archive.zip', type: 'application/zip', size: 10 * 1024 * 1024 }).ok).toBe(true)
     expect(storage.validate({ name: 'payload.html', type: 'text/html', size: 100 }).ok).toBe(false)
     expect(storage.validate({ name: 'fake.pdf.exe', type: 'application/pdf', size: 100 }).ok).toBe(false)
     expect(storage.validate({ name: 'huge.png', type: 'image/png', size: storage.MAX_BYTES + 1 }).ok).toBe(false)
+    expect(storage.validate({ name: 'customer.mp4', type: 'video/mp4', size: storage.CUSTOMER_MAX_BYTES + 1 }, { customer: true }).ok).toBe(false)
   })
 
   it('uses expiring signed URLs instead of public bucket URLs', async () => {

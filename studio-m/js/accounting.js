@@ -11,7 +11,11 @@ const SMAccounting = {
 
   MONTHS: ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'],
 
-  BANK_COLORS: ['#0071E3', '#5856D6', '#009688', '#E68619', '#34C759', '#00A3BF', '#FF375F'],
+  BANK_THEMES: [
+    ['#2f6fed', '#70c8ff'], ['#4f46e5', '#a78bfa'], ['#00796b', '#42d3bd'],
+    ['#b45309', '#fbbf24'], ['#166534', '#4ade80'], ['#0e7490', '#67e8f9'],
+    ['#be123c', '#fb7185']
+  ],
 
   SOURCE_TYPES: {
     customer: 'مشتری / قرارداد',
@@ -216,25 +220,55 @@ const SMAccounting = {
   },
 
   _bankCard(b, i) {
-    const color = this.BANK_COLORS[i % this.BANK_COLORS.length]
+    const theme = this.BANK_THEMES[i % this.BANK_THEMES.length]
     const account = this._bankAccount(b)
     const iban = this._bankIban(b)
-    return `<div class="sm-acc-bank" style="--bank-color:${color}">
-      <div class="sm-acc-bank-top">
-        <div class="sm-acc-bank-icon"><i class="fas fa-building-columns"></i></div>
-        <div class="sm-acc-bank-title">
-          <strong>${SM.esc(b.name || b.bank || 'حساب بانکی')}</strong>
-          <span>${SM.esc(b.bank || '')}${b.holder ? ` · ${SM.esc(b.holder)}` : ''}</span>
+    const title = b.name || b.bank || 'حساب بانکی'
+    const bank = b.bank || title
+    return `<article class="sm-acc-bank" style="--bank-from:${theme[0]};--bank-to:${theme[1]}" data-bank-card="${SM.esc(b.id)}">
+      <div class="sm-bank-card-scene">
+        <div class="sm-bank-card-3d">
+          <section class="sm-bank-card-face sm-bank-card-front" aria-label="روی کارت ${SM.esc(title)}">
+            <div class="sm-bank-card-head">
+              <span class="sm-bank-brand"><i class="fas fa-building-columns"></i> ${SM.esc(bank)}</span>
+              <span class="sm-bank-contactless" aria-hidden="true"><i class="fas fa-wifi"></i></span>
+            </div>
+            <div class="sm-bank-chip" aria-hidden="true"><span></span><span></span><span></span></div>
+            <code class="sm-bank-number" dir="ltr">${SM.esc(b.card ? this._maskCard(b.card) : '•••• •••• •••• ••••')}</code>
+            <div class="sm-bank-card-foot">
+              <span><small>صاحب حساب</small><strong>${SM.esc(b.holder || title)}</strong></span>
+              <span class="sm-bank-card-balance"><small>موجودی</small><strong>${SM.fmt(b.balance || 0)} <em>تومان</em></strong></span>
+            </div>
+          </section>
+          <section class="sm-bank-card-face sm-bank-card-back" aria-label="پشت کارت ${SM.esc(title)}">
+            <div class="sm-bank-magstripe"></div>
+            <div class="sm-bank-back-content">
+              <span class="sm-bank-back-label">شماره حساب</span><code dir="ltr">${SM.esc(account || '—')}</code>
+              <span class="sm-bank-back-label">شماره شبا</span><code class="sm-bank-iban" dir="ltr">${SM.esc(this._fmtSheba(iban))}</code>
+              <div class="sm-bank-back-brand"><i class="fas fa-building-columns"></i><strong>${SM.esc(bank)}</strong></div>
+            </div>
+          </section>
         </div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMAccounting.editBank', [b.id])} title="ویرایش"><i class="fas fa-pen"></i></button>
       </div>
-      <div class="sm-acc-bank-balance">${SM.fmt(b.balance || 0)} <small>تومان</small></div>
-      <div class="sm-acc-bank-fields">
-        <div class="sm-acc-bank-field"><span>شماره کارت</span><code dir="ltr">${SM.esc(b.card ? this._maskCard(b.card) : '—')}</code></div>
-        <div class="sm-acc-bank-field"><span>شماره حساب</span><code dir="ltr">${SM.esc(account || '—')}</code></div>
-        <div class="sm-acc-bank-field sm-acc-bank-field--full"><span>شماره شبا</span><code dir="ltr">${SM.esc(this._fmtSheba(iban))}</code></div>
+      <div class="sm-bank-card-actions">
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost sm-bank-flip-btn" ${SMEvents.attrs('SMAccounting.toggleBankCard', [b.id])} aria-pressed="false"><i class="fas fa-rotate"></i> نمایش پشت کارت</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMAccounting.editBank', [b.id])}><i class="fas fa-pen"></i> ویرایش</button>
       </div>
-    </div>`
+    </article>`
+  },
+
+  toggleBankCard(id) {
+    const card = [...document.querySelectorAll('[data-bank-card]')]
+      .find(el => el.dataset.bankCard === String(id))
+    if (!card) return
+    const flipped = card.classList.toggle('is-flipped')
+    const button = card.querySelector('.sm-bank-flip-btn')
+    if (button) {
+      button.setAttribute('aria-pressed', String(flipped))
+      button.innerHTML = flipped
+        ? '<i class="fas fa-rotate-left"></i> نمایش روی کارت'
+        : '<i class="fas fa-rotate"></i> نمایش پشت کارت'
+    }
   },
 
   _ledgerView(q) {

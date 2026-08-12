@@ -440,6 +440,50 @@ const Cloud = {
     return { ok: true, at: data }
   },
 
+  async createBackupArchive(label = 'manual') {
+    if (!this.isEnabled()) return { ok: false, skipped: true, error: 'پشتیبان ابری غیرفعال است' }
+    const sess = await this.session()
+    if (!sess?.user) return { ok: false, error: 'برای پشتیبان ابری باید وارد Supabase شوید' }
+
+    let studioId = this.studioCloudConfig().studioId
+    if (!studioId) studioId = await this._loadMemberStudioId()
+    if (!studioId) return { ok: false, error: 'استودیوی ابری یافت نشد' }
+
+    const raw = typeof DB !== 'undefined' ? JSON.parse(DB.exportJSON()) : {}
+    const payload = sanitizeSnapshotForCloud(raw)
+    const serialized = JSON.stringify(payload)
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(serialized))
+    const checksum = [...new Uint8Array(digest)]
+      .map(byte => byte.toString(16).padStart(2, '0')).join('')
+    const c = await this.client()
+    const { data, error } = await c.rpc('create_studio_backup', {
+      p_studio_id: studioId,
+      p_payload: payload,
+      p_checksum: checksum,
+      p_source: String(label || 'manual').slice(0, 32),
+      p_db_version: payload._meta?.dbVersion || AppConfig.DB_VERSION,
+      p_app_version: AppConfig.APP_VERSION
+    })
+    return error
+      ? { ok: false, error: this.formatAuthError(error.message) }
+      : { ok: true, id: data, checksum }
+  },
+
+  async listBackupArchives(limit = 20) {
+    if (!this.isEnabled()) return { ok: false, skipped: true, backups: [] }
+    const studioId = this.studioCloudConfig().studioId || await this._loadMemberStudioId()
+    const c = await this.client()
+    if (!studioId || !c || !await this.session()) return { ok: false, error: 'ورود ابری لازم است', backups: [] }
+    const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20))
+    const { data, error } = await c
+      .from('studio_backup_archives')
+      .select('id, source, checksum, size_bytes, db_version, app_version, created_at, created_by')
+      .eq('studio_id', studioId)
+      .order('created_at', { ascending: false })
+      .limit(safeLimit)
+    return error ? { ok: false, error: error.message, backups: [] } : { ok: true, backups: data || [] }
+  },
+
   async pullSnapshot({ force = false } = {}) {
     if (!this.isEnabled()) return { ok: false, skipped: true }
     const now = Date.now()

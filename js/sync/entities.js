@@ -22,7 +22,12 @@ export const SYNC_ENTITIES = [
   'fileAssets',
   'salaryPayments',
   'attendance',
-  'notifications'
+  'notifications',
+  'persProjects',
+  'persContracts',
+  'calendarReminders',
+  'galleries',
+  'customerCustody'
 ]
 
 /** Collections that soft-delete (tombstone) instead of hard-splice */

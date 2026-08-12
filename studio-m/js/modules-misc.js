@@ -26,7 +26,11 @@ SMModules.files = {
     const input = (b && b.files !== undefined) ? b : a
     const file = input?.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) return SM.toast(SM.state.locale === 'fa' ? 'حداکثر ۵ مگابایت' : 'Max 5MB', 'error')
+    const cloudAvailable = typeof FileStorage !== 'undefined' && FileStorage.isAvailable?.()
+    const maxBytes = cloudAvailable ? FileStorage.MAX_BYTES : 5 * 1024 * 1024
+    if (file.size > maxBytes) {
+      return SM.toast(cloudAvailable ? 'حداکثر ۵۰ مگابایت' : 'در حالت محلی حداکثر ۵ مگابایت', 'error')
+    }
     const assetId = crypto.randomUUID?.() || `${Date.now()}`
 
     const persist = async (item) => {
@@ -37,7 +41,7 @@ SMModules.files = {
       input.value = ''
     }
 
-    if (typeof FileStorage !== 'undefined' && FileStorage.isAvailable?.()) {
+    if (cloudAvailable) {
       const up = await FileStorage.upload(file, assetId)
       if (!up.ok) return SM.toast(up.error || 'خطا در آپلود ابر', 'error')
       await persist({

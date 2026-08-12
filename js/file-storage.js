@@ -3,17 +3,26 @@
  */
 const FileStorage = {
   BUCKET: 'studio-files',
-  MAX_BYTES: 5 * 1024 * 1024,
-  ALLOWED_MIME: new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']),
+  MAX_BYTES: 50 * 1024 * 1024,
+  CUSTOMER_MAX_BYTES: 5 * 1024 * 1024,
+  ALLOWED_MIME: new Set([
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+    'video/mp4', 'video/quicktime', 'application/pdf', 'application/zip'
+  ]),
 
-  validate(file) {
+  validate(file, { customer = false } = {}) {
     if (!file) return { ok: false, error: 'فایلی انتخاب نشده است' }
-    if (file.size <= 0 || file.size > this.MAX_BYTES) return { ok: false, error: 'حجم فایل باید حداکثر ۵ مگابایت باشد' }
-    if (!this.ALLOWED_MIME.has(file.type)) return { ok: false, error: 'فقط JPG، PNG، WebP و PDF مجاز است' }
+    const limit = customer ? this.CUSTOMER_MAX_BYTES : this.MAX_BYTES
+    if (file.size <= 0 || file.size > limit) {
+      return { ok: false, error: `حجم فایل باید حداکثر ${customer ? '۵' : '۵۰'} مگابایت باشد` }
+    }
+    if (!this.ALLOWED_MIME.has(file.type)) return { ok: false, error: 'نوع فایل مجاز نیست' }
     const ext = String(file.name || '').split('.').pop()?.toLowerCase()
     const allowedExt = {
       'image/jpeg': ['jpg', 'jpeg'], 'image/png': ['png'],
-      'image/webp': ['webp'], 'application/pdf': ['pdf']
+      'image/webp': ['webp'], 'image/gif': ['gif'],
+      'video/mp4': ['mp4'], 'video/quicktime': ['mov'],
+      'application/pdf': ['pdf'], 'application/zip': ['zip']
     }
     if (!allowedExt[file.type]?.includes(ext)) return { ok: false, error: 'پسوند فایل با نوع آن هم‌خوانی ندارد' }
     return { ok: true }
@@ -65,7 +74,7 @@ const FileStorage = {
 
   async uploadCustomer(file, { studioId, contractId, assetId }) {
     if (typeof Cloud === 'undefined' || !Cloud.isConfigured?.()) return { ok: false, error: 'ابر فعال نیست' }
-    const validation = this.validate(file)
+    const validation = this.validate(file, { customer: true })
     if (!validation.ok) return validation
     if (!/^[0-9a-f-]{36}$/i.test(String(studioId || '')) || !/^[0-9a-f-]{36}$/i.test(String(contractId || ''))) {
       return { ok: false, error: 'دسترسی ابری قرارداد معتبر نیست' }
