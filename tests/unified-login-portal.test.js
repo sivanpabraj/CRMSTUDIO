@@ -37,7 +37,7 @@ describe('UnifiedLogin portal gate', () => {
     })
   })
 
-  it('requires portal invite code instead of auto-verifying', async () => {
+  it('activates a pending portal after the unified OTP is verified', async () => {
     await import('../js/unified-login.js')
     const UnifiedLogin = window.UnifiedLogin
 
@@ -68,8 +68,11 @@ describe('UnifiedLogin portal gate', () => {
 
     const result = await UnifiedLogin.verifyOtp('09121111111', '222222')
     expect(result.ok).toBe(true)
-    expect(result.next).toBe('portal_verify')
-    expect(Auth.loginWithOtp).not.toHaveBeenCalled()
-    expect(SecureDB.update).not.toHaveBeenCalled()
+    expect(result.next).toBe('redirect')
+    expect(Auth.loginWithOtp).toHaveBeenCalledWith('u1')
+    expect(SecureDB.update).toHaveBeenCalledWith('users', 'u1', expect.objectContaining({
+      portalStatus: 'active',
+      portalOtp: expect.objectContaining({ verified: true, via: 'unified_sms_login' })
+    }))
   })
 })
