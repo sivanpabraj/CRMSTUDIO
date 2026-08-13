@@ -151,7 +151,7 @@ const SMSettings = {
     </div>`
   },
 
-  _studioTab(info) {
+  _studioTab(_info) {
     if (typeof Studio !== 'undefined') Studio.ensureIdentity()
     const live = SM.studio()
     const code = live.joinCode || ''
@@ -481,9 +481,12 @@ const SMSettings = {
         </div>
         <div class="sm-card-body">
           <p style="font-size:.82rem;color:var(--sm-text-muted);line-height:1.7;margin:0 0 14px">
-            همگام‌سازی: entity (۲.۵s) + snapshot (۶۰s) + realtime.
+            همگام‌سازی زنده بین سیستم و موبایل: entity (~۰.۷s) + realtime (~۰.۴s) + snapshot پشتیبان (۶۰s).
             حالت: <strong>${SM.esc(typeof Cloud !== 'undefined' ? Cloud.syncModeLabel() : '—')}</strong>
-            · Realtime: ${SMUI.badge(rt === 'live' ? 'متصل' : 'قطع', rt === 'live' ? 'success' : 'muted')}
+            · Realtime: ${SMUI.badge(rt === 'live' ? 'زنده — چنددستگاه' : 'قطع', rt === 'live' ? 'success' : 'muted')}
+          </p>
+          <p style="font-size:.72rem;color:var(--sm-text-muted);margin:0 0 12px;line-height:1.6">
+            برای آپدیت لحظه‌ای: روی <strong>هر دو دستگاه</strong> ابر را روشن کنید، با همان حساب Supabase وارد شوید، و migration ۴ را روی پروژه اعمال کنید.
           </p>
           ${SMUI.formField('Supabase URL', 'cloud-url', { value: url, dir: 'ltr', placeholder: 'https://xxxx.supabase.co' })}
           ${SMUI.formField('Anon Key (public)', 'cloud-key', { value: key, dir: 'ltr', placeholder: 'eyJhbG...' })}

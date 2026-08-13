@@ -220,6 +220,64 @@ const SM = {
     }
     document.getElementById('sm-sidebar')?.classList.remove('open')
     this.closeSidebar()
+    this._paintLiveBadge()
+  },
+
+  /** Soft re-render current module after peer sync (no hash thrash). */
+  refreshCurrentView({ silent = true } = {}) {
+    if (this.state.viewStack?.length) return false
+    const route = this.state.route
+    const main = document.getElementById('sm-content')
+    if (!main || !route) return false
+    if (this.isModuleDisabled(route)) return false
+    const mod = typeof SMModules !== 'undefined' ? SMModules[route] : null
+    if (!mod?.render) return false
+    try {
+      mod.render(main)
+      if (!silent) this.toast('همگام با دستگاه دیگر', 'info')
+      return true
+    } catch (e) {
+      console.warn('[SM.refreshCurrentView]', e)
+      return false
+    }
+  },
+
+  _hasOpenModal() {
+    return !!document.querySelector('#sm-modal-root .sm-modal-overlay, #sm-modal-root .sm-modal')
+  },
+
+  _paintLiveBadge() {
+    const el = document.getElementById('sm-live-sync')
+    if (!el) return
+    const live = typeof Cloud !== 'undefined' && Cloud.realtimeStatus?.() === 'live'
+    const on = typeof Cloud !== 'undefined' && Cloud.isEnabled?.()
+    el.hidden = !on
+    el.classList.toggle('is-live', !!live)
+    el.title = live ? 'همگام‌سازی لحظه‌ای فعال' : 'ابر فعال — realtime قطع'
+    el.innerHTML = live
+      ? '<i class="fas fa-bolt"></i><span>زنده</span>'
+      : '<i class="fas fa-cloud"></i><span>ابر</span>'
+  },
+
+  bindLiveSync() {
+    if (this._liveSyncBound) return
+    this._liveSyncBound = true
+    window.addEventListener('sm-sync-pull', (ev) => {
+      const detail = ev?.detail || {}
+      const ok = typeof LiveSyncUi !== 'undefined' && LiveSyncUi.shouldRefreshUiAfterPull
+        ? LiveSyncUi.shouldRefreshUiAfterPull(detail, {
+          hasOpenModal: this._hasOpenModal(),
+          route: this.state.route,
+          liveUiEnabled: true
+        })
+        : (detail.applied > 0 && !this._hasOpenModal())
+      if (ok) this.refreshCurrentView({ silent: true })
+    })
+    window.addEventListener('sm-realtime-status', () => this._paintLiveBadge())
+    this._paintLiveBadge()
+    if (typeof Cloud !== 'undefined' && Cloud.ensureLiveSync) {
+      Cloud.ensureLiveSync().catch(() => {})
+    }
   },
 
   pushSubView(title, renderHtml) {
@@ -329,12 +387,14 @@ const SM = {
               <div class="sm-header-sub" id="sm-header-sub" hidden></div>
             </div>
             <div class="sm-header-actions">
+              <span class="sm-live-sync" id="sm-live-sync" hidden title="همگام‌سازی"><i class="fas fa-cloud"></i><span>ابر</span></span>
               <button type="button" class="sm-btn-icon" onclick="SM.toggleTheme()" title="${this.t('theme')}"><i class="fas fa-${this.state.theme === 'light' ? 'moon' : 'sun'}"></i></button>
             </div>
           </header>
           <main class="sm-content" id="sm-content"></main>
         </div>
       </div>`
+    this._paintLiveBadge()
   },
 
   getModuleSearch(route) {

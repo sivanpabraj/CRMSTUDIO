@@ -20,11 +20,15 @@ Studio M is an offline-first PWA (Vanilla JS + IndexedDB) with optional Supabase
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Sync model (Phase 2–3)
+## Sync model (Phase 2–3 + live multi-device)
 
-1. **Entity sync** (primary, ~2.5s) — 15 entity types → `studio_entities`
-2. **Snapshot** (fallback, 60s) — sanitized JSON → `studio_snapshots`
-3. **Realtime** — postgres changes → pull entities
+1. **Entity sync** (primary, ~0.7s debounce) — 18 entity types → `studio_entities`
+2. **Realtime** — `postgres_changes` on `studio_entities` (+ `studio_sync_events`) → pull (~0.4s)
+3. **UI live refresh** — Pro re-renders current module on `sm-sync-pull` (skips open modals)
+4. **Snapshot** (fallback, 60s) — sanitized JSON → `studio_snapshots`
+5. **Tab hide** — flushes pending entity push so peers see changes sooner
+
+**Requirement:** Cloud enabled + Supabase session on **each** device, same studio.
 
 ### Snapshot security
 

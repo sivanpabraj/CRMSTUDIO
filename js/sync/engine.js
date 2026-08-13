@@ -4,6 +4,7 @@
 import { SYNC_ENTITIES, isSyncEntity, stripSensitive, toRpcRow } from './entities.js'
 import { mergeCollection } from './conflict.js'
 import { upsertConflict, listConflicts } from './conflict-store.js'
+import { LIVE_ENTITY_PUSH_MS } from '../lib/live-sync-ui.js'
 
 export const SyncEngine = {
   _entityPushTimer: null,
@@ -15,6 +16,7 @@ export const SyncEngine = {
     if (!cloud?.isEnabled?.()) return
     this._entityPending = true
     clearTimeout(this._entityPushTimer)
+    const delay = LIVE_ENTITY_PUSH_MS || 700
     this._entityPushTimer = setTimeout(() => {
       this.pushAll(cloud).then(r => {
         if (r?.ok || r?.skipped) return
@@ -22,7 +24,16 @@ export const SyncEngine = {
       }).catch(e => {
         cloud._notifyCloudError?.(e?.message || 'خطا در entity sync')
       })
-    }, 2500)
+    }, delay)
+  },
+
+  /** Flush pending entity push immediately (tab hide / critical path). */
+  async flushEntityPush(cloud) {
+    if (!cloud?.isEnabled?.()) return { ok: false, skipped: true }
+    clearTimeout(this._entityPushTimer)
+    this._entityPushTimer = null
+    if (!this._entityPending) return { ok: true, skipped: true, reason: 'nothing_pending' }
+    return this.pushAll(cloud)
   },
 
   scheduleSnapshotPush(cloud) {
