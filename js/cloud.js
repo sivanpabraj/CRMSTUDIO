@@ -52,6 +52,9 @@ const Cloud = {
     if (m.includes('requested path is invalid')) {
       return 'Site URL در Supabase هنوز xxx.supabase.co است. Dashboard → Authentication → URL Configuration → Site URL = http://localhost:5173/studio-m/auth-callback.html'
     }
+    if (/provider is not enabled|Unsupported provider|validation_failed/i.test(m)) {
+      return 'Google provider در Supabase خاموش است — Authentication → Providers → Google را Enable کنید'
+    }
     if (m.includes('email_address_invalid')) {
       return 'فرمت ایمیل auth نامعتبر است — اپ را رفرش کنید و دوباره ثبت‌نام کنید'
     }
@@ -167,6 +170,75 @@ const Cloud = {
     await this._loadMemberStudioId()
     await RealtimeSync.start(this)
     return { ok: true, session: data.session, user: data.user }
+  },
+
+  /** Stash cloud config for auth-callback.html (OAuth PKCE exchange). */
+  stashOAuthConfig({ intent = 'signin' } = {}) {
+    try {
+      const cfg = this.resolvedConfig()
+      if (cfg.url) sessionStorage.setItem('sm_cloud_url', cfg.url)
+      if (cfg.anonKey) sessionStorage.setItem('sm_cloud_key', cfg.anonKey)
+      sessionStorage.setItem('sm_oauth_intent', intent)
+      sessionStorage.setItem('sm_oauth_return', '/studio-m/index.html#settings')
+    } catch { /* private mode */ }
+  },
+
+  /**
+   * Google OAuth via Supabase Auth (provider must be enabled in Dashboard).
+   * Never put Client Secret in the app — only in Supabase Google provider settings.
+   */
+  async signInWithGoogle({ intent = 'signin' } = {}) {
+    const c = await this.client()
+    if (!c) return { ok: false, error: 'Supabase پیکربندی نشده — ابتدا URL و Anon Key را ذخیره کنید' }
+    if (!this.isConfigured()) return { ok: false, error: 'پیکربندی ابر ناقص است' }
+    this.stashOAuthConfig({ intent })
+    const redirectTo = this.authRedirectUrl()
+    const { data, error } = await c.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+        skipBrowserRedirect: false,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account'
+        }
+      }
+    })
+    if (error) return { ok: false, error: this.formatAuthError(error.message) }
+    return { ok: true, url: data?.url || '', provider: 'google' }
+  },
+
+  /**
+   * After OAuth redirect lands back in the app: attach studio + start realtime.
+   */
+  async completeOAuthReturn() {
+    const sess = await this.session()
+    if (!sess?.user) return { ok: false, skipped: true, reason: 'no_session' }
+
+    let studioId = await this._loadMemberStudioId()
+    if (!studioId) {
+      const info = typeof DB !== 'undefined' ? (DB.get('studioInfo') || {}) : {}
+      const localUser = typeof Auth !== 'undefined' ? Auth.getUser?.() : null
+      const display = localUser?.name
+        || sess.user.user_metadata?.full_name
+        || sess.user.user_metadata?.name
+        || sess.user.email
+        || 'مدیر'
+      const phone = localUser?.phone || info.phone || ''
+      const studioName = info.name || AppConfig.DEFAULT_STUDIO_NAME
+      const reg = await this._registerStudio(studioName, phone, display, null)
+      if (!reg.ok) return reg
+      studioId = reg.studioId
+    }
+
+    if (!this.studioCloudConfig().enabled && typeof SecureDB !== 'undefined') {
+      const info = DB.get('studioInfo') || {}
+      await SecureDB.merge('studioInfo', { ...info, cloudEnabled: true })
+    }
+
+    await RealtimeSync.start(this)
+    try { sessionStorage.removeItem('sm_oauth_intent') } catch { /* */ }
+    return { ok: true, studioId, user: sess.user, provider: sess.user.app_metadata?.provider || 'google' }
   },
 
   async signOut() {

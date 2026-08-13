@@ -19,6 +19,7 @@ const SMSettings = {
     this._tab = tab
     this._search = ''
     SM.navigate('settings')
+    if (tab === 'cloud') this.finishGoogleOAuthIfNeeded?.()
   },
 
   onSearch(q) {
@@ -77,6 +78,7 @@ const SMSettings = {
       })), this._tab)}
       <div id="sm-settings-panel" style="margin-top:16px">${this._renderTab(info)}</div>`
     if (this._tab === 'backup') setTimeout(() => this._loadBackupList(), 0)
+    if (this._tab === 'cloud') setTimeout(() => this.finishGoogleOAuthIfNeeded(), 0)
   },
 
   _renderTab(info) {
@@ -502,11 +504,13 @@ const SMSettings = {
         <div class="sm-card-body">
           <p style="font-size:.78rem;color:var(--sm-text-muted);margin:0 0 10px">کاربر محلی: <strong>${SM.esc(user?.name || '—')}</strong> · ایمیل Supabase: <code dir="ltr">${SM.esc(typeof Cloud !== 'undefined' ? Cloud.phoneToEmail(user?.phone) : '')}</code></p>
           <p style="font-size:.72rem;color:var(--orange-500,#c2410c);margin:0 0 10px;line-height:1.6"><strong>توجه:</strong> با «یکسان‌سازی رمز»، تغییر رمز محلی به Supabase هم اعمال می‌شود (نیاز به ورود ابری).</p>
-          <p style="font-size:.72rem;color:var(--sm-text-muted);margin:0 0 10px;line-height:1.6">Supabase Dashboard → Authentication → URL Configuration:<br/>Site URL = <code dir="ltr">http://localhost:5173/studio-m/auth-callback.html</code><br/>Redirect URLs = <code dir="ltr">http://localhost:5173/**</code></p>
+          <p style="font-size:.72rem;color:var(--sm-text-muted);margin:0 0 10px;line-height:1.6">Supabase Dashboard → Authentication → URL Configuration:<br/>Site URL = <code dir="ltr">${SM.esc(location.origin)}/studio-m/auth-callback.html</code><br/>Redirect URLs = <code dir="ltr">${SM.esc(location.origin)}/**</code></p>
+          <p style="font-size:.72rem;color:var(--sm-text-muted);margin:0 0 10px;line-height:1.6">ورود گوگل: Authentication → Providers → Google را Enable کنید و Client ID/Secret را فقط در Dashboard بگذارید (هرگز در چت/کد اپ).</p>
           ${SMUI.formField('رمز Supabase', 'cloud-pw', { type: 'password', dir: 'ltr', placeholder: 'رمز حساب ابری' })}
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
             <button type="button" class="sm-btn sm-btn-primary" onclick="SMSettings.cloudSignIn()"><i class="fas fa-sign-in-alt"></i> ورود</button>
             <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.cloudSignUp()"><i class="fas fa-user-plus"></i> ثبت‌نام + ساخت استودیو</button>
+            <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.cloudSignInGoogle()"><i class="fas fa-at"></i> ورود با Google</button>
             <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.cloudSignOut()"><i class="fas fa-sign-out-alt"></i> خروج</button>
           </div>
         </div>
@@ -560,6 +564,11 @@ const SMSettings = {
       cloudUnifyPassword: unify
     })
     Cloud._client = null
+    try {
+      if (url) sessionStorage.setItem('sm_cloud_url', url)
+      if (anonKey) sessionStorage.setItem('sm_cloud_key', anonKey)
+      Cloud.stashOAuthConfig?.({ intent: 'signin' })
+    } catch { /* */ }
     await DB.flush?.()
     SM.toast('تنظیمات ابر ذخیره شد', 'success')
     SMSettings.setTab('cloud')
@@ -574,6 +583,40 @@ const SMSettings = {
     if (!r.ok) return SM.toast(r.error || 'خطا', 'error')
     SM.toast('ورود Supabase موفق', 'success')
     SMSettings.setTab('cloud')
+  },
+
+  async cloudSignInGoogle() {
+    if (typeof Cloud === 'undefined') return SM.toast('ماژول ابر نیست', 'error')
+    if (!Cloud.isConfigured?.()) return SM.toast('ابتدا URL و Anon Key را ذخیره کنید', 'error')
+    try {
+      const info = DB.get('studioInfo') || {}
+      if (info.supabaseUrl) sessionStorage.setItem('sm_cloud_url', Cloud.normalizeUrl(info.supabaseUrl))
+      if (info.supabaseAnonKey) sessionStorage.setItem('sm_cloud_key', info.supabaseAnonKey)
+    } catch { /* */ }
+    SM.toast('در حال انتقال به Google…', 'info')
+    const r = await Cloud.signInWithGoogle({ intent: 'signin' })
+    if (!r.ok) return SM.toast(r.error || 'خطای Google OAuth', 'error')
+    if (r.url) location.href = r.url
+  },
+
+  async finishGoogleOAuthIfNeeded() {
+    if (typeof Cloud === 'undefined' || !Cloud.completeOAuthReturn) return
+    let intent = null
+    try { intent = sessionStorage.getItem('sm_oauth_intent') } catch { /* */ }
+    if (!intent) return
+    try {
+      const sess = await Cloud.session()
+      if (!sess) return
+      const r = await Cloud.completeOAuthReturn()
+      if (r?.ok && !r.skipped) {
+        SM.toast('ورود Google / ابر آماده است', 'success')
+        if (this._tab === 'cloud') this.setTab('cloud')
+      } else if (r && !r.ok && !r.skipped) {
+        SM.toast(r.error || 'تکمیل ورود Google ناموفق', 'error')
+      }
+    } catch (e) {
+      console.warn('[SMSettings] OAuth complete', e)
+    }
   },
 
   async cloudSignUp() {

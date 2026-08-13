@@ -25,6 +25,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const r = route === 'gallery' || route === 'media' || route === 'crm' || route === 'signatures' ? 'dashboard' : route
     SM.navigate(SMModules[r] ? r : 'dashboard')
     SM.bindLiveSync?.()
+    if (typeof Cloud !== 'undefined' && Cloud.stashOAuthConfig && Cloud.isConfigured?.()) {
+      Cloud.stashOAuthConfig({ intent: 'signin' })
+    }
+    if (typeof SMSettings !== 'undefined' && SMSettings.finishGoogleOAuthIfNeeded) {
+      SMSettings.finishGoogleOAuthIfNeeded().catch(() => {})
+    }
     window.addEventListener('hashchange', () => {
       const raw = (location.hash || '#dashboard').replace('#', '') || 'dashboard'
       const hr = raw === 'gallery' || raw === 'media' || raw === 'crm' || raw === 'signatures' ? 'dashboard' : raw
