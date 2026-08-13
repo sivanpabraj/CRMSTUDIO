@@ -265,6 +265,19 @@ const Cloud = {
     SyncEngine.scheduleSnapshotPush(this)
   },
 
+  /** Immediate push of pending entity changes (before tab sleep / switch device). */
+  async flushPushNow() {
+    if (!this.isEnabled()) return { ok: false, skipped: true }
+    return SyncEngine.flushEntityPush(this)
+  },
+
+  async ensureLiveSync() {
+    if (!this.isEnabled()) return { ok: false, skipped: true }
+    const sess = await this.session()
+    if (!sess) return { ok: false, error: 'no session' }
+    return RealtimeSync.start(this)
+  },
+
   async _pushSnapshotDebounced() {
     if (!this.isEnabled() || !this._snapshotPending) return { ok: false, skipped: true }
     this._snapshotPending = false

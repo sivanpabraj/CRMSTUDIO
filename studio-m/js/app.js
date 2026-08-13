@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const route = (location.hash || '#dashboard').replace('#', '') || 'dashboard'
     const r = route === 'gallery' || route === 'media' || route === 'crm' || route === 'signatures' ? 'dashboard' : route
     SM.navigate(SMModules[r] ? r : 'dashboard')
+    SM.bindLiveSync?.()
     window.addEventListener('hashchange', () => {
       const raw = (location.hash || '#dashboard').replace('#', '') || 'dashboard'
       const hr = raw === 'gallery' || raw === 'media' || raw === 'crm' || raw === 'signatures' ? 'dashboard' : raw
