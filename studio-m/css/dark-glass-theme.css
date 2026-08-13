@@ -79,7 +79,7 @@ body[data-theme="dark-glass"] .sm-card:hover {
   body.sm-sidebar-collapsed .sm-main { margin-inline-start: var(--sm-sidebar-collapsed-w); }
   body.sm-sidebar-collapsed .sm-sidebar-head { padding-inline: 14px; }
   body.sm-sidebar-collapsed .sm-brand { justify-content: center; }
-  body.sm-sidebar-collapsed .sm-brand > div:last-child,
+  body.sm-sidebar-collapsed .sm-brand > div:nth-child(2),
   body.sm-sidebar-collapsed .sm-nav-label,
   body.sm-sidebar-collapsed .sm-nav-item span,
   body.sm-sidebar-collapsed .sm-user-info,
