@@ -127,6 +127,8 @@ const Portal = {
 
     document.getElementById('portal-app').innerHTML = `
       <div class="auth-page auth-page--unified">
+        <canvas class="auth-ambient" data-auth-ambient aria-hidden="true"></canvas>
+        <div class="auth-ambient-fallback" aria-hidden="true"></div>
         <div class="auth-unified-wrap">
           <div class="auth-card glass-panel auth-unified-card">
             <div class="auth-unified-head">
@@ -140,6 +142,7 @@ const Portal = {
         </div>
       </div>`
 
+    window.AuthAmbient?.mount?.()
     this._bindStepKeys(step)
     if (step === 'consultation') {
       ConsultationBooking.reset()
