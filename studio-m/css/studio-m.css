@@ -206,6 +206,24 @@ body.sm-app {
 .sm-page-nav-wrap .page-nav-current { color: var(--sm-accent); display: inline-flex; align-items: center; gap: 4px; }
 .sm-page-nav-wrap .page-nav-sep { color: var(--sm-text-muted); opacity: .5; font-size: 10px; }
 .sm-header-actions { margin-inline-start: auto; display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.sm-live-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .72rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--sm-surface-2);
+  color: var(--sm-text-muted);
+  border: 1px solid var(--sm-border);
+}
+.sm-live-sync.is-live {
+  background: rgba(52, 199, 89, .12);
+  color: var(--sm-success);
+  border-color: rgba(52, 199, 89, .25);
+}
+.sm-live-sync i { font-size: .7rem; }
 
 .sm-sidebar-overlay {
   display: none;
