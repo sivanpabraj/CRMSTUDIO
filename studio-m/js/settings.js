@@ -7,7 +7,7 @@ const SMSettings = {
   TAB_META: [
     { id: 'profile', icon: 'fa-user', title: 'پروفایل من', keywords: 'نام موبایل ایمیل لوگو رمز عبور پسورد password' },
     { id: 'studio', icon: 'fa-building', title: 'استودیو', keywords: 'آدرس تلفن شعار شبکه اجتماعی کد عضویت join' },
-    { id: 'widgets', icon: 'fa-gauge-high', title: 'ویجت داشبورد', keywords: 'ویجت چیدمان داشبورد تقویم قرارداد' },
+    { id: 'widgets', icon: 'fa-gauge-high', title: 'پیشخوان مدیریتی', keywords: 'داشبورد مالی عملیات نمودار سلامت مالی' },
     { id: 'site', icon: 'fa-globe', title: 'سایت', keywords: 'وب سایت html embed لینک ورود' },
     { id: 'sms', icon: 'fa-sms', title: 'پیامک', keywords: 'sms api کاوهنگار پیامک' },
     { id: 'backup', icon: 'fa-cloud', title: 'پشتیبان', keywords: 'backup بازیابی restore دانلود پوشه فایل' },
@@ -151,7 +151,7 @@ const SMSettings = {
     </div>`
   },
 
-  _studioTab(info) {
+  _studioTab(_info) {
     if (typeof Studio !== 'undefined') Studio.ensureIdentity()
     const live = SM.studio()
     const code = live.joinCode || ''
@@ -207,71 +207,26 @@ const SMSettings = {
     if (typeof SMDashboard === 'undefined') {
       return SMUI.empty('fa-gauge-high', 'ماژول داشبورد بارگذاری نشد')
     }
-    const cfg = SMDashboard.getConfig()
-    const rows = cfg.order.map((id, idx) => {
-      const w = SMDashboard.WIDGETS[id]
-      if (!w) return ''
-      const on = cfg.enabled.includes(id)
-      return `<div class="sm-widget-row" data-id="${id}" style="--w-color:${w.color}">
-        <label class="sm-widget-check">
-          <input type="checkbox" name="dash-widget" value="${id}"${on ? ' checked' : ''}/>
-          <span class="sm-widget-icon"><i class="fas ${w.icon}"></i></span>
-          <span>
-            <strong>${SM.esc(w.title)}</strong>
-            <small>${SM.esc(w.desc || '')}</small>
-          </span>
-        </label>
-        <div class="sm-widget-order">
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="بالا" onclick="SMSettings.moveWidget('${id}',-1)"${idx === 0 ? ' disabled' : ''}><i class="fas fa-chevron-up"></i></button>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" title="پایین" onclick="SMSettings.moveWidget('${id}',1)"${idx === cfg.order.length - 1 ? ' disabled' : ''}><i class="fas fa-chevron-down"></i></button>
-        </div>
-      </div>`
-    }).join('')
-
     return `<div class="sm-card sm-settings-full">
       <div class="sm-card-head">
-        <div class="sm-card-title"><i class="fas fa-gauge-high"></i> ویجت‌های داشبورد</div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveWidgets()"><i class="fas fa-save"></i> ذخیره</button>
+        <div class="sm-card-title"><i class="fas fa-gauge-high"></i> پیشخوان مدیریتی</div>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SM.navigate('dashboard')"><i class="fas fa-eye"></i> مشاهده پیشخوان</button>
       </div>
       <div class="sm-card-body">
         <p style="font-size:.82rem;color:var(--sm-text-muted);line-height:1.7;margin:0 0 16px">
-          ویجت‌های فعال را انتخاب کنید. برای جابه‌جایی روی داشبورد، دکمه «جابه‌جایی ویجت‌ها» را بزنید و بکشید.
+          چیدمان پیشخوان بر اساس اولویت تصمیم‌گیری استودیو ثابت شده تا مقایسه دوره‌ها و محل شاخص‌ها تغییر نکند. تمام کارت‌ها مستقیماً از قراردادها، حسابداری، هزینه‌ها، تقویم و گردش تولید خوانده می‌شوند.
         </p>
-        <div class="sm-widget-list">${rows}</div>
-        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
-          <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.resetWidgets()"><i class="fas fa-rotate-left"></i> پیش‌فرض</button>
-          <button type="button" class="sm-btn sm-btn-ghost" onclick="SM.navigate('dashboard')"><i class="fas fa-eye"></i> مشاهده داشبورد</button>
+        <div class="sm-widget-list">
+          ${[
+            ['fa-coins', 'شاخص‌های مالی', 'فقط مدیر سیستم و مدیر استودیو'],
+            ['fa-chart-line', 'وصول و برآورد', 'شش ماه اخیر با فرمول قابل مشاهده'],
+            ['fa-heart-pulse', 'سلامت مالی', 'وصول، نقدینگی، سودآوری و بدهی'],
+            ['fa-clapperboard', 'عملیات تولید', 'دریافت، انتخاب، ادیت، بازبینی و تحویل'],
+            ['fa-calendar-check', 'مراسم‌های نزدیک', 'تقویم و قراردادهای سی روز آینده']
+          ].map(item => `<div class="sm-widget-row"><span class="sm-widget-icon"><i class="fas ${item[0]}"></i></span><span><strong>${item[1]}</strong><small>${item[2]}</small></span></div>`).join('')}
         </div>
       </div>
     </div>`
-  },
-
-  moveWidget(id, dir) {
-    const cfg = SMDashboard.getConfig()
-    const order = [...cfg.order]
-    const i = order.indexOf(id)
-    if (i < 0) return
-    const j = i + dir
-    if (j < 0 || j >= order.length) return
-    ;[order[i], order[j]] = [order[j], order[i]]
-    SMDashboard.saveConfig(cfg.enabled, order)
-    SMSettings.setTab('widgets')
-  },
-
-  saveWidgets() {
-    const boxes = document.querySelectorAll('input[name="dash-widget"]:checked')
-    const enabled = [...boxes].map(b => b.value)
-    const cfg = SMDashboard.getConfig()
-    SMDashboard.saveConfig(enabled, cfg.order)
-    SM.toast('ویجت‌های داشبورد ذخیره شد', 'success')
-    SMSettings.setTab('widgets')
-  },
-
-  resetWidgets() {
-    const def = SMDashboard.defaultOrder()
-    SMDashboard.saveConfig(def, def)
-    SM.toast('به حالت پیش‌فرض برگشت', 'success')
-    SMSettings.setTab('widgets')
   },
 
   _siteTab(info) {

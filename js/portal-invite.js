@@ -143,7 +143,7 @@ const PortalInvite = {
     }
   },
 
-  async sendInvite(userId, tempPassword) {
+  async sendInvite(userId, _tempPassword) {
     const user = DB.find('users', u => u.id === userId)
     if (!user?.phone) return { ok: false, error: 'کاربر یافت نشد' }
 

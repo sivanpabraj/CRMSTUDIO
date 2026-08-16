@@ -390,33 +390,290 @@ const SMDashboard = {
     </div>`
   },
 
+  _number(value) {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : 0
+  },
+
+  _sum(list, field = 'amount') {
+    return list.reduce((total, item) => total + this._number(item?.[field]), 0)
+  },
+
+  _monthRef(offset = 0) {
+    const today = Utils.parseJalaliToday()
+    let year = today.jy
+    let month = today.jm + offset
+    while (month < 1) { month += 12; year -= 1 }
+    while (month > 12) { month -= 12; year += 1 }
+    return { year, month, key: `${year}/${String(month).padStart(2, '0')}/`, label: Utils.jalaliMonthName(month) }
+  },
+
+  _monthAmount(items, type, offset = 0) {
+    const ref = this._monthRef(offset)
+    return this._sum(items.filter(item => (!type || item.type === type) && String(item.date || '').startsWith(ref.key)))
+  },
+
+  _percentChange(current, previous) {
+    if (!previous) return current > 0 ? 100 : 0
+    return Math.round(((current - previous) / Math.abs(previous)) * 100)
+  },
+
+  _financialModel(ctx) {
+    const monthIncome = this._monthAmount(ctx.tx, 'deposit', 0)
+    const previousIncome = this._monthAmount(ctx.tx, 'deposit', -1)
+    const monthExpense = this._monthAmount(ctx.tx, 'withdrawal', 0)
+    const previousExpense = this._monthAmount(ctx.tx, 'withdrawal', -1)
+    const bankBalance = this._sum(DB.get('banks') || [], 'balance')
+    const net = monthIncome - monthExpense
+    const billableContracts = ctx.contracts.filter(contract => contract.status !== 'cancelled')
+    const collectionRate = billableContracts.length
+      ? Math.round((billableContracts.reduce((sum, contract) => {
+        const total = this._number(contract.total)
+        if (!total) return sum
+        return sum + Math.min(total, this._number(contract.deposit) + this._number(contract.paid))
+      }, 0) / Math.max(1, this._sum(billableContracts, 'total'))) * 100)
+      : 0
+    const liquidity = monthExpense > 0 ? Math.min(100, Math.round((bankBalance / monthExpense) * 50)) : (bankBalance > 0 ? 100 : 0)
+    const profitability = monthIncome > 0 ? Math.max(0, Math.min(100, Math.round((net / monthIncome) * 100))) : 0
+    const overdue = ctx.contracts.filter(contract => {
+      const due = this._number(contract.total) - this._number(contract.deposit) - this._number(contract.paid)
+      const days = Utils.daysUntil(contract.eventDate || contract.date)
+      return due > 0 && days !== null && days < 0
+    })
+    const debtScore = Math.max(0, 100 - Math.min(100, overdue.length * 20))
+    const health = Math.round((collectionRate * 0.35) + (liquidity * 0.25) + (profitability * 0.25) + (debtScore * 0.15))
+    return {
+      monthIncome, previousIncome, monthExpense, previousExpense, bankBalance, net,
+      collectionRate, liquidity, profitability, debtScore, health, overdue,
+      incomeTrend: this._percentChange(monthIncome, previousIncome),
+      expenseTrend: this._percentChange(monthExpense, previousExpense)
+    }
+  },
+
+  _forecastSeries(ctx) {
+    return [-5, -4, -3, -2, -1, 0].map(offset => {
+      const ref = this._monthRef(offset)
+      const actual = this._monthAmount(ctx.tx, 'deposit', offset)
+      const expected = ctx.contracts
+        .filter(contract => String(contract.eventDate || contract.date || '').startsWith(ref.key))
+        .reduce((sum, contract) => sum + Math.max(0,
+          this._number(contract.total) - this._number(contract.deposit) - this._number(contract.paid)), 0)
+      return { ...ref, actual, expected: actual + expected }
+    })
+  },
+
+  _expenseCategories(ctx) {
+    const monthKey = this._monthRef(0).key
+    const categories = [
+      { id: 'staff', label: 'حقوق و پرسنل', icon: 'fa-users', pattern: /حقوق|پرسنل|دستمزد|salary|staff/i, color: '#C9A96E' },
+      { id: 'print', label: 'چاپ و آلبوم', icon: 'fa-book-open', pattern: /چاپ|آلبوم|print|album/i, color: '#A78BFA' },
+      { id: 'gear', label: 'تجهیزات', icon: 'fa-camera', pattern: /تجهیز|دوربین|لنز|باتری|gear|camera/i, color: '#60A5FA' },
+      { id: 'marketing', label: 'تبلیغات', icon: 'fa-bullhorn', pattern: /تبلیغ|بازاریابی|مارکت|instagram|marketing/i, color: '#34D399' },
+      { id: 'transport', label: 'رفت‌وآمد و لوکیشن', icon: 'fa-car', pattern: /رفت|حمل|لوکیشن|بنزین|travel|transport|location/i, color: '#FB923C' }
+    ]
+    const expenseRows = ctx.expenses.filter(item => !item.date || String(item.date).startsWith(monthKey))
+    const unmatchedWithdrawals = ctx.monthWithdrawals.filter(transaction => !expenseRows.some(expense => {
+      const sameDay = String(expense.date || '') === String(transaction.date || '')
+      const sameAmount = this._number(expense.amount) === this._number(transaction.amount)
+      const text = `${transaction.title || ''} ${transaction.desc || ''} ${transaction.note || ''}`
+      return sameDay && sameAmount && expense.title && text.includes(expense.title)
+    }))
+    const source = [...expenseRows, ...unmatchedWithdrawals].map(item => ({ ...item, _amount: this._number(item.amount) }))
+    const unique = [...new Map(source.map(item => [item.id || `${item.date}-${item.title}-${item._amount}`, item])).values()]
+    let assigned = 0
+    const result = categories.map(category => {
+      const value = unique.filter(item => category.pattern.test(`${item.title || ''} ${item.category || ''} ${item.note || ''}`))
+        .reduce((sum, item) => sum + item._amount, 0)
+      assigned += value
+      return { ...category, value }
+    })
+    const total = unique.reduce((sum, item) => sum + item._amount, 0)
+    result.push({ id: 'other', label: 'سایر', icon: 'fa-ellipsis', color: '#94A3B8', value: Math.max(0, total - assigned) })
+    return { total, items: result.sort((a, b) => b.value - a.value) }
+  },
+
+  _workflowSummary() {
+    const stages = [
+      { id: 'ingest', label: 'دریافت فایل', color: '#60A5FA' },
+      { id: 'cull', label: 'انتخاب اولیه', color: '#A78BFA' },
+      { id: 'edit', label: 'تدوین و ادیت', color: '#F59E0B' },
+      { id: 'review', label: 'بازبینی', color: '#F472B6' },
+      { id: 'delivery', label: 'تحویل', color: '#34D399' }
+    ]
+    const workflows = DB.get('workflows') || []
+    return stages.map(stage => ({
+      ...stage,
+      count: workflows.filter(item => (item.stage || item.currentStage || '').toLowerCase().includes(stage.id)).length
+    }))
+  },
+
+  _insights(ctx, finance) {
+    const insights = []
+    if (finance.incomeTrend > 0) insights.push({ type: 'success', icon: 'fa-arrow-trend-up', text: `وصول این ماه نسبت به ماه قبل ${Math.abs(finance.incomeTrend).toLocaleString('fa-IR')}٪ رشد کرده است.` })
+    if (finance.incomeTrend < 0) insights.push({ type: 'danger', icon: 'fa-arrow-trend-down', text: `وصول این ماه نسبت به ماه قبل ${Math.abs(finance.incomeTrend).toLocaleString('fa-IR')}٪ کاهش دارد.` })
+    if (finance.expenseTrend > 15) insights.push({ type: 'warning', icon: 'fa-flag', text: `هزینه‌های این ماه ${finance.expenseTrend.toLocaleString('fa-IR')}٪ بیشتر از ماه قبل است؛ ریز هزینه‌ها بررسی شود.` })
+    if (finance.overdue.length) insights.push({ type: 'danger', icon: 'fa-clock', text: `${finance.overdue.length.toLocaleString('fa-IR')} قرارداد پس از تاریخ مراسم هنوز مانده‌حساب دارد.` })
+    if (ctx.chequeAlerts.length) insights.push({ type: 'warning', icon: 'fa-money-check', text: `${ctx.chequeAlerts.length.toLocaleString('fa-IR')} چک در هفت روز آینده سررسید می‌شود.` })
+    const closeEvents = ctx.events.filter(event => event.days >= 0 && event.days <= 7)
+    if (closeEvents.length) insights.push({ type: 'info', icon: 'fa-calendar-check', text: `${closeEvents.length.toLocaleString('fa-IR')} مراسم در هفت روز آینده نیازمند تأیید تیم و تجهیزات است.` })
+    if (!insights.length) insights.push({ type: 'muted', icon: 'fa-circle-check', text: 'هشدار فوری بر اساس داده‌های ثبت‌شده وجود ندارد.' })
+    return insights.slice(0, 5)
+  },
+
+  _trendBadge(value, inverse = false) {
+    const positive = inverse ? value <= 0 : value >= 0
+    return `<span class="sm-exec-trend ${positive ? 'is-positive' : 'is-negative'}"><i class="fas fa-arrow-${value >= 0 ? 'up' : 'down'}"></i>${Math.abs(value).toLocaleString('fa-IR')}٪</span>`
+  },
+
+  _kpiCard(label, value, meta, icon, color, route, trend = null, inverse = false) {
+    return `<button type="button" class="sm-exec-kpi" style="--kpi-color:${color}" onclick="SMDashboard.go('${route}')">
+      <span class="sm-exec-kpi-icon"><i class="fas ${icon}"></i></span>
+      <span class="sm-exec-kpi-label">${SM.esc(label)}</span>
+      <strong>${SM.fmt(value)}</strong>
+      <span class="sm-exec-kpi-foot">${trend === null ? '' : this._trendBadge(trend, inverse)}<small>${SM.esc(meta)}</small></span>
+    </button>`
+  },
+
+  _forecastChart(series) {
+    const max = Math.max(1, ...series.flatMap(item => [item.actual, item.expected]))
+    const points = values => values.map((value, index) => `${index * 20},${92 - ((value / max) * 76)}`).join(' ')
+    const actualPoints = points(series.map(item => item.actual))
+    const forecastPoints = points(series.map(item => item.expected))
+    return `<div class="sm-exec-chart" role="img" aria-label="مقایسه وصول واقعی و برآورد قراردادی شش ماه اخیر">
+      <div class="sm-exec-chart-legend"><span><i class="is-actual"></i>وصول واقعی</span><span><i class="is-forecast"></i>برآورد قراردادی</span></div>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="smActualFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C9A96E" stop-opacity=".38"/><stop offset="1" stop-color="#C9A96E" stop-opacity="0"/></linearGradient></defs>
+        <g class="sm-exec-grid"><line x1="0" y1="16" x2="100" y2="16"/><line x1="0" y1="54" x2="100" y2="54"/><line x1="0" y1="92" x2="100" y2="92"/></g>
+        <polygon points="0,92 ${actualPoints} 100,92" fill="url(#smActualFill)"/>
+        <polyline class="sm-exec-line is-forecast" points="${forecastPoints}"/>
+        <polyline class="sm-exec-line is-actual" points="${actualPoints}"/>
+      </svg>
+      <div class="sm-exec-chart-labels">${series.map(item => `<span><b>${SM.esc(item.label)}</b><small>${SM.fmt(item.actual)}</small></span>`).join('')}</div>
+    </div>`
+  },
+
+  _healthPanel(finance) {
+    const status = finance.health >= 75 ? 'عالی' : finance.health >= 55 ? 'قابل قبول' : finance.health >= 35 ? 'نیازمند توجه' : 'پرریسک'
+    return `<section class="sm-exec-panel sm-exec-health">
+      <div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">کنترل مالی</span><h3>سلامت مالی</h3></div>${SMUI.badge(status, finance.health >= 55 ? 'success' : 'warning')}</div>
+      <div class="sm-health-ring" style="--health:${finance.health}" aria-label="امتیاز سلامت مالی ${finance.health} از ۱۰۰"><strong>${finance.health.toLocaleString('fa-IR')}</strong><small>از ۱۰۰</small></div>
+      <div class="sm-health-legend">
+        <span><i style="--ring-color:#34D399"></i><b>${finance.collectionRate.toLocaleString('fa-IR')}٪</b><small>وصول</small></span>
+        <span><i style="--ring-color:#60A5FA"></i><b>${finance.liquidity.toLocaleString('fa-IR')}٪</b><small>نقدینگی</small></span>
+        <span><i style="--ring-color:#A78BFA"></i><b>${finance.profitability.toLocaleString('fa-IR')}٪</b><small>سودآوری</small></span>
+        <span><i style="--ring-color:#F59E0B"></i><b>${finance.debtScore.toLocaleString('fa-IR')}٪</b><small>بدهی</small></span>
+      </div>
+      <p class="sm-exec-formula">فرمول: وصول ۳۵٪ + نقدینگی ۲۵٪ + سودآوری ۲۵٪ + بدهی ۱۵٪</p>
+    </section>`
+  },
+
+  _expensePanel(expenses) {
+    const max = Math.max(1, ...expenses.items.map(item => item.value))
+    return `<section class="sm-exec-panel sm-exec-expenses">
+      <div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">ماه جاری</span><h3>ترکیب هزینه‌ها</h3></div><button type="button" class="sm-exec-link" onclick="SMDashboard.go('expenses')">مشاهده کامل <i class="fas fa-arrow-left"></i></button></div>
+      <div class="sm-expense-list">${expenses.items.map(item => `<div class="sm-expense-row">
+        <span class="sm-expense-label"><i class="fas ${item.icon}" style="--expense-color:${item.color}"></i>${SM.esc(item.label)}</span>
+        <span class="sm-expense-track"><i style="width:${Math.round((item.value / max) * 100)}%;--expense-color:${item.color}"></i></span>
+        <strong>${expenses.total ? Math.round((item.value / expenses.total) * 100).toLocaleString('fa-IR') : '۰'}٪</strong>
+      </div>`).join('')}</div>
+    </section>`
+  },
+
+  _assistantPanel(insights) {
+    return `<section class="sm-exec-panel sm-exec-assistant">
+      <div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">بر پایه داده ثبت‌شده</span><h3><i class="fas fa-robot"></i> دستیار تصمیم‌گیری</h3></div></div>
+      <div class="sm-insight-list">${insights.map(item => `<div class="sm-insight is-${item.type}"><i class="fas ${item.icon}"></i><span>${SM.esc(item.text)}</span></div>`).join('')}</div>
+    </section>`
+  },
+
+  _workflowPanel(stages) {
+    const max = Math.max(1, ...stages.map(stage => stage.count))
+    return `<section class="sm-exec-panel sm-exec-workflow">
+      <div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">عملیات استودیو</span><h3>گردش تولید</h3></div><button type="button" class="sm-exec-link" onclick="SMDashboard.go('workflow')">باز کردن برد <i class="fas fa-arrow-left"></i></button></div>
+      <div class="sm-workflow-bars">${stages.map(stage => `<div class="sm-workflow-row"><span>${SM.esc(stage.label)}</span><div><i style="width:${Math.max(4, (stage.count / max) * 100)}%;--stage-color:${stage.color}"></i></div><strong>${stage.count.toLocaleString('fa-IR')}</strong></div>`).join('')}</div>
+    </section>`
+  },
+
+  _eventsPanel(ctx) {
+    const events = ctx.events.filter(item => item.days >= 0).slice(0, 5)
+    return `<section class="sm-exec-panel sm-exec-events"><div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">برنامه نزدیک</span><h3>مراسم‌های پیش‌رو</h3></div><button type="button" class="sm-exec-link" onclick="SMDashboard.go('calendar')">تقویم <i class="fas fa-arrow-left"></i></button></div>
+      <div class="sm-exec-event-list">${events.length ? events.map(event => `<button type="button" onclick="SMDashboard.go('contracts')"><span class="sm-exec-event-date"><strong>${event.days.toLocaleString('fa-IR')}</strong><small>${event.days === 0 ? 'امروز' : 'روز مانده'}</small></span><span><b>${SM.esc(event.couple || 'مراسم')}</b><small>${SM.esc(event.eventDate || '—')} · ${SM.esc(event.venue || 'محل ثبت نشده')}</small></span><i class="fas fa-chevron-left"></i></button>`).join('') : SMUI.empty('fa-calendar', 'مراسم پیش‌رو ثبت نشده')}</div>
+    </section>`
+  },
+
+  _transactionsPanel(ctx) {
+    const rows = ctx.tx.slice(-7).reverse()
+    return `<section class="sm-exec-panel sm-exec-transactions"><div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">آخرین ثبت‌ها</span><h3>گردش مالی اخیر</h3></div><button type="button" class="sm-exec-link" onclick="SMDashboard.go('accounting')">حسابداری <i class="fas fa-arrow-left"></i></button></div>
+      ${rows.length ? `<div class="sm-exec-table-wrap"><table><thead><tr><th>عنوان</th><th>تاریخ</th><th>مبلغ</th><th>وضعیت</th></tr></thead><tbody>${rows.map(row => `<tr><td>${SM.esc(row.title || row.note || 'تراکنش')}</td><td>${SM.esc(row.date || '—')}</td><td class="${row.type === 'deposit' ? 'is-income' : 'is-expense'}">${row.type === 'deposit' ? '+' : '−'} ${SM.fmt(row.amount || 0)}</td><td>${SMUI.badge(row.status === 'pending' ? 'در انتظار' : 'ثبت‌شده', row.status === 'pending' ? 'warning' : 'success')}</td></tr>`).join('')}</tbody></table></div>` : SMUI.empty('fa-receipt', 'تراکنشی ثبت نشده')}</section>`
+  },
+
+  _canViewFinance() {
+    const user = typeof SM !== 'undefined' ? SM.user?.() : null
+    return !!(user && typeof Access !== 'undefined' && (Access.isSystemAdmin(user) || Access.isStudioManager(user)))
+  },
+
+  _operationalDashboard(ctx) {
+    const stages = this._workflowSummary()
+    const closeEvents = ctx.events.filter(event => event.days >= 0 && event.days <= 30).length
+    return `<div class="sm-exec-dashboard sm-exec-dashboard--operations">
+      <div class="sm-exec-toolbar"><div><span class="sm-exec-eyebrow">نمای عملیاتی مجاز</span><h2>پیشخوان کارها</h2><p>${SM.esc(Utils.todayJalali())} · اطلاعات مالی فقط برای مدیر استودیو نمایش داده می‌شود</p></div>
+        <div class="sm-exec-toolbar-actions">${SMUI.moduleSearch('dashboard', 'جستجو در مراسم و مشتری...')}</div></div>
+      <div class="sm-exec-kpis sm-exec-kpis--operations">
+        ${this._kpiCard('مراسم ۳۰ روز آینده', closeEvents, 'برنامه کاری نزدیک', 'fa-calendar-check', '#A78BFA', 'calendar')}
+        ${this._kpiCard('درخواست‌های باز', ctx.openInbox, 'پیام و پیگیری مشتری', 'fa-inbox', '#60A5FA', 'inbox')}
+        ${this._kpiCard('رزروهای نزدیک', ctx.upcomingBookings.length, 'چهارده روز آینده', 'fa-calendar-plus', '#34D399', 'bookings')}
+        ${this._kpiCard('پروژه‌های تولید', stages.reduce((sum, stage) => sum + stage.count, 0), 'ادیت، بازبینی و تحویل', 'fa-clapperboard', '#F59E0B', 'workflow')}
+      </div>
+      <div class="sm-exec-grid sm-exec-grid--bottom">${this._eventsPanel(ctx)}${this._workflowPanel(stages)}</div>
+    </div>`
+  },
+
   render(el) {
     const ctx = this._ctx()
-    const cfg = this.getConfig()
-    const dashQ = SM.getModuleSearch('dashboard')
-    const edit = this._layoutEdit
-    const blocks = []
-
-    cfg.order.forEach(id => {
-      if (!cfg.enabled.includes(id)) return
-      const html = this._renderWidget(id, ctx, dashQ)
-      if (html) blocks.push(this._block(id, html))
-    })
+    if (!this._canViewFinance()) {
+      el.innerHTML = this._operationalDashboard(ctx)
+      return
+    }
+    const finance = this._financialModel(ctx)
+    const expenses = this._expenseCategories(ctx)
+    const forecasts = this._forecastSeries(ctx)
+    const stages = this._workflowSummary()
+    const insights = this._insights(ctx, finance)
+    const activeContracts = ctx.contracts.filter(contract => contract.status !== 'cancelled').length
+    const closeEvents = ctx.events.filter(event => event.days >= 0 && event.days <= 30).length
 
     el.innerHTML = `
-      ${SMUI.moduleSearch('dashboard', 'جستجو در داشبورد — مراسم، مشتری...')}
-      <div class="sm-dash-layout-bar">
-        <button type="button" class="sm-btn sm-btn-sm ${edit ? 'sm-btn-primary' : 'sm-btn-ghost'}" onclick="SMDashboard.toggleLayoutEdit()">
-          <i class="fas fa-arrows-up-down-left-right"></i> ${edit ? 'اتمام چیدمان' : 'جابه‌جایی ویجت‌ها'}
-        </button>
-        ${edit ? '<span class="sm-dash-layout-hint"><i class="fas fa-grip-vertical"></i> بکشید و رها کنید</span>' : ''}
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('settings');SMSettings.setTab('widgets')" title="تنظیم ویجت‌ها">
-          <i class="fas fa-sliders"></i>
-        </button>
+      <div class="sm-exec-dashboard">
+        <div class="sm-exec-toolbar">
+          <div><span class="sm-exec-eyebrow">نمای لحظه‌ای استودیو</span><h2>پیشخوان مدیریت</h2><p>${SM.esc(Utils.todayJalali())} · همه ارقام به تومان</p></div>
+          <div class="sm-exec-toolbar-actions">
+            ${SMUI.moduleSearch('dashboard', 'جستجو در مراسم و مشتری...')}
+            <button type="button" class="sm-btn sm-btn-primary" onclick="window.location.href='../contract.html'"><i class="fas fa-plus"></i> قرارداد جدید</button>
+          </div>
+        </div>
+        <div class="sm-exec-kpis">
+          ${this._kpiCard('وصول این ماه', finance.monthIncome, 'نسبت به ماه قبل', 'fa-wallet', '#34D399', 'accounting', finance.incomeTrend)}
+          ${this._kpiCard('هزینه این ماه', finance.monthExpense, 'نسبت به ماه قبل', 'fa-receipt', '#F87171', 'expenses', finance.expenseTrend, true)}
+          ${this._kpiCard('سود خالص ماه', finance.net, 'وصول منهای هزینه', 'fa-chart-line', '#C9A96E', 'reports')}
+          ${this._kpiCard('مانده مشتریان', ctx.outstanding, `${finance.overdue.length.toLocaleString('fa-IR')} قرارداد معوق`, 'fa-hourglass-half', '#F59E0B', 'contracts')}
+          ${this._kpiCard('موجودی حساب‌ها', finance.bankBalance, 'مجموع بانک و صندوق', 'fa-building-columns', '#60A5FA', 'accounting')}
+          ${this._kpiCard('مراسم ۳۰ روز', closeEvents, `${activeContracts.toLocaleString('fa-IR')} قرارداد فعال`, 'fa-calendar-check', '#A78BFA', 'calendar')}
+        </div>
+        <div class="sm-exec-grid sm-exec-grid--finance">
+          <section class="sm-exec-panel sm-exec-forecast"><div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">شش ماه اخیر</span><h3>وصول واقعی و برآورد قراردادی</h3></div><span class="sm-exec-note">برآورد = وصول ثبت‌شده + مانده قرارداد همان ماه</span></div>${this._forecastChart(forecasts)}</section>
+          ${this._healthPanel(finance)}
+        </div>
+        <div class="sm-exec-grid sm-exec-grid--middle">
+          ${this._expensePanel(expenses)}
+          ${this._assistantPanel(insights)}
+          ${this._workflowPanel(stages)}
+        </div>
+        <div class="sm-exec-grid sm-exec-grid--bottom">
+          ${this._eventsPanel(ctx)}
+          ${this._transactionsPanel(ctx)}
+        </div>
       </div>
-      <div class="sm-dash-sortable${edit ? ' sm-dash--edit' : ''}" id="sm-dash-sortable">${blocks.join('')}</div>`
-
-    this._bindSortable(el.querySelector('#sm-dash-sortable'))
+      `
   },
 
   _block(id, inner) {
