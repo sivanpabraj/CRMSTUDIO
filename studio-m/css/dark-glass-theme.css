@@ -168,3 +168,31 @@ body[data-theme="dark-glass"] .sm-card:hover {
   .sm-theme-option[aria-checked="true"],
   .sm-nav-item.active { outline: 2px solid CanvasText; }
 }
+
+/* Executive dashboard integration */
+body[data-theme="dark-glass"] .sm-exec-dashboard {
+  --exec-panel: rgba(11, 18, 26, .72);
+  --exec-gold: #d8b774;
+}
+body[data-theme="dark-glass"] .sm-exec-panel,
+body[data-theme="dark-glass"] .sm-exec-kpi {
+  border-color: rgba(255, 255, 255, .09);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.035), rgba(255,255,255,.012)),
+    rgba(9, 15, 22, .76);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 18px 42px rgba(0,0,0,.2);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+}
+body[data-theme="dark-glass"] .sm-insight,
+body[data-theme="dark-glass"] .sm-exec-event-list > button,
+body[data-theme="dark-glass"] .sm-expense-track,
+body[data-theme="dark-glass"] .sm-workflow-row > div {
+  background: rgba(255,255,255,.035);
+}
+body[data-theme="dark-glass"] .sm-health-ring::before { background: #0d151e; }
+
+@supports not (backdrop-filter: blur(1px)) {
+  body[data-theme="dark-glass"] .sm-exec-panel,
+  body[data-theme="dark-glass"] .sm-exec-kpi { background: #0d151e; }
+}
