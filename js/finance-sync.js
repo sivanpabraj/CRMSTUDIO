@@ -79,7 +79,7 @@ const FinanceSync = {
 
   /** Serialized bank balance updates — prevents lost updates under concurrent writes */
   async applyBankDelta(bankId, type, amount) {
-    if (!bankId || !amount) return
+    if (!bankId || !Number.isSafeInteger(amount) || amount <= 0) return
     const run = async () => {
       const b = (typeof DB.findActive === 'function'
         ? DB.findActive('banks', x => x.id === bankId)
@@ -94,7 +94,7 @@ const FinanceSync = {
 
   async _updateContractPaid(contractId, purposeCategory, amount, { reverse = false } = {}) {
     const c = DB.find('contracts', x => x.id === contractId && !x._deleted)
-    if (!c || !amount) return
+    if (!c || !Number.isSafeInteger(amount) || amount <= 0) return
     // Initial deposit lives on contract.deposit — only installments update paid
     if (purposeCategory !== 'contract_payment') return
     const delta = reverse ? -amount : amount
@@ -295,8 +295,8 @@ const FinanceSync = {
       return { ok: false, error: 'ویرایش انتقال بین حساب از اینجا مجاز نیست' }
     }
 
-    const amount = +(patch.amount != null ? patch.amount : old.amount) || 0
-    if (!amount) return { ok: false, error: 'مبلغ نامعتبر' }
+    const amount = Number(patch.amount != null ? patch.amount : old.amount)
+    if (!Number.isSafeInteger(amount) || amount <= 0) return { ok: false, error: 'مبلغ نامعتبر' }
     const type = patch.type || old.type
     const bankId = patch.bankId != null ? patch.bankId : old.bankId
     if (!bankId) return { ok: false, error: 'انتخاب حساب بانکی الزامی است' }
@@ -562,10 +562,10 @@ const FinanceSync = {
    * انتقال واقعی بین دو حساب — کل عملیات داخل صف بانک + rollback روی خطا
    */
   async transferBetweenBanks(opts = {}) {
-    const amount = +(opts.amount || 0)
+    const amount = Number(opts.amount)
     const fromId = opts.fromBankId
     const toId = opts.toBankId
-    if (!amount) return { ok: false, error: 'مبلغ نامعتبر' }
+    if (!Number.isSafeInteger(amount) || amount <= 0) return { ok: false, error: 'مبلغ نامعتبر' }
     if (!fromId || !toId) return { ok: false, error: 'انتخاب هر دو حساب الزامی است' }
     if (fromId === toId) return { ok: false, error: 'حساب مبدأ و مقصد باید متفاوت باشند' }
 
@@ -715,8 +715,8 @@ const FinanceSync = {
    * ثبت واریز یکپارچه: تراکنش + بانک + فاکتور (+ قرارداد) — با rollback
    */
   async recordDeposit(opts = {}) {
-    const amount = +(opts.amount || 0)
-    if (!amount) return { ok: false, error: 'مبلغ نامعتبر' }
+    const amount = Number(opts.amount)
+    if (!Number.isSafeInteger(amount) || amount <= 0) return { ok: false, error: 'مبلغ نامعتبر' }
     if (!opts.bankId) return { ok: false, error: 'انتخاب حساب بانکی الزامی است' }
 
     const contract = opts.contractId
@@ -822,8 +822,8 @@ const FinanceSync = {
    * ثبت برداشت یکپارچه (حقوق / هزینه / …) با rollback
    */
   async recordWithdrawal(opts = {}) {
-    const amount = +(opts.amount || 0)
-    if (!amount) return { ok: false, error: 'مبلغ نامعتبر' }
+    const amount = Number(opts.amount)
+    if (!Number.isSafeInteger(amount) || amount <= 0) return { ok: false, error: 'مبلغ نامعتبر' }
     if (!opts.bankId) return { ok: false, error: 'انتخاب حساب بانکی الزامی است' }
 
     const bank = DB.find('banks', b => b.id === opts.bankId && !b._deleted)
@@ -902,8 +902,9 @@ const FinanceSync = {
 
   /** بیعانه اولیه هنگام ثبت قرارداد */
   recordContractInitialDeposit(contract, bankId, meta = {}) {
-    const amount = +(contract.deposit || 0)
-    if (!amount) return { ok: true, skipped: true }
+    const amount = Number(contract.deposit || 0)
+    if (amount === 0) return { ok: true, skipped: true }
+    if (!Number.isSafeInteger(amount) || amount < 0) return { ok: false, error: 'مبلغ بیعانه نامعتبر است' }
     if (!bankId) return { ok: false, error: 'برای بیعانه، حساب بانکی را انتخاب کنید' }
 
     const existing = (typeof DB.active === 'function' ? DB.active('transactions') : DB.filter('transactions', t => !t._deleted))

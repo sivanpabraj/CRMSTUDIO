@@ -511,3 +511,5 @@ const UnifiedLogin = {
 }
 
 window.UnifiedLogin = UnifiedLogin
+
+export default UnifiedLogin

@@ -45,7 +45,9 @@ const StudioMutateClient = {
         && !['localhost', '127.0.0.1'].includes(String(location.hostname || ''))
       return browserProduction || (cloudOn && hasUrl)
     } catch {
-      return false
+      // An authority-resolution failure must never downgrade a production
+      // financial mutation to an optional local write.
+      return true
     }
   },
 

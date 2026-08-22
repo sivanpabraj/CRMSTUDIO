@@ -383,4 +383,467 @@ describe('FinanceSync update/delete integration', () => {
     expect(elements.preview.innerHTML).toBe('')
     expect(() => FinanceSync.populateBankSelect('missing')).not.toThrow()
   })
+
+  it.each([0, -1, -500, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects unsafe amount %s before every money mutation', async (amount) => {
+      const bank = g.DB.insert('banks', { name: 'A', balance: 1000 })
+      const tx = g.DB.insert('transactions', { type: 'deposit', amount: 100, bankId: bank.id })
+      const before = JSON.stringify(g.data)
+      expect((await FinanceSync.recordDeposit({ amount, bankId: bank.id })).ok).toBe(false)
+      expect((await FinanceSync.recordWithdrawal({ amount, bankId: bank.id })).ok).toBe(false)
+      expect((await FinanceSync.transferBetweenBanks({ amount, fromBankId: bank.id, toBankId: 'b2' })).ok).toBe(false)
+      expect((await FinanceSync.updateTransaction(tx.id, { amount })).ok).toBe(false)
+      expect(JSON.stringify(g.data)).toBe(before)
+    }
+  )
+
+  it('rejects negative/non-integer initial deposits while zero remains an explicit no-op', () => {
+    expect(FinanceSync.recordContractInitialDeposit({ id: 'c', deposit: 0 }, 'b')).toEqual({ ok: true, skipped: true })
+    expect(FinanceSync.recordContractInitialDeposit({ id: 'c', deposit: -1 }, 'b')).toMatchObject({ ok: false })
+    expect(FinanceSync.recordContractInitialDeposit({ id: 'c', deposit: 1.25 }, 'b')).toMatchObject({ ok: false })
+  })
+
+  it('covers bank queue, contract paid guards and fallback lookup without corrupting balances', async () => {
+    const bank = g.DB.insert('banks', { name: 'A', balance: 100 })
+    const contract = g.DB.insert('contracts', { total: 1000, deposit: 100, paid: 50, balance: 850 })
+    await FinanceSync.applyBankDelta('', 'deposit', 10)
+    await FinanceSync.applyBankDelta(bank.id, 'deposit', -10)
+    await FinanceSync.applyBankDelta('missing', 'deposit', 10)
+    await FinanceSync.applyBankDelta(bank.id, 'withdrawal', 20)
+    expect(g.DB.find('banks', b => b.id === bank.id).balance).toBe(80)
+    await FinanceSync.applyContractPaid(contract.id, 'other_income', 10)
+    await FinanceSync.applyContractPaid('missing', 'contract_payment', 10)
+    await FinanceSync.applyContractPaid(contract.id, 'contract_payment', 25)
+    await FinanceSync.reverseContractPaid(contract.id, 'contract_payment', 1000)
+    expect(g.DB.find('contracts', c => c.id === contract.id)).toMatchObject({ paid: 0, balance: 900 })
+
+    g.DB.findActive = undefined
+    expect(FinanceSync._findActiveTx('missing')).toBeUndefined()
+    await FinanceSync.applyBankDelta(bank.id, 'deposit', 20)
+    expect(g.DB.find('banks', b => b.id === bank.id).balance).toBe(100)
+  })
+
+  it('exercises authoritative gate outcomes without granting a failed request', async () => {
+    const originalClient = globalThis.StudioMutateClient
+    globalThis.PlanLimits = { assertMoneyOpAllowed: vi.fn(() => ({ ok: false, error: 'quota' })) }
+    expect(await FinanceSync._beforeMoneyCommit('op', {}, 'k')).toMatchObject({ ok: false, reason: 'plan_quota' })
+    delete globalThis.PlanLimits
+
+    Object.assign(originalClient, {
+      requiredWhenOnline: () => false,
+      enabled: () => true,
+      report: vi.fn()
+    })
+    globalThis.location = { hostname: 'localhost' }
+    const deferred = await FinanceSync._beforeMoneyCommit('op', {}, 'k')
+    expect(deferred, JSON.stringify(deferred)).toMatchObject({ ok: true, deferReport: true })
+    await FinanceSync._afterMoneyCommit('op', { transactionId: 'none' }, deferred)
+    expect(originalClient.report).toHaveBeenCalledOnce()
+
+    Object.assign(originalClient, {
+      requiredWhenOnline: () => true,
+      enabled: () => true,
+      authorize: vi.fn()
+        .mockResolvedValueOnce({ ok: false, retryable: true, error: 'offline' })
+        .mockResolvedValueOnce({ ok: false, queueable: true })
+        .mockResolvedValueOnce({ ok: false, error: 'denied' })
+        .mockResolvedValueOnce({ ok: false, skipped: true, reason: 'not_required' })
+        .mockRejectedValueOnce(new Error('gateway exploded'))
+    })
+    expect(await FinanceSync._beforeMoneyCommit('op', {}, 'a')).toMatchObject({ ok: false, error: 'offline' })
+    expect(await FinanceSync._beforeMoneyCommit('op', {}, 'b')).toMatchObject({ ok: false })
+    expect(await FinanceSync._beforeMoneyCommit('op', {}, 'c')).toMatchObject({ ok: false, error: 'denied' })
+    expect(await FinanceSync._beforeMoneyCommit('op', {}, 'd')).toEqual({ ok: true })
+    expect(await FinanceSync._beforeMoneyCommit('op', {}, 'e')).toMatchObject({ ok: false, error: 'gateway exploded' })
+  })
+
+  it('records authorized receipts, ledger version and applied status', async () => {
+    const tx = g.DB.insert('transactions', { type: 'deposit', amount: 10, bankId: '' })
+    Object.assign(globalThis.StudioMutateClient, {
+      requiredWhenOnline: () => true,
+      enabled: () => true,
+      authorize: vi.fn(async () => ({ ok: true, result: { ledgerVersion: 4 } }))
+    })
+    globalThis.FinanceOutbox = {
+      recordAccepted: vi.fn(async row => ({ id: 'receipt', ...row })),
+      markApplied: vi.fn(async () => {})
+    }
+    const gate = await FinanceSync._beforeMoneyCommit('op', { transactionId: tx.id }, 'idem')
+    expect(gate).toMatchObject({ ok: true, authorized: true, idempotencyKey: 'idem' })
+    expect(g.data.studioInfo.ledgerVersion).toBe(4)
+    await FinanceSync._afterMoneyCommit('op', { transactionId: tx.id }, gate)
+    expect(g.DB.find('transactions', t => t.id === tx.id).mutateStatus).toBe('synced')
+    expect(globalThis.FinanceOutbox.markApplied).toHaveBeenCalledWith('idem')
+  })
+
+  it('fails closed when the mutate client loses authorize and persists queued statuses when explicitly requested', async () => {
+    const client = globalThis.StudioMutateClient
+    client.authorize = undefined
+    expect(await FinanceSync._beforeMoneyCommit('op', {}, 'missing')).toMatchObject({
+      ok: false, reason: 'mutate_client_missing'
+    })
+    const out = g.DB.insert('transactions', { type: 'withdrawal', amount: 1 })
+    const incoming = g.DB.insert('transactions', { type: 'deposit', amount: 1 })
+    globalThis.FinanceOutbox = { enqueue: vi.fn(async () => ({ ok: true })) }
+    await FinanceSync._afterMoneyCommit('fallback', {
+      outTransactionId: out.id, inTransactionId: incoming.id
+    }, { queueOutbox: true, op: 'transfer', idempotencyKey: 'key', payload: { stable: true } })
+    expect(globalThis.FinanceOutbox.enqueue).toHaveBeenCalledWith({
+      op: 'transfer', idempotencyKey: 'key', payload: { stable: true }
+    })
+    expect(g.DB.find('transactions', t => t.id === out.id).mutateStatus).toBe('pending')
+    expect(g.DB.find('transactions', t => t.id === incoming.id).mutateStatus).toBe('pending')
+    globalThis.FinanceOutbox.enqueue.mockRejectedValueOnce(new Error('outbox unavailable'))
+    await expect(FinanceSync._afterMoneyCommit('op', {}, { queueOutbox: true })).resolves.toBeUndefined()
+  })
+
+  it('executes update, delete and transfer through the legacy lookup fallback', async () => {
+    const a = g.DB.insert('banks', { name: 'A', balance: 1000 })
+    const b = g.DB.insert('banks', { name: 'B', balance: 100 })
+    const contract = g.DB.insert('contracts', { total: 2000, deposit: 100, paid: 0, balance: 1900 })
+    const dep = await FinanceSync.recordDeposit({
+      amount: 100, bankId: a.id, contractId: contract.id,
+      purposeCategory: 'contract_payment', syncInvoice: true
+    })
+    g.DB.findActive = undefined
+    const updated = await FinanceSync.updateTransaction(dep.transactionId, {
+      amount: 150, bankId: b.id, type: 'deposit', contractId: contract.id,
+      purposeCategory: 'contract_payment'
+    })
+    expect(updated.ok).toBe(true)
+    expect(g.DB.find('banks', x => x.id === a.id).balance).toBe(1000)
+    expect(g.DB.find('banks', x => x.id === b.id).balance).toBe(250)
+    expect((await FinanceSync.deleteTransaction(dep.transactionId)).ok).toBe(true)
+    const transfer = await FinanceSync.transferBetweenBanks({
+      amount: 50, fromBankId: a.id, toBankId: b.id,
+      pairId: 'pair', outTransactionId: 'out', inTransactionId: 'in', date: '1405/01/01'
+    })
+    expect(transfer).toMatchObject({ ok: true, pairId: 'pair' })
+  })
+
+  it('restores both banks, contracts, transaction and invoice after a late update failure', async () => {
+    const a = g.DB.insert('banks', { name: 'A', balance: 100 })
+    const b = g.DB.insert('banks', { name: 'B', balance: 200 })
+    const oldContract = g.DB.insert('contracts', { total: 1000, deposit: 100, paid: 100, balance: 800 })
+    const newContract = g.DB.insert('contracts', { total: 2000, deposit: 200, paid: 50, balance: 1750 })
+    const invoice = g.DB.insert('invoices', { number: 'F-1', amount: 100, _deleted: false })
+    const tx = g.DB.insert('transactions', {
+      type: 'deposit', amount: 100, bankId: a.id, contractId: oldContract.id,
+      purposeCategory: 'contract_payment', invoiceId: invoice.id
+    })
+    g.DB.flush = vi.fn(async () => { throw new Error('late flush failure') })
+    const result = await FinanceSync.updateTransaction(tx.id, {
+      amount: 150, bankId: b.id, type: 'deposit', contractId: newContract.id,
+      purposeCategory: 'contract_payment'
+    })
+    expect(result.ok).toBe(false)
+    expect(g.DB.find('banks', x => x.id === a.id).balance).toBe(100)
+    expect(g.DB.find('banks', x => x.id === b.id).balance).toBe(200)
+    expect(g.DB.find('contracts', x => x.id === oldContract.id)).toMatchObject({ paid: 100, balance: 800 })
+    expect(g.DB.find('contracts', x => x.id === newContract.id)).toMatchObject({ paid: 50, balance: 1750 })
+    expect(g.DB.find('transactions', x => x.id === tx.id)).toMatchObject({ amount: 100, bankId: a.id })
+    expect(g.DB.find('invoices', x => x.id === invoice.id)).toMatchObject({ number: 'F-1', amount: 100 })
+  })
+
+  it('covers invoice numbering fallback, random id fallback and reconciliation filters', async () => {
+    g.DB.active = undefined
+    g.DB.insert('invoices', { number: 'old', _deleted: false })
+    g.DB.insert('invoices', { number: 'deleted', _deleted: true })
+    expect(FinanceSync.genInvoiceNumber()).toBe('F-14040401-002')
+    const originalCrypto = globalThis.crypto
+    Object.defineProperty(globalThis, 'crypto', { value: {}, configurable: true })
+    expect(FinanceSync._newLocalId('manual')).toMatch(/^manual_/)
+    Object.defineProperty(globalThis, 'crypto', { value: originalCrypto, configurable: true })
+    const bank = g.DB.insert('banks', { name: 'A', balance: 0 })
+    g.DB.findActive = undefined
+    await FinanceSync.reconcileAccepted({}, {
+      balances: [
+        { account_ref: 'liability:customer', balance_irr: 10 },
+        { account_ref: 'asset:bank:missing', balance_irr: 100 },
+        { account_ref: `asset:bank:${bank.id}`, balance_irr: 500 }
+      ]
+    })
+    expect(g.DB.find('banks', x => x.id === bank.id).balance).toBe(50)
+  })
+
+  it('preserves every explicit finance field instead of replacing it with defaults', async () => {
+    const a = g.DB.insert('banks', {
+      name: 'Primary', bank: 'Melli', account: '11', card: '22', iban: 'IR33', holder: 'Owner', balance: 1000
+    })
+    const b = g.DB.insert('banks', { name: 'Secondary', balance: 0 })
+    const deposit = await FinanceSync.recordDeposit({
+      transactionId: 'dep-full', amount: 100, bankId: a.id, date: '1405/02/03', periodMonth: '1405/02',
+      sourceType: 'partner', contractId: '', client: 'Client', purposeCategory: 'rent', purpose: 'Rent',
+      paymentMethod: 'cash', transactionRef: 'ref-d', accountOrCard: 'cashbox', notes: 'note-d', syncInvoice: false
+    })
+    expect(deposit.ok).toBe(true)
+    expect(g.DB.find('transactions', x => x.id === deposit.transactionId)).toMatchObject({
+      date: '1405/02/03', periodMonth: '1405/02', sourceType: 'partner', client: 'Client',
+      purpose: 'Rent', paymentMethod: 'cash', transactionRef: 'ref-d', accountOrCard: 'cashbox', notes: 'note-d'
+    })
+    const withdrawal = await FinanceSync.recordWithdrawal({
+      transactionId: 'wd-full', amount: 1200, bankId: a.id, allowOverdraft: true,
+      date: '1405/02/04', periodMonth: '1405/02', sourceType: 'vendor', contractId: 'c', personnelId: 'p',
+      client: 'Vendor', purposeCategory: 'equipment', purpose: 'Gear', paymentMethod: 'card',
+      transactionRef: 'ref-w', accountOrCard: '22', notes: 'note-w', desc: 'description',
+      expenseId: 'expense', salaryPaymentId: 'salary', syncInvoice: false
+    })
+    expect(withdrawal.ok).toBe(true)
+    expect(g.DB.find('transactions', x => x.id === withdrawal.transactionId)).toMatchObject({
+      contractId: 'c', personnelId: 'p', expenseId: 'expense', salaryPaymentId: 'salary', desc: 'description'
+    })
+    const transfer = await FinanceSync.transferBetweenBanks({
+      amount: 10, fromBankId: b.id, toBankId: a.id, pairId: 'full-pair',
+      outTransactionId: 'full-out', inTransactionId: 'full-in', allowOverdraft: true,
+      date: '1405/02/05', periodMonth: '1405/02', purpose: 'Move', paymentMethod: 'cash',
+      transactionRef: 'ref-t', notes: 'note-t'
+    })
+    expect(transfer.ok).toBe(false)
+  })
+
+  it('covers sparse and complete invoice, person, contract and bank projections', async () => {
+    expect(FinanceSync.couple({ couple: 'Exact' })).toBe('Exact')
+    expect(FinanceSync.couple({ bride: 'Bride' })).toBe('Bride')
+    expect(FinanceSync.couple({ groom: 'Groom' })).toBe('Groom')
+    expect(FinanceSync.couple({})).toBe('—')
+    expect(FinanceSync.normalizeBankFields({ account: 'a', iban: 'i' })).toMatchObject({ accountNumber: 'a', shaba: 'i' })
+    const bank = g.DB.insert('banks', { bank: 'Melli', card: '123', balance: 0 })
+    const contract = g.DB.insert('contracts', { bride: 'B', groom: 'G' })
+    const sparseId = await FinanceSync.createInvoiceFromTx({
+      type: 'deposit', amount: 10, date: '1405/01/01', bankId: bank.id,
+      contractId: contract.id, purposeCategory: 'other_income'
+    }, 'sparse')
+    expect(g.DB.find('invoices', i => i.id === sparseId)).toMatchObject({ client: 'B و G', direction: 'in' })
+    const missingExisting = await FinanceSync.createInvoiceFromTx({
+      type: 'withdrawal', amount: 5, date: '1405/01/02', bankId: '',
+      purposeCategory: 'print', client: 'Explicit', accountOrCard: 'manual', notes: 'memo'
+    }, 'other', 'missing-invoice')
+    expect(missingExisting).toBe('missing-invoice')
+    expect(FinanceSync.mapInvoiceType({ type: 'withdrawal', purposeCategory: 'print' })).toBe('expense')
+    expect(FinanceSync.mapInvoiceType({ type: 'withdrawal', purposeCategory: 'unknown' })).toBe('expense')
+
+    const elements = { rich: { innerHTML: '' }, plain: { innerHTML: '' } }
+    globalThis.document = { getElementById: id => elements[id] || null }
+    FinanceSync.renderBankPreview(bank.id, 'rich')
+    expect(elements.rich.innerHTML).toContain('کارت')
+    FinanceSync.renderBankPreview('missing', 'plain')
+    expect(elements.plain.innerHTML).toContain('—')
+  })
+
+  it('restores initial-deposit contract metadata after a late persistence failure', async () => {
+    const bank = g.DB.insert('banks', { name: 'A', balance: 0 })
+    const contract = g.DB.insert('contracts', {
+      total: 1000, deposit: 100, paid: 0, balance: 900,
+      depositBankId: 'previous-bank', depositTransactionId: 'previous-tx',
+      depositInvoiceId: 'previous-invoice', depositRecordedAt: 'previous-date'
+    })
+    g.DB.flush = vi.fn(async () => { throw new Error('late failure') })
+    const result = await FinanceSync.recordDeposit({
+      transactionId: 'initial', amount: 100, bankId: bank.id, contractId: contract.id,
+      purposeCategory: 'contract_deposit', syncInvoice: true
+    })
+    expect(result.ok).toBe(false)
+    expect(g.DB.find('contracts', c => c.id === contract.id)).toMatchObject({
+      depositBankId: 'previous-bank', depositTransactionId: 'previous-tx',
+      depositInvoiceId: 'previous-invoice', depositRecordedAt: 'previous-date'
+    })
+  })
+
+  it('executes collection fallback predicates with active and deleted rows', () => {
+    g.DB.active = undefined
+    g.DB.insert('transactions', { contractId: 'c', type: 'deposit', purposeCategory: 'contract_deposit', _deleted: false })
+    g.DB.insert('transactions', { contractId: 'c', type: 'deposit', purposeCategory: 'contract_deposit', _deleted: true })
+    g.DB.insert('invoices', { contractId: 'c', _deleted: false })
+    g.DB.insert('invoices', { contractId: 'c', _deleted: true })
+    g.DB.insert('banks', { name: 'Visible', _deleted: false })
+    g.DB.insert('banks', { name: 'Hidden', _deleted: true })
+    expect(FinanceSync.recordContractInitialDeposit({ id: 'c', deposit: 10 }, '')).toMatchObject({ ok: false })
+    expect(FinanceSync.recordContractInitialDeposit({ id: 'c', deposit: 10 }, 'bank')).toMatchObject({ skipped: true })
+    expect(FinanceSync.contractInvoices('c')).toHaveLength(1)
+    expect(FinanceSync.hasSyncedDeposit('c')).toBe(true)
+    const select = { innerHTML: '' }
+    globalThis.document = { getElementById: () => select }
+    FinanceSync.populateBankSelect('select')
+    expect(select.innerHTML).toContain('Visible')
+    expect(select.innerHTML).not.toContain('Hidden')
+  })
+
+  it('updates every editable transaction field and exercises explicit patch branches', async () => {
+    const bank = g.DB.insert('banks', { name: 'A', balance: 100 })
+    const tx = g.DB.insert('transactions', {
+      type: 'deposit', amount: 10, date: 'old', bankId: bank.id, sourceType: 'old',
+      purposeCategory: 'other_income', invoiceId: '', expenseId: '', salaryPaymentId: '', chequeId: ''
+    })
+    const result = await FinanceSync.updateTransaction(tx.id, {
+      amount: 20, type: 'deposit', date: '1405/03/01', periodMonth: '1405/03', bankId: bank.id,
+      sourceType: 'partner', contractId: '', personnelId: 'person', client: 'client',
+      purposeCategory: 'rent', purpose: 'purpose', paymentMethod: 'cash', transactionRef: 'ref',
+      accountOrCard: 'account', notes: 'notes', desc: 'desc'
+    }, { syncInvoice: false, clientMutationId: 'fixed' })
+    expect(result.ok).toBe(true)
+    expect(g.DB.find('transactions', x => x.id === tx.id)).toMatchObject({
+      amount: 20, date: '1405/03/01', periodMonth: '1405/03', sourceType: 'partner',
+      personnelId: 'person', client: 'client', purpose: 'purpose', desc: 'desc'
+    })
+  })
+
+  it('denies every operation before local mutation when the authoritative gate rejects it', async () => {
+    const a = g.DB.insert('banks', { name: 'A', balance: 100 })
+    const b = g.DB.insert('banks', { name: 'B', balance: 0 })
+    const tx = g.DB.insert('transactions', { type: 'deposit', amount: 10, bankId: a.id })
+    Object.assign(globalThis.StudioMutateClient, {
+      requiredWhenOnline: () => true,
+      enabled: () => true,
+      authorize: vi.fn(async () => ({ ok: false, error: 'denied', reason: 'policy' }))
+    })
+    expect((await FinanceSync.updateTransaction(tx.id, { amount: 20 })).ok).toBe(false)
+    expect((await FinanceSync.deleteTransaction(tx.id)).ok).toBe(false)
+    expect((await FinanceSync.transferBetweenBanks({ amount: 10, fromBankId: a.id, toBankId: b.id })).ok).toBe(false)
+    expect((await FinanceSync.recordDeposit({ amount: 10, bankId: a.id })).ok).toBe(false)
+    expect((await FinanceSync.recordWithdrawal({ amount: 10, bankId: a.id })).ok).toBe(false)
+    expect(g.DB.find('banks', x => x.id === a.id).balance).toBe(100)
+    expect(g.DB.find('transactions', x => x.id === tx.id)._deleted).not.toBe(true)
+  })
+
+  it('covers non-critical reporting, quota pass and reconciliation defaults', async () => {
+    const client = globalThis.StudioMutateClient
+    Object.assign(client, {
+      requiredWhenOnline: () => false,
+      enabled: () => false,
+      report: vi.fn(() => { throw new Error('telemetry failure') })
+    })
+    expect(() => FinanceSync._reportMutate('op', {})).not.toThrow()
+    globalThis.PlanLimits = { assertMoneyOpAllowed: vi.fn(() => ({ ok: true })) }
+    expect(await FinanceSync._beforeMoneyCommit('op', {}, 'quota-pass')).toMatchObject({
+      ok: true, developmentLocalOnly: true
+    })
+    delete globalThis.PlanLimits
+
+    const tx = g.DB.insert('transactions', { type: 'deposit', amount: 1 })
+    globalThis.FinanceOutbox = { enqueue: vi.fn(async () => ({ ok: true })) }
+    await FinanceSync._afterMoneyCommit('op', { transactionId: tx.id }, {
+      queueOutbox: true, idempotencyKey: 'only-out'
+    })
+    expect(g.DB.find('transactions', x => x.id === tx.id).mutateStatus).toBe('pending')
+    await FinanceSync._afterMoneyCommit('op', {}, { authorized: true })
+
+    await FinanceSync.reconcileAccepted({ payload: { transactionId: 'missing' } }, {
+      balances: [], ledgerVersion: null
+    })
+    expect(FinanceSync._serverAcceptedFailure({}, {}, 'fallback')).toMatchObject({
+      ok: false, error: 'fallback', serverAccepted: false, needsReconciliation: false, idempotencyKey: ''
+    })
+  })
+
+  it('validates missing bank ids before invoking the authority service', async () => {
+    expect(await FinanceSync.recordDeposit({ amount: 10 })).toMatchObject({ ok: false })
+    expect(await FinanceSync.recordWithdrawal({ amount: 10 })).toMatchObject({ ok: false })
+  })
+
+  it('covers empty-value safety fallbacks without manufacturing financial data', async () => {
+    const originalBankInfo = FinanceSync.bankInfo
+    FinanceSync.bankInfo = () => ({ name: '', bank: '', account: '', card: '' })
+    expect(FinanceSync.bankLabel('empty')).toBe('—')
+    FinanceSync.bankInfo = originalBankInfo
+
+    const contract = g.DB.insert('contracts', { total: 0, deposit: 0, paid: 5, balance: 0 })
+    await FinanceSync.reverseContractPaid(contract.id, 'contract_payment', 5)
+    expect(g.DB.find('contracts', c => c.id === contract.id)).toMatchObject({ paid: 0, balance: 0 })
+
+    const client = globalThis.StudioMutateClient
+    Object.assign(client, {
+      requiredWhenOnline: () => true,
+      enabled: () => true,
+      authorize: vi.fn(async () => ({ ok: false }))
+    })
+    expect(await FinanceSync._beforeMoneyCommit('op', {}, 'defaults')).toMatchObject({
+      ok: false, error: 'تأیید سرور برای تراکنش مالی ناموفق بود', reason: 'mutate_failed'
+    })
+    client.authorize = vi.fn(async () => { throw {} })
+    expect(await FinanceSync._beforeMoneyCommit('op', {}, 'throw-default')).toMatchObject({
+      ok: false, error: 'خطای دروازه مالی سرور'
+    })
+
+    await FinanceSync.reconcileAccepted({}, { balances: [{}] })
+    expect(FinanceSync._serverAcceptedFailure(null, null, 'fallback')).toMatchObject({ error: 'fallback' })
+  })
+
+  it('covers authority and projection fallback values with explicit assertions', async () => {
+    const client = globalThis.StudioMutateClient
+    client.report = undefined
+    expect(() => FinanceSync._reportMutate('noop', {})).not.toThrow()
+
+    globalThis.FinanceOutbox = { recordAccepted: vi.fn(async row => row) }
+    Object.assign(client, {
+      requiredWhenOnline: () => true,
+      enabled: () => true,
+      authorize: vi.fn(async () => ({ ok: true }))
+    })
+    const gate = await FinanceSync._beforeMoneyCommit('accepted-empty', {}, 'empty-result')
+    expect(gate).toMatchObject({ ok: true, authorized: true })
+    expect(globalThis.FinanceOutbox.recordAccepted).toHaveBeenCalledWith(expect.objectContaining({ serverResult: null }))
+
+    const tx = g.DB.insert('transactions', { type: 'deposit', amount: 1 })
+    await FinanceSync.reconcileAccepted({ payload: { transactionId: tx.id } }, { balances: [] })
+    expect(g.DB.find('transactions', row => row.id === tx.id)).toMatchObject({
+      serverLedgerVersion: null, serverTransactionId: ''
+    })
+    expect(FinanceSync._serverAcceptedFailure({ authorized: true, idempotencyKey: 'k' }, null, 'fallback')).toMatchObject({
+      serverAccepted: true, needsReconciliation: true, idempotencyKey: 'k'
+    })
+
+    const originalGet = g.DB.get
+    g.DB.active = undefined
+    g.DB.get = col => col === 'invoices' ? undefined : originalGet(col)
+    expect(FinanceSync.genInvoiceNumber()).toBe('F-14040401-001')
+  })
+
+  it('rolls back deposit contract metadata, paid amount, invoice, transaction and bank', async () => {
+    const bank = g.DB.insert('banks', { name: 'A', balance: 10 })
+    const contract = g.DB.insert('contracts', {
+      total: 1000, deposit: 0, paid: 50, balance: 950,
+      depositBankId: 'old', depositTransactionId: 'oldtx', depositInvoiceId: 'oldinv', depositRecordedAt: 'old'
+    })
+    g.DB.flush = vi.fn(async () => { throw new Error('flush failed') })
+    const result = await FinanceSync.recordDeposit({
+      transactionId: 'stable', amount: 100, bankId: bank.id, contractId: contract.id,
+      purposeCategory: 'contract_payment', syncInvoice: true
+    })
+    expect(result.ok).toBe(false)
+    expect(g.DB.find('banks', b => b.id === bank.id).balance).toBe(10)
+    expect(g.DB.find('contracts', c => c.id === contract.id)).toMatchObject({ paid: 50, balance: 950 })
+    expect(g.DB.find('transactions', t => t.id === 'stable')._deleted).toBe(true)
+  })
+
+  it('rolls back a withdrawal after transaction, bank and invoice were written', async () => {
+    const bank = g.DB.insert('banks', { name: 'A', balance: 500 })
+    g.DB.flush = vi.fn(async () => { throw new Error('flush failed') })
+    const result = await FinanceSync.recordWithdrawal({
+      transactionId: 'wd', amount: 100, bankId: bank.id, syncInvoice: true
+    })
+    expect(result.ok).toBe(false)
+    expect(g.DB.find('banks', b => b.id === bank.id).balance).toBe(500)
+    expect(g.DB.find('transactions', t => t.id === 'wd')._deleted).toBe(true)
+    expect(g.DB.active('invoices')).toHaveLength(0)
+  })
+
+  it('uses fallback collections and empty UI states', () => {
+    const bank = g.DB.insert('banks', { name: '', bank: '', balance: 0 })
+    g.DB.findActive = undefined
+    g.DB.active = undefined
+    g.DB.insert('transactions', { contractId: 'c', type: 'deposit', purposeCategory: 'contract_deposit', _deleted: false })
+    g.DB.insert('transactions', { contractId: 'c', type: 'withdrawal', _deleted: false })
+    g.DB.insert('invoices', { contractId: 'c', _deleted: false })
+    g.DB.insert('invoices', { contractId: 'c', _deleted: true })
+    expect(FinanceSync.bankLabel(bank.id)).toBe('حساب')
+    expect(FinanceSync.contractPayments('c')).toHaveLength(1)
+    expect(FinanceSync.contractInvoices('c')).toHaveLength(1)
+    expect(FinanceSync.hasSyncedDeposit('c')).toBe(true)
+    const empty = { innerHTML: '' }
+    globalThis.document = { getElementById: () => empty }
+    g.DB.set('banks', [])
+    FinanceSync.populateBankSelect('x')
+    expect(empty.innerHTML).toContain('ابتدا')
+    expect(() => FinanceSync.renderBankPreview('b', 'missing')).not.toThrow()
+  })
 })

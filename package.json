@@ -20,7 +20,9 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "test:e2e": "npm run build && playwright test",
+    "test:e2e": "npm run test:e2e:visual && npm run test:e2e:auth",
+    "test:e2e:visual": "E2E_LOCAL_DEMO_BUILD=1 npm run build && playwright test e2e/visual.spec.js",
+    "test:e2e:auth": "npm run build && playwright test e2e/finance-auth.spec.js",
     "test:e2e:ui": "playwright test --ui",
     "test:realtime:two-device": "node scripts/two-device-realtime-test.mjs",
     "test:rls:local": "supabase db reset --local && supabase test db && bash scripts/test-assignment-concurrency.sh"

@@ -17,12 +17,12 @@ alter table public.studio_mutation_audit enable row level security;
 
 create policy studio_mutation_audit_member_read on public.studio_mutation_audit
   for select using (
-    studio_id in (select unnest(public.user_studio_ids()))
+    studio_id in (select public.user_studio_ids())
   );
 
 create policy studio_mutation_audit_member_insert on public.studio_mutation_audit
   for insert with check (
-    studio_id in (select unnest(public.user_studio_ids()))
+    studio_id in (select public.user_studio_ids())
     and user_id = auth.uid()
   );
 

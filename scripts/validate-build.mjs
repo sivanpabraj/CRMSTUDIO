@@ -17,6 +17,11 @@ for (const asset of offline.assets) {
   if (!existsSync(join('dist', asset))) throw new Error(`offline manifest references missing asset: ${asset}`)
 }
 
+const buildFlags = readFileSync('dist/js/build-flags.js', 'utf8')
+if (!/Object\.freeze\(\{"localDemo":false\}\)/.test(buildFlags)) {
+  throw new Error('release artifact enables local demo identity')
+}
+
 const files = []
 const walk = dir => {
   for (const name of readdirSync(dir)) {

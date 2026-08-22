@@ -51,7 +51,7 @@ export async function verifyObject(obj, payloadFn, matchFields = {}) {
   }
   if (obj.expires != null && Date.now() > obj.expires) return false
   if (!obj.sig) {
-    return typeof AppConfig !== 'undefined' && AppConfig.isLocalDev?.()
+    return !!(typeof AppConfig !== 'undefined' && AppConfig.isLocalDev?.())
   }
   try {
     const secret = sessionStorage.getItem(PROOF_SECRET_KEY)

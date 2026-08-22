@@ -3,11 +3,11 @@
  */
 
 export function generateCsrfToken() {
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-    return Array.from(crypto.getRandomValues(new Uint8Array(16)))
-      .map(b => b.toString(16).padStart(2, '0')).join('')
+  if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
+    throw new Error('secure_random_unavailable')
   }
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
 /**

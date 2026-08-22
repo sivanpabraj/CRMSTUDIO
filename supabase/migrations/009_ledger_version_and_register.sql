@@ -11,7 +11,7 @@ alter table public.studio_ledger_heads enable row level security;
 
 create policy studio_ledger_heads_member_read on public.studio_ledger_heads
   for select using (
-    studio_id in (select unnest(public.user_studio_ids()))
+    studio_id in (select public.user_studio_ids())
   );
 
 -- Members cannot forge version bumps from the client; Edge uses user JWT insert via RPC below.

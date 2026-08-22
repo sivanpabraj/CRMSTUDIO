@@ -21,12 +21,12 @@ alter table public.studio_ledger_entries enable row level security;
 
 create policy studio_ledger_entries_member_read on public.studio_ledger_entries
   for select using (
-    studio_id in (select unnest(public.user_studio_ids()))
+    studio_id in (select public.user_studio_ids())
   );
 
 create policy studio_ledger_entries_member_insert on public.studio_ledger_entries
   for insert with check (
-    studio_id in (select unnest(public.user_studio_ids()))
+    studio_id in (select public.user_studio_ids())
     and user_id = auth.uid()
   );
 

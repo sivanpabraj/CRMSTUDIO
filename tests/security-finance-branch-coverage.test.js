@@ -82,12 +82,9 @@ describe('CSRF helper branch behavior', () => {
     expect(generateCsrfToken()).toMatch(/^[0-9a-f]{32}$/)
   })
 
-  it('uses the explicit fallback only when Web Crypto is unavailable', () => {
+  it('fails closed when Web Crypto is unavailable', () => {
     vi.stubGlobal('crypto', undefined)
-    vi.spyOn(Date, 'now').mockReturnValue(123)
-    vi.spyOn(Math, 'random').mockReturnValue(0.5)
-    expect(generateCsrfToken()).toMatch(/^123_[a-z0-9]+$/)
-    vi.restoreAllMocks()
+    expect(() => generateCsrfToken()).toThrow('secure_random_unavailable')
   })
 
   it('rejects every missing/mismatched binding and accepts exact binding', () => {

@@ -29,3 +29,9 @@ export function injectStaticPublicEnv(source, env = process.env) {
   }
   return output
 }
+
+export function renderStaticBuildFlags(env = process.env) {
+  const localDemo = String(env.E2E_LOCAL_DEMO_BUILD || '').trim() === '1'
+  return `/* Generated build flags; never derive these from browser-controlled state. */\n` +
+    `globalThis.__SM_BUILD_FLAGS__ = Object.freeze(${JSON.stringify({ localDemo })})\n`
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Buffer } from 'node:buffer'
-import { assertPublishableSupabaseKey, injectStaticPublicEnv } from '../scripts/lib/static-public-env.mjs'
+import { assertPublishableSupabaseKey, injectStaticPublicEnv, renderStaticBuildFlags } from '../scripts/lib/static-public-env.mjs'
 
 describe('static production environment injection', () => {
   const source = `const url = import.meta.env?.VITE_SUPABASE_URL || ''
@@ -53,5 +53,11 @@ const key = import.meta.env?.VITE_SUPABASE_ANON_KEY || ''`
     })
     expect(output.match(/"https:\/\/trusted\.supabase\.co"/g)).toHaveLength(2)
     expect(output).toContain('import.meta.env?.PRIVATE_KEY')
+  })
+
+  it('keeps local identity disabled unless the isolated E2E build explicitly opts in', () => {
+    expect(renderStaticBuildFlags({})).toContain('{"localDemo":false}')
+    expect(renderStaticBuildFlags({ E2E_LOCAL_DEMO_BUILD: 'true' })).toContain('{"localDemo":false}')
+    expect(renderStaticBuildFlags({ E2E_LOCAL_DEMO_BUILD: '1' })).toContain('{"localDemo":true}')
   })
 })

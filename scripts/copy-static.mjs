@@ -5,7 +5,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
-import { injectStaticPublicEnv } from './lib/static-public-env.mjs'
+import { injectStaticPublicEnv, renderStaticBuildFlags } from './lib/static-public-env.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dist = join(root, 'dist')
@@ -20,6 +20,8 @@ function copy(src, dest) {
 }
 
 copy('js', 'js')
+writeFileSync(join(dist, 'js/build-flags.js'), renderStaticBuildFlags(process.env))
+console.log('copy-static: injected immutable build capability flags')
 const cloudDist = join(dist, 'js/cloud.js')
 if (existsSync(cloudDist)) {
   const source = readFileSync(cloudDist, 'utf8')

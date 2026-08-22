@@ -198,3 +198,5 @@ const PasswordReset = {
 }
 
 window.PasswordReset = PasswordReset
+
+export default PasswordReset
