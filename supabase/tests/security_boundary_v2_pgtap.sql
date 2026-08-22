@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
-select plan(52);
+select plan(54);
 
 insert into auth.users (instance_id,id,aud,role,email,created_at,updated_at) values
  ('00000000-0000-0000-0000-000000000000','11000000-0000-4000-8000-000000000001','authenticated','authenticated','manager-v2@test.invalid',now(),now()),
@@ -221,7 +221,14 @@ select ok(not has_function_privilege('authenticated',
   'public.create_studio_backup(uuid,jsonb,text,text,integer,text)','EXECUTE'),
   'plaintext backup RPC is retired');
 
-set local role service_role;
+select ok(not has_table_privilege('service_role','public.finance_journal_lines','INSERT'),
+  'service role cannot bypass the finance command boundary with direct journal inserts');
+select ok(not has_table_privilege('service_role','public.studio_backup_archives','SELECT'),
+  'service role cannot enumerate encrypted backup archives directly');
+
+-- The database owner deliberately attempts the strongest possible direct
+-- tamper. Passing proves the deferred accounting invariant survives RLS bypass;
+-- service_role is separately proven to lack direct table privileges above.
 create function pg_temp.attempt_unbalanced_journal() returns void
 language plpgsql as $$
 begin
@@ -236,6 +243,8 @@ end;
 $$;
 select throws_ok($$select pg_temp.attempt_unbalanced_journal()$$,
   '23514','finance_journal_unbalanced','deferred journal invariant rejects an unbalanced tamper at commit boundary');
+
+set local role service_role;
 select lives_ok($$
   select public.store_encrypted_studio_backup(
     '21000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000001',
@@ -243,6 +252,7 @@ select lives_ok($$
     repeat('a',64),128,
     '{"format":"crmstudio-aes-gcm-v1","algorithm":"AES-256-GCM","schemaVersion":23,"keyVersion":1,"appVersion":"1.0.1","aad":"test"}'::jsonb)
 $$,'service stores an encrypted envelope for an active manager');
+reset role;
 select is((select count(*) from public.studio_backup_archives
   where encrypted_payload is not null and payload is null),1::bigint,
   'database stores ciphertext and no plaintext payload');

@@ -70,8 +70,10 @@ describe('password reset and unified login behavior', () => {
     vi.stubGlobal('NotifyHub', { consultationRequested: vi.fn() })
     vi.stubGlobal('DemoSeed', { isDemoMode: () => false })
     vi.stubGlobal('SignedProof', { issue: vi.fn(async () => {}), clear: vi.fn() })
-    ;({ default: PasswordReset } = await import('../js/password-reset.js'))
-    ;({ default: UnifiedLogin } = await import('../js/unified-login.js'))
+    await import('../js/password-reset.js')
+    await import('../js/unified-login.js')
+    PasswordReset = window.PasswordReset
+    UnifiedLogin = window.UnifiedLogin
   })
 
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })

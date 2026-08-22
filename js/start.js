@@ -26,7 +26,7 @@ const StartPortal = {
     const app = document.getElementById('start-app')
     app.innerHTML = `
       <div class="auth-page">
-        <div class="auth-layout" style="max-width:480px;margin:0 auto">
+        <div class="auth-layout auth-layout--single" style="max-width:480px;margin:0 auto">
           <div class="auth-card glass-panel">
             <div class="auth-logo">
               <div class="auth-logo-ring"><i class="fas fa-crown"></i></div>
@@ -66,7 +66,7 @@ const StartPortal = {
     const app = document.getElementById('start-app')
     app.innerHTML = `
       <div class="auth-page">
-        <div class="auth-layout" style="max-width:520px;margin:0 auto">
+        <div class="auth-layout auth-layout--single" style="max-width:520px;margin:0 auto">
           <div class="auth-card glass-panel" style="text-align:center">
             <div style="font-size:3rem;margin:16px 0">✅</div>
             <h1 class="auth-title">${Utils.escapeHtml(studioName)}</h1>
@@ -83,7 +83,7 @@ const StartPortal = {
     const app = document.getElementById('start-app')
     app.innerHTML = `
       <div class="auth-page">
-        <div class="auth-layout" style="max-width:480px;margin:0 auto">
+        <div class="auth-layout auth-layout--single" style="max-width:480px;margin:0 auto">
           <div class="auth-card glass-panel">
             <div class="auth-logo">
               <div class="auth-logo-ring"><i class="fas fa-shield-halved"></i></div>

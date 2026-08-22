@@ -13,6 +13,6 @@
 | `tests/erp-operational-core.test.js` | کاربران واقعی JWT، جداسازی tenant/role و دسترسی work-order | `supabase/tests/rls_role_resource_matrix.sql` |
 | `tests/legacy-access-hardening.test.js` | manager/accountant/photographer/customer/expired membership روی جدول‌های واقعی | `supabase/tests/rls_role_resource_matrix.sql` |
 | `tests/personnel-assignment-concurrency.test.js` | دو session هم‌زمان PostgreSQL و الزام commit شدن دقیقاً یک assignment | `scripts/test-assignment-concurrency.sh` |
-| `customer-portal-security`، `erp-finance-reporting`، `erp-tenant-trigger-runtime`، `secure-invitations`، `security-blocker-closure` | verified phone و append-only portal؛ report view با RLS؛ trigger fail-closed؛ invitation create→request→approval؛ journal/storage/privilege؛ رد عضویت منقضی/لغوشده در `register_studio` | `supabase/tests/security_boundary_v2_pgtap.sql` با plan(52) و migrationهای اصلاحی 041 و 042 |
+| `customer-portal-security`، `erp-finance-reporting`، `erp-tenant-trigger-runtime`، `secure-invitations`، `security-blocker-closure` | verified phone و append-only portal؛ report view با RLS؛ trigger fail-closed؛ invitation create→request→approval؛ journal/storage/privilege؛ رد عضویت منقضی/لغوشده در `register_studio` | `supabase/tests/security_boundary_v2_pgtap.sql` با plan(54) و migrationهای اصلاحی 041 تا 043 |
 
 سه شاهد PostgreSQL فوق در job `database` از CI و job `verify-database` از release اجرا می‌شوند. تا وقتی اجرای واقعی آن jobها سبز نشده، این نگاشت فقط طراحی gate است و به معنی PASS نیست.

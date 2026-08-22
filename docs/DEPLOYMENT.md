@@ -56,7 +56,7 @@ Required headers (see `docker/nginx.conf`):
 ## Supabase
 
 1. Create project
-2. همهٔ migrationهای شماره‌دار `supabase/migrations/` را بدون حذف یا انتخاب گزینشی اعمال کنید. manifest نسخهٔ 1.0.1 دقیقاً با `042_register_studio_membership_validity.sql` پایان می‌یابد و validator هر اختلافی را رد می‌کند.
+2. همهٔ migrationهای شماره‌دار `supabase/migrations/` را بدون حذف یا انتخاب گزینشی اعمال کنید. manifest نسخهٔ 1.0.1 دقیقاً با `043_contract_child_table_specific_triggers.sql` پایان می‌یابد و validator هر اختلافی را رد می‌کند.
 3. Set Auth Site URL → `https://your-domain/studio-m/auth-callback.html` and add the exact staging/production callback URLs to Redirect URLs
 4. Under Authentication, enable Phone plus the configured SMS provider. Enable Google/Apple only after registering their production client IDs and secrets in Supabase; never place provider secrets in the frontend.
 5. Enable Attack Protection → Leaked Password Protection.

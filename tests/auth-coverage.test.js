@@ -67,7 +67,8 @@ describe('Auth behavioral coverage', () => {
     vi.stubGlobal('SessionSign', undefined)
     vi.stubGlobal('SignedProof', undefined)
     vi.stubGlobal('PasswordSecurity', undefined)
-    ;({ default: Auth } = await import('../js/auth.js'))
+    await import('../js/auth.js')
+    Auth = window.Auth
   })
 
   afterEach(() => {
