@@ -1,9 +1,16 @@
 /**
  * Studio M Phase 2/3 — Sync engine (entity-first, snapshot fallback, conflicts)
  */
-import { SYNC_ENTITIES, isSyncEntity, stripSensitive, toRpcRow } from './entities.js'
+import { SYNC_ENTITIES, isSyncEntity, stripSensitive } from './entities.js'
 import { mergeCollection } from './conflict.js'
 import { upsertConflict, listConflicts } from './conflict-store.js'
+import { LIVE_ENTITY_PUSH_MS } from '../lib/live-sync-ui.js'
+import {
+  nextSequenceCursor,
+  normalizeDelta,
+  reconcilePush,
+  toAuthoritativeCommand,
+} from './protocol.js'
 
 export const SyncEngine = {
   _entityPushTimer: null,
@@ -15,6 +22,7 @@ export const SyncEngine = {
     if (!cloud?.isEnabled?.()) return
     this._entityPending = true
     clearTimeout(this._entityPushTimer)
+    const delay = LIVE_ENTITY_PUSH_MS || 700
     this._entityPushTimer = setTimeout(() => {
       this.pushAll(cloud).then(r => {
         if (r?.ok || r?.skipped) return
@@ -22,7 +30,16 @@ export const SyncEngine = {
       }).catch(e => {
         cloud._notifyCloudError?.(e?.message || 'خطا در entity sync')
       })
-    }, 2500)
+    }, delay)
+  },
+
+  /** Flush pending entity push immediately (tab hide / critical path). */
+  async flushEntityPush(cloud) {
+    if (!cloud?.isEnabled?.()) return { ok: false, skipped: true }
+    clearTimeout(this._entityPushTimer)
+    this._entityPushTimer = null
+    if (!this._entityPending) return { ok: true, skipped: true, reason: 'nothing_pending' }
+    return this.pushAll(cloud)
   },
 
   scheduleSnapshotPush(cloud) {
@@ -39,11 +56,27 @@ export const SyncEngine = {
     return info.syncCursors && typeof info.syncCursors === 'object' ? info.syncCursors : {}
   },
 
+  _sequenceCursors() {
+    const info = typeof DB !== 'undefined' ? (DB.get('studioInfo') || {}) : {}
+    return info.syncSequenceCursors && typeof info.syncSequenceCursors === 'object'
+      ? info.syncSequenceCursors
+      : {}
+  },
+
   async _saveCursors(cursors, extra = {}) {
     if (typeof SecureDB === 'undefined') return
     await SecureDB.merge('studioInfo', {
       ...(DB.get('studioInfo') || {}),
       syncCursors: cursors,
+      ...extra
+    })
+  },
+
+  async _saveSequenceCursors(cursors, extra = {}) {
+    if (typeof SecureDB === 'undefined') return
+    await SecureDB.merge('studioInfo', {
+      ...(DB.get('studioInfo') || {}),
+      syncSequenceCursors: cursors,
       ...extra
     })
   },
@@ -59,9 +92,10 @@ export const SyncEngine = {
   _rowsSince(collection, sinceIso) {
     const since = sinceIso ? Date.parse(sinceIso) : 0
     return (DB.get(collection) || []).filter(item => {
-      if (!item?.id || item._deleted) return false
-      const t = Date.parse(item.updatedAtIso || item.updated_at || '')
-      return !since || !Number.isFinite(t) || t > since
+      if (!item?.id) return false
+      // Include tombstones (_deleted) so peers receive soft-deletes
+      const t = Date.parse(item.updatedAtIso || item.updated_at || item.deletedAtIso || '')
+      return !!item._syncMutationId || !item._serverRevision || !since || !Number.isFinite(t) || t > since
     })
   },
 
@@ -79,17 +113,34 @@ export const SyncEngine = {
     const items = this._rowsSince(entityType, since)
     if (!items.length) return { ok: true, count: 0, entityType }
 
-    const rows = items.map(i => toRpcRow(stripSensitive(entityType, i)))
-    const { data, error } = await c.rpc('upsert_studio_entities', {
-      p_studio_id: studioId,
-      p_entity_type: entityType,
-      p_rows: rows
-    })
-    if (error) return { ok: false, error: error.message, entityType }
+    let accepted = 0
+    for (let offset = 0; offset < items.length; offset += 200) {
+      const batchItems = items.slice(offset, offset + 200)
+      const commands = batchItems.map(item => {
+        const command = toAuthoritativeCommand(entityType, item)
+        if (command.payload) command.payload = stripSensitive(entityType, command.payload)
+        return command
+      })
+      const { data, error } = await c.rpc('apply_studio_entity_commands', {
+        p_studio_id: studioId,
+        p_entity_type: entityType,
+        p_commands: commands
+      })
+      if (error) return { ok: false, error: error.message, entityType }
+      const current = DB.get(entityType) || []
+      const reconciled = reconcilePush(current, commands, data?.results || [])
+      if (typeof SecureDB !== 'undefined' && SecureDB.systemSet) {
+        await SecureDB.systemSet(entityType, reconciled)
+      } else {
+        await DB.set(entityType, reconciled)
+      }
+      accepted += data?.results?.length || 0
+    }
 
     const cursors = { ...this._cursors(), [entityType]: new Date().toISOString() }
     await this._saveCursors(cursors)
-    return { ok: true, count: data ?? rows.length, entityType }
+    await DB.flush?.()
+    return { ok: true, count: accepted, entityType }
   },
 
   async pushContractsTable(cloud) {
@@ -130,7 +181,10 @@ export const SyncEngine = {
     })
     await DB.flush?.()
 
-    if (errors.length) return { ok: false, error: errors.join(' · '), partial: total }
+    if (errors.length) {
+      this._entityPending = true
+      return { ok: false, error: errors.join(' · '), partial: total }
+    }
     return { ok: true, count: total, at }
   },
 
@@ -150,29 +204,32 @@ export const SyncEngine = {
     if (!c) return { ok: false, error: 'no client' }
 
     let applied = 0
-    const cursors = { ...this._cursors() }
+    const cursors = { ...this._sequenceCursors() }
     let conflictList = listConflicts(DB.get('studioInfo') || {})
     const newConflicts = []
 
     for (const entityType of SYNC_ENTITIES) {
       if (!isSyncEntity(entityType)) continue
-      let since = cursors[entityType] || '1970-01-01T00:00:00.000Z'
+      let cursor = cursors[entityType] || {
+        seq: 0,
+        id: '00000000-0000-0000-0000-000000000000'
+      }
 
       while (true) {
-        const { data, error } = await c
-          .from('studio_entities')
-          .select('local_id, payload, updated_at, revision')
-          .eq('studio_id', studioId)
-          .eq('entity_type', entityType)
-          .gt('updated_at', since)
-          .order('updated_at', { ascending: true })
-          .limit(500)
+        const { data, error } = await c.rpc('pull_studio_entity_deltas', {
+          p_studio_id: studioId,
+          p_entity_type: entityType,
+          p_after_seq: Number(cursor.seq) || 0,
+          p_after_id: cursor.id || '00000000-0000-0000-0000-000000000000',
+          p_limit: 500
+        })
 
         if (error) return { ok: false, error: error.message }
         if (!data?.length) break
 
         const local = DB.get(entityType) || []
-        const merged = mergeCollection(local, data)
+        const normalized = data.map(normalizeDelta)
+        const merged = mergeCollection(local, normalized)
         if (merged.conflicts?.length) {
           for (const cfl of merged.conflicts) {
             cfl.entityType = entityType
@@ -188,11 +245,8 @@ export const SyncEngine = {
           }
           applied += merged.applied
         }
-        const lastAt = data[data.length - 1].updated_at
-        if (lastAt) {
-          cursors[entityType] = lastAt
-          since = lastAt
-        }
+        cursor = nextSequenceCursor(data, cursor)
+        cursors[entityType] = cursor
         if (data.length < 500) break
       }
     }
@@ -202,7 +256,7 @@ export const SyncEngine = {
     }
 
     if (applied > 0) {
-      await this._saveCursors(cursors, {
+      await this._saveSequenceCursors(cursors, {
         cloudLastEntitySyncAt: new Date().toISOString(),
         cloudLastSyncDir: 'pull'
       })
@@ -210,7 +264,7 @@ export const SyncEngine = {
     } else if (newConflicts.length) {
       await DB.flush?.()
     } else {
-      await this._saveCursors(cursors)
+      await this._saveSequenceCursors(cursors)
     }
 
     return {

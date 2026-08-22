@@ -8,7 +8,55 @@ const Auth = {
   LOCKOUT_THRESHOLD: AppConfig.LOCKOUT_THRESHOLD,
   LOCKOUT_DURATION_MS: AppConfig.LOCKOUT_DURATION_MS,
   OTP_PROOF_KEY: AppConfig.OTP_LOGIN_PROOF_KEY,
+  PW_RESET_PROOF_KEY: 'talar_pw_reset_proof',
   CSRF_KEY: AppConfig.CSRF_KEY,
+  _cloudPrincipal: null,
+  _cloudSession: null,
+
+  _allowsLocalIdentity() {
+    return typeof AppConfig.allowsLocalIdentity === 'function'
+      ? !!AppConfig.allowsLocalIdentity()
+      : !!AppConfig.isLocalDev?.()
+  },
+
+  acceptCloudIdentity(authUser, membership) {
+    const roles = Array.isArray(membership?.roles)
+      ? membership.roles.map(role => typeof normalizeRole === 'function' ? normalizeRole(role) : role).filter(Boolean)
+      : []
+    const now = Date.now()
+    const validFrom = membership?.valid_from ? Date.parse(membership.valid_from) : Number.NaN
+    const validUntil = membership?.valid_until ? Date.parse(membership.valid_until) : null
+    const membershipInvalid = membership?.status !== 'active' || !!membership?.revoked_at ||
+      !Number.isFinite(validFrom) || validFrom > now ||
+      (validUntil !== null && (!Number.isFinite(validUntil) || validUntil <= now))
+    if (!authUser?.id || !membership?.studio_id || !roles.length || membershipInvalid) {
+      this.clearCloudIdentity()
+      return null
+    }
+    this._cloudPrincipal = Object.freeze({
+      id: authUser.id,
+      authUserId: authUser.id,
+      studioId: membership.studio_id,
+      name: membership.display_name || authUser.email || 'کاربر',
+      phone: membership.phone || '',
+      roles: Object.freeze(roles.slice()),
+      status: 'active',
+      sessionVersion: Number(membership.session_version) || 1,
+      cloudAuthoritative: true
+    })
+    this._cloudSession = Object.freeze({
+      userId: authUser.id,
+      studioId: membership.studio_id,
+      sessionVersion: Number(membership.session_version) || 1,
+      cloudAuthoritative: true
+    })
+    return this._cloudPrincipal
+  },
+
+  clearCloudIdentity() {
+    this._cloudPrincipal = null
+    this._cloudSession = null
+  },
 
   _securityState() {
     let s = DB.get('securityState')
@@ -152,6 +200,13 @@ const Auth = {
     const user = this.getUser()
     if (!user) return ''
 
+    if (!this._allowsLocalIdentity()) {
+      if (session.csrf) return session.csrf
+      const csrf = this._regenerateCsrf()
+      this._cloudSession = Object.freeze({ ...session, csrf })
+      return csrf
+    }
+
     if (session.csrf) {
       try { sessionStorage.setItem(this.CSRF_KEY, session.csrf) } catch { /* */ }
       return session.csrf
@@ -233,6 +288,17 @@ const Auth = {
   },
 
   async login(phone, password) {
+    if (!this._allowsLocalIdentity()) {
+      if (typeof Cloud === 'undefined' || !Cloud.isConfigured?.()) {
+        return { ok: false, code: 'cloud_required', error: 'ورود سرور در این استقرار پیکربندی نشده است' }
+      }
+      const result = await Cloud.signIn({ phone, password })
+      if (!result.ok || !result.identity) {
+        this.clearCloudIdentity()
+        return { ok: false, code: result.code || 'cloud_auth_failed', error: result.error || 'ورود ناموفق بود' }
+      }
+      return { ok: true, user: result.identity, mustChangePassword: false }
+    }
     return SecureDB.runInternalAsync(async () => {
     phone = Utils.normalizePhone(phone)
     password = Utils.normalizePassword(password)
@@ -298,6 +364,9 @@ const Auth = {
 
   /** ورود با OTP پیامکی — فقط پس از تأیید کد (grantOtpLoginProof) */
   async loginWithOtp(userId) {
+    if (!this._allowsLocalIdentity()) {
+      return { ok: false, code: 'cloud_otp_required', error: 'OTP محلی در محیط عملیاتی مجاز نیست' }
+    }
     return SecureDB.runInternalAsync(async () => {
     let proofOk
     if (typeof SignedProof !== 'undefined' && SignedProof.verify) {
@@ -337,6 +406,10 @@ const Auth = {
   },
 
   logout() {
+    this.clearCloudIdentity()
+    if (!this._allowsLocalIdentity() && typeof Cloud !== 'undefined') {
+      Promise.resolve(Cloud.signOut?.()).catch(() => {})
+    }
     this._sessionRemove(this.SESSION_KEY)
     if (typeof SessionSign !== 'undefined') SessionSign.clearSecret?.()
     if (typeof SignedProof !== 'undefined') SignedProof.clearSecret?.()
@@ -349,27 +422,42 @@ const Auth = {
   },
 
   getSession() {
+    if (!this._allowsLocalIdentity()) return this._cloudSession
     return this._sessionGet(this.SESSION_KEY, null)
   },
 
   getUser() {
+    if (!this._allowsLocalIdentity()) return this._cloudPrincipal
     const session = this.getSession()
     if (!session?.userId) return null
     if (session.expiresAt && Date.now() > session.expiresAt) {
       this.logout()
       return null
     }
-    if (typeof SessionSign !== 'undefined' && session.sig) {
-      /* verify async signature on next tick — sync path trusts expiry only if verify pending */
-      if (session._sigInvalid) {
-        this.logout()
-        return null
-      }
+    if (session._sigInvalid) {
+      this.logout()
+      return null
+    }
+    // Production fail-closed: unsigned sessions are never trusted on the sync path
+    if (typeof SessionSign !== 'undefined' && !session.sig) {
+      const allowUnsigned = typeof AppConfig !== 'undefined'
+        ? AppConfig.isLocalDev?.()
+        : (typeof location !== 'undefined' && ['localhost', '127.0.0.1', '::1'].includes(location.hostname))
+      if (!allowUnsigned) return null
     }
     return DB.find('users', u => u.id === session.userId) || null
   },
 
   async verifySessionSignature() {
+    if (!this._allowsLocalIdentity()) {
+      if (typeof Cloud === 'undefined' || !Cloud.restoreAuthoritativeIdentity) {
+        this.clearCloudIdentity()
+        return false
+      }
+      const restored = await Cloud.restoreAuthoritativeIdentity()
+      if (!restored.ok) this.clearCloudIdentity()
+      return !!restored.ok
+    }
     const session = this.getSession()
     if (!session?.userId) return false
     if (typeof SessionSign === 'undefined') {
@@ -384,8 +472,17 @@ const Auth = {
     }
 
     if (!working.sig) {
-      await this._sessionSetSigned(this.SESSION_KEY, working)
-      return true
+      // Local/dev: upgrade legacy unsigned sessions once. Production: reject.
+      const allowUpgrade = typeof AppConfig !== 'undefined'
+        ? AppConfig.isLocalDev?.()
+        : (typeof location !== 'undefined' && ['localhost', '127.0.0.1', '::1'].includes(location.hostname))
+      if (allowUpgrade) {
+        await this._sessionSetSigned(this.SESSION_KEY, working)
+        return true
+      }
+      session._sigInvalid = true
+      this.logout()
+      return false
     }
 
     let ok = await SessionSign.verify(working)
@@ -473,7 +570,7 @@ const Auth = {
   },
 
   canAccessAdmin() {
-    if (typeof Access !== 'undefined') return Access.canAccessLegacyAdmin()
+    if (typeof Access !== 'undefined') return Access.canAccessStudioM()
     if (this.isAdmin()) return true
     const user = this.getUser()
     if (!user) return false
@@ -544,6 +641,12 @@ const Auth = {
   },
 
   async verifyCurrentPassword(password) {
+    if (!this._allowsLocalIdentity()) {
+      if (typeof Cloud === 'undefined' || !Cloud.verifyCurrentPassword) {
+        return { ok: false, error: 'سرویس احراز هویت در دسترس نیست' }
+      }
+      return Cloud.verifyCurrentPassword(password)
+    }
     const user = this.getUser()
     if (!user) return { ok: false, error: 'ابتدا وارد شوید' }
     const pw = Utils.normalizePassword(password)
@@ -553,6 +656,14 @@ const Auth = {
   },
 
   async updatePassword(userId, currentPassword, newPassword) {
+    if (!this._allowsLocalIdentity()) {
+      const pwErr = this.validatePassword(newPassword)
+      if (pwErr) return { ok: false, error: pwErr }
+      if (typeof Cloud === 'undefined' || !Cloud.changePassword) {
+        return { ok: false, error: 'سرویس احراز هویت در دسترس نیست' }
+      }
+      return Cloud.changePassword(currentPassword, newPassword)
+    }
     const user = DB.find('users', u => u.id === userId)
     if (!user) return { ok: false, error: 'کاربر یافت نشد' }
     currentPassword = Utils.normalizePassword(currentPassword)
@@ -582,11 +693,22 @@ const Auth = {
   },
 
   async resetManagerPassword(phone, newPassword, opts = {}) {
+    if (!this._allowsLocalIdentity()) {
+      return { ok: false, code: 'cloud_reset_required', error: 'بازیابی رمز فقط از مسیر Supabase Auth مجاز است' }
+    }
     return SecureDB.runInternalAsync(async () => {
     if (!opts.otpVerified) {
       return { ok: false, error: 'بازیابی رمز فقط با کد تأیید پیامکی امکان‌پذیر است' }
     }
     phone = Utils.normalizePhone(phone)
+    if (typeof SignedProof !== 'undefined' && SignedProof.verify) {
+      const proofOk = await SignedProof.verify(this.PW_RESET_PROOF_KEY, { phone, purpose: 'pw_reset' })
+      if (!proofOk) {
+        return { ok: false, error: 'اعتبارسنجی بازیابی نامعتبر یا منقضی است — دوباره کد بگیرید' }
+      }
+    } else if (!(typeof AppConfig !== 'undefined' && AppConfig.isLocalDev?.())) {
+      return { ok: false, error: 'ماژول اعتبارسنجی بازیابی در دسترس نیست' }
+    }
     newPassword = Utils.normalizePassword(newPassword)
     const user = DB.find('users', u => Utils.normalizePhone(u.phone) === phone)
     if (!user) return { ok: false, error: 'کاربری با این شماره یافت نشد' }
@@ -608,6 +730,7 @@ const Auth = {
     })
     await DB.flush()
     this._clearAttempts(phone)
+    if (typeof SignedProof !== 'undefined') SignedProof.clear?.(this.PW_RESET_PROOF_KEY)
     DB.log('password_reset', `بازیابی رمز مدیر: ${user.name}`)
     return { ok: true }
     })

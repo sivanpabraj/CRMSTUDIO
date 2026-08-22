@@ -6,3 +6,12 @@ enabled = true
 
 [functions.send-sms]
 verify_jwt = true
+
+[functions.studio-mutate]
+verify_jwt = true
+
+[functions.cloud-backup]
+verify_jwt = true
+
+[functions.health]
+verify_jwt = false

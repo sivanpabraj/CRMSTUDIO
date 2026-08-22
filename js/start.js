@@ -3,7 +3,10 @@
    ══════════════════════════════════════════════ */
 
 const StartPortal = {
+  _pendingRegistration: null,
+
   _hasActiveManager() {
+    if (!AppConfig.allowsLocalIdentity?.()) return !!Auth.getUser?.()
     return DB.get('users').some(u => {
       const roles = (u.roles || []).map(r => typeof normalizeRole === 'function' ? normalizeRole(r) : r)
       return u.status === 'active' && (roles.includes('studio_manager') || roles.includes('system_admin'))
@@ -73,10 +76,71 @@ const StartPortal = {
           </div>
         </div>
       </div>`
-    this._pendingLogin = { phone, password }
+    this._pendingLogin = AppConfig.allowsLocalIdentity?.() ? { phone, password } : null
+  },
+
+  showCloudOtp(phone) {
+    const app = document.getElementById('start-app')
+    app.innerHTML = `
+      <div class="auth-page">
+        <div class="auth-layout" style="max-width:480px;margin:0 auto">
+          <div class="auth-card glass-panel">
+            <div class="auth-logo">
+              <div class="auth-logo-ring"><i class="fas fa-shield-halved"></i></div>
+              <span class="auth-badge">تأیید هویت سرور</span>
+              <h1 class="auth-title">کد پیامکی را وارد کنید</h1>
+              <p class="auth-sub">کد ارسال‌شده به <span dir="ltr">${Utils.escapeHtml(phone)}</span> فقط در Supabase بررسی می‌شود.</p>
+            </div>
+            <div class="auth-form">
+              <div class="auth-field">
+                <label class="auth-label" for="st-otp">کد ۶ رقمی</label>
+                <div class="auth-input-wrap"><i class="fas fa-key"></i><input type="text" id="st-otp" class="ltr" dir="ltr" inputmode="numeric" maxlength="6" autocomplete="one-time-code"/></div>
+              </div>
+              <div class="auth-error" id="st-error"></div>
+              <button type="button" class="auth-btn auth-btn-primary" id="st-verify-btn"><i class="fas fa-check"></i> تأیید و ساخت استودیو</button>
+            </div>
+          </div>
+        </div>
+      </div>`
+    document.getElementById('st-verify-btn')?.addEventListener('click', () => this.verifyCloudSetup())
+    document.getElementById('st-otp')?.focus()
+  },
+
+  async verifyCloudSetup() {
+    const pending = this._pendingRegistration
+    const errEl = document.getElementById('st-error')
+    const showErr = message => {
+      if (errEl) { errEl.textContent = message; errEl.style.display = 'block' }
+    }
+    if (!pending || !Cloud?.isConfigured?.()) {
+      showErr('درخواست راه‌اندازی معتبر نیست؛ صفحه را دوباره باز کنید')
+      return
+    }
+    const otp = Utils.faToEn(String(document.getElementById('st-otp')?.value || '')).replace(/\D/g, '')
+    if (!/^\d{6}$/.test(otp)) { showErr('کد ۶ رقمی معتبر وارد کنید'); return }
+
+    const verified = await Cloud.verifyPhoneOtp(pending.phone, otp)
+    if (!verified.ok) { showErr('کد نامعتبر یا منقضی است'); return }
+    const password = await Cloud.updateAuthPassword(pending.password)
+    if (!password.ok) { showErr(password.error || 'ثبت رمز در سرور شکست خورد'); return }
+    const registered = await Cloud.registerCurrentStudio({
+      studioName: pending.studioName,
+      phone: pending.phone,
+      name: pending.managerName
+    })
+    if (!registered.ok) { showErr(registered.error || 'ساخت استودیو در سرور شکست خورد'); return }
+
+    const { studioName, phone } = pending
+    this._pendingRegistration = null
+    this.showSuccess('', studioName, phone, '')
   },
 
   async enterAdmin() {
+    if (!AppConfig.allowsLocalIdentity?.()) {
+      if (Auth.getUser?.()?.cloudAuthoritative) window.location.href = 'studio-m/'
+      else Utils.toast('نشست معتبر سرور یافت نشد', 'error')
+      return
+    }
     const creds = this._pendingLogin
     if (!creds?.phone) { window.location.href = 'index.html'; return }
     const result = await Auth.login(creds.phone, creds.password)
@@ -100,6 +164,20 @@ const StartPortal = {
     const pwErr = Auth.validatePassword(password)
     if (pwErr) { showErr(pwErr); return }
 
+    if (!AppConfig.allowsLocalIdentity?.()) {
+      if (typeof Cloud === 'undefined' || !Cloud.isConfigured?.()) {
+        showErr('پیکربندی Supabase در build وجود ندارد؛ راه‌اندازی محلی در production ممنوع است')
+        return
+      }
+      const sent = await Cloud.sendPhoneOtp(phone)
+      if (!sent.ok) { showErr(sent.error || 'ارسال کد تأیید ممکن نشد'); return }
+      // Credentials remain in memory for the short verification step. They are
+      // never written to localStorage, sessionStorage or IndexedDB.
+      this._pendingRegistration = { studioName, managerName, phone, password }
+      this.showCloudOtp(phone)
+      return
+    }
+
     try {
     let joinCode
     await SecureDB.runInternalAsync(async () => {
@@ -112,15 +190,14 @@ const StartPortal = {
       joinCode,
       slug: studioName.replace(/\s+/g, '-').slice(0, 24),
       address: '', social: '', logo: '',
-      setupCompleted: true,
-      smsProxyUrl: 'https://gfzfmecglamyxevvttji.supabase.co/functions/v1/send-sms'
+      setupCompleted: true
     })
 
     if (!DB.get('banks').length) {
       DB.insert('banks', {
         id: 'bank_cash_' + Date.now(),
         name: 'صندوق نقدی',
-        accountNumber: '', shaba: '', card: '',
+        account: '', accountNumber: '', iban: '', shaba: '', card: '',
         balance: 0, color: '#22C55E', icon: '💰'
       })
     }

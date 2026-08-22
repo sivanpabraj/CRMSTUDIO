@@ -1,0 +1,57 @@
+/* Self-hosted, font-free icon fallback for restricted/offline deployments. */
+:where(.fas, .far, .fab) {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1em;
+  font-family: system-ui, sans-serif;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+}
+:where(.fas, .far, .fab)::before { content: "•"; }
+.fa-camera-retro::before, .fa-camera::before { content: "📷"; }
+.fa-chart-line::before, .fa-chart-pie::before, .fa-gauge-high::before { content: "▥"; }
+.fa-calendar-check::before, .fa-calendar-days::before, .fa-calendar-alt::before { content: "▦"; }
+.fa-clock::before { content: "◷"; }
+.fa-file-signature::before, .fa-file-invoice-dollar::before { content: "▤"; }
+.fa-box-open::before, .fa-inbox::before { content: "▣"; }
+.fa-calculator::before { content: "#"; }
+.fa-receipt::before, .fa-money-check-alt::before { content: "₮"; }
+.fa-users::before, .fa-user-group::before, .fa-user-shield::before, .fa-user-tag::before { content: "♟"; }
+.fa-user-clock::before { content: "◴"; }
+.fa-right-left::before { content: "⇄"; }
+.fa-folder-open::before { content: "▱"; }
+.fa-diagram-project::before { content: "⌘"; }
+.fa-bell::before { content: "◉"; }
+.fa-comments::before, .fa-sms::before { content: "◌"; }
+.fa-door-open::before, .fa-right-from-bracket::before, .fa-sign-in-alt::before { content: "↪"; }
+.fa-sliders::before, .fa-cog::before, .fa-gear::before { content: "⚙"; }
+.fa-shield-halved::before { content: "◇"; }
+.fa-plug::before { content: "⌁"; }
+.fa-plus::before { content: "+"; }
+.fa-times::before, .fa-xmark::before { content: "×"; }
+.fa-check::before, .fa-check-circle::before { content: "✓"; }
+.fa-exclamation-circle::before, .fa-triangle-exclamation::before { content: "!"; }
+.fa-info-circle::before { content: "i"; }
+.fa-trash::before { content: "⌫"; }
+.fa-pen::before { content: "✎"; }
+.fa-eye::before { content: "◉"; }
+.fa-search::before, .fa-magnifying-glass::before { content: "⌕"; }
+.fa-bars::before { content: "☰"; }
+.fa-arrow-right::before, .fa-chevron-right::before { content: "→"; }
+.fa-arrow-left::before, .fa-chevron-left::before { content: "←"; }
+.fa-chevron-down::before { content: "⌄"; }
+.fa-chevron-up::before { content: "⌃"; }
+.fa-moon::before { content: "☾"; }
+.fa-sun::before { content: "☀"; }
+.fa-cloud::before { content: "☁"; }
+.fa-bolt::before { content: "ϟ"; }
+.fa-spinner::before { content: "◌"; }
+.fa-spin { animation: local-icon-spin .8s linear infinite; }
+.fa-wand-magic-sparkles::before { content: "✦"; }
+.fa-paper-plane::before { content: "➤"; }
+.fa-lock::before { content: "▣"; }
+.fa-google::before { content: "G"; }
+.fa-apple::before { content: "●"; }
+@keyframes local-icon-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .fa-spin { animation: none; } }

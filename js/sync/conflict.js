@@ -2,7 +2,10 @@
  * Studio M Phase 2/3 — Per-row merge + conflict detection
  */
 
-const META_KEYS = new Set(['_syncRev', 'updatedAtIso', 'updatedAt', 'updated_at', 'createdAt'])
+const META_KEYS = new Set([
+  '_syncRev', '_syncMutationId', '_serverRevision', '_serverSeq',
+  'updatedAtIso', 'updatedAt', 'updated_at', 'createdAt'
+])
 
 export function parseTime(v) {
   if (!v) return 0
@@ -29,21 +32,13 @@ export function compareRows(localItem, remotePayload, remoteUpdatedAt) {
 /** Detect concurrent edit needing user choice */
 export function detectConflict(localItem, remoteRow) {
   if (!localItem || !remoteRow?.payload) return false
-  const verdict = compareRows(localItem, remoteRow.payload, remoteRow.updated_at)
   const localJson = JSON.stringify(stripMeta(localItem))
   const remoteJson = JSON.stringify(stripMeta(remoteRow.payload))
   if (localJson === remoteJson) return false
-
-  if (verdict === 'equal') return true
-
-  const localRev = Number(localItem._syncRev) || 0
+  if (!localItem._syncMutationId) return false
+  const localRev = Number(localItem._serverRevision) || 0
   const remoteRev = Number(remoteRow.revision) || 0
-  if (localRev > 0 && remoteRev > 0 && localRev !== remoteRev) {
-    const localT = parseTime(localItem.updatedAtIso)
-    const remoteT = parseTime(remoteRow.updated_at)
-    if (Math.abs(localT - remoteT) < 120000) return true
-  }
-  return false
+  return localRev !== remoteRev
 }
 
 export function mergeCollection(localItems, remoteRows, { idKey = 'id', onConflict } = {}) {
@@ -72,13 +67,22 @@ export function mergeCollection(localItems, remoteRows, { idKey = 'id', onConfli
       continue
     }
 
-    const verdict = compareRows(local, row.payload, row.updated_at)
-    if (verdict === 'remote' || (!local && row.payload)) {
-      byId.set(localId, {
+    const remoteRevision = Number(row.revision) || 0
+    const localRevision = Number(local?._serverRevision) || 0
+    if (!local || remoteRevision >= localRevision) {
+      const next = {
         ...row.payload,
         id: localId,
-        updatedAtIso: row.updated_at
-      })
+        updatedAtIso: row.updated_at,
+        _serverRevision: remoteRevision,
+        _serverSeq: Number(row.updated_seq) || 0
+      }
+      delete next._syncMutationId
+      if (row.payload?._deleted) {
+        next._deleted = true
+        next.deletedAtIso = row.payload.deletedAtIso || row.updated_at
+      }
+      byId.set(localId, next)
       applied++
     } else {
       skipped++

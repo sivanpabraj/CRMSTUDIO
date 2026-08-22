@@ -5,6 +5,7 @@
 const ROLE_DEFS = {
   system_admin:       { id: 'system_admin',       emoji: '🛡️', title: 'ادمین سیستم',     type: 'management', perms: ['all', 'manage_users', 'manage_system'] },
   studio_manager:     { id: 'studio_manager',     emoji: '👑', title: 'مدیر استودیو',    type: 'management', perms: ['view_all', 'view_contract', 'calendar', 'sms', 'editing', 'manage_personnel', 'manage_contracts', 'manage_finance'] },
+  accountant:         { id: 'accountant',         emoji: '🧾', title: 'حسابدار',          type: 'management', perms: ['view_all', 'view_contract', 'manage_finance'] },
   office_secretary:   { id: 'office_secretary',   emoji: '📋', title: 'منشی / هماهنگ‌کننده', type: 'management', perms: ['calendar', 'view_contract', 'view_appointments', 'view_all', 'sms'] },
   coordinator:        { id: 'coordinator',        emoji: '🎯', title: 'هماهنگ‌کننده',    type: 'management', perms: ['calendar', 'view_contract', 'view_appointments', 'view_all', 'sms'], aliasOf: 'office_secretary' },
   inspector:          { id: 'inspector',          emoji: '🔍', title: 'بازرس',           type: 'management', perms: ['view_all', 'view_contract'] },
@@ -18,6 +19,7 @@ const ROLE_DEFS = {
   editor_clip:        { id: 'editor_clip',        emoji: '✂️', title: 'ادیتور کلیپ',     type: 'office', perms: ['view_own_projects', 'editing'] },
   album_designer:     { id: 'album_designer',     emoji: '🎨', title: 'طراح آلبوم',      type: 'office', perms: ['view_own_projects', 'editing'] },
   colorist:           { id: 'colorist',           emoji: '🌈', title: 'کالریست',         type: 'office', perms: ['view_own_projects', 'editing'] },
+  freelancer:         { id: 'freelancer',         emoji: '⏳', title: 'فریلنسر زمان‌دار', type: 'field', perms: ['view_own_projects'] },
   other:              { id: 'other',              emoji: '👤', title: 'سایر',            type: 'field', perms: ['view_own_projects'] }
 }
 
@@ -28,14 +30,14 @@ const ROLE_COLORS = {
   vid_venue: '#E68619', vid_clip: '#FF9500',
   helishot: '#00A3BF', crane: '#009688',
   editor_venue: '#34C759', editor_clip: '#30D158',
-  album_designer: '#BF5AF2', colorist: '#FF375F', other: '#94A3B8'
+  album_designer: '#BF5AF2', colorist: '#FF375F', freelancer: '#F59E0B', other: '#94A3B8'
 }
 
 /** نقش‌های قابل انتخاب برای پرسنل (چند نقش همزمان) */
 const PERSONNEL_ROLE_IDS = [
   'photographer', 'photographer_clip', 'vid_venue', 'vid_clip',
   'helishot', 'crane', 'editor_venue', 'editor_clip',
-  'album_designer', 'colorist', 'office_secretary', 'other'
+  'album_designer', 'colorist', 'freelancer', 'office_secretary', 'other'
 ]
 
 const ROLE_LEGACY_MAP = {
@@ -108,7 +110,7 @@ function getRoleColor(id) {
 }
 
 function getManagementRoles() {
-  const order = ['system_admin', 'studio_manager', 'office_secretary', 'coordinator', 'inspector']
+  const order = ['system_admin', 'studio_manager', 'accountant', 'office_secretary', 'coordinator', 'inspector']
   return getAllRoles()
     .filter(r => r.type === 'management')
     .sort((a, b) => {

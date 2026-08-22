@@ -43,6 +43,7 @@ const state = {
   lineItems: [],
   selectedPackageId: null,
   selectedPackageName: '',
+  selectedPackageSnapshot: null,
   packageExtras: [],
   verify: {
     groom: { code: '', sentAt: null, verified: false, verifiedAt: null, phone: '' },
@@ -83,13 +84,28 @@ function gotoStep(n) {
   document.querySelector('.form-col')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+function selectedContractTypes() {
+  return [...document.querySelectorAll('input[name="contract-type"]:checked')].map(el => el.value)
+}
+
+function onContractTypesChange() {
+  const types = selectedContractTypes()
+  const industrialFields = document.getElementById('industrial-client-fields')
+  if (industrialFields) industrialFields.hidden = !types.includes('صنعتی')
+}
+
 function validateStep(s) {
   if (s === 1) {
-    if (!gv('groom-name')) { toast('نام داماد الزامی است', 'error'); return false }
-    if (!gv('bride-name')) { toast('نام عروس الزامی است', 'error'); return false }
+    const types = selectedContractTypes()
+    if (!types.length) { toast('حداقل یک نوع پروژه را انتخاب کنید', 'error'); return false }
+    const industrialOnly = types.length === 1 && types[0] === 'صنعتی'
+    if (industrialOnly && !gv('client-name')) { toast('نام مشتری یا مجموعه الزامی است', 'error'); return false }
+    if (!industrialOnly && !gv('groom-name')) { toast('نام داماد الزامی است', 'error'); return false }
+    if (!industrialOnly && !gv('bride-name')) { toast('نام عروس الزامی است', 'error'); return false }
     if (!gv('event-date')) { toast('تاریخ مراسم را وارد کنید', 'error'); return false }
-    if (!gv('groom-phone')) { toast('شماره تماس داماد الزامی است', 'error'); return false }
-    if (!isVerifyValid('groom')) {
+    const primaryPhone = industrialOnly ? gv('client-phone') : gv('groom-phone')
+    if (!primaryPhone) { toast('شماره تماس اصلی الزامی است', 'error'); return false }
+    if (!industrialOnly && !isVerifyValid('groom')) {
       toast('شماره داماد باید با پیامک تأیید شود', 'error')
       return false
     }
@@ -426,19 +442,23 @@ function renderPackagePicker() {
     wrap.innerHTML = '<p class="block-desc">پکیجی در Studio M تعریف نشده — از منوی «پکیج قیمت» اضافه کنید.</p>'
     return
   }
+  if (typeof ContractRenderSecurity === 'undefined') {
+    wrap.textContent = 'نمایش امن پکیج در دسترس نیست.'
+    return
+  }
   wrap.innerHTML = pkgs.map(p => {
     const tier = PackageCatalog.tierMeta(p.tier)
-    const color = p.color || tier.color
     const total = PackageCatalog.packageTotal(p)
     const active = state.selectedPackageId === p.id ? ' active' : ''
     const feats = PackageCatalog.featureLines(p).slice(0, 4)
-    return `<button type="button" class="pkg-pick-card${active}" style="--pkg-color:${color}" onclick="applyContractPackage('${p.id}')">
-      <div class="pkg-pick-tier">${tier.icon} ${tier.label}</div>
-      <div class="pkg-pick-name">${escapeHtml(p.name)}</div>
-      <ul class="pkg-pick-feats">${feats.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
-      <div class="pkg-pick-price">${fmtNum(total)} <small>تومان</small></div>
-    </button>`
-  }).join('') + `<button type="button" class="pkg-pick-card pkg-pick-custom${!state.selectedPackageId ? ' active' : ''}" onclick="clearContractPackage()">
+    return ContractRenderSecurity.renderPackageCard({
+      packageItem: p,
+      tier,
+      totalLabel: fmtNum(total),
+      active: !!active,
+      features: feats
+    })
+  }).join('') + `<button type="button" class="pkg-pick-card pkg-pick-custom${!state.selectedPackageId ? ' active' : ''}" data-contract-action="clear-package">
     <div class="pkg-pick-tier">✏️</div>
     <div class="pkg-pick-name">سفارشی</div>
     <div class="pkg-pick-feats"><li>بدون پکیج — دستی</li></div>
@@ -452,7 +472,7 @@ function updatePackageSelectedBanner() {
   if (!state.selectedPackageId) { el.hidden = true; return }
   el.hidden = false
   el.innerHTML = `<span>پکیج انتخاب‌شده: <strong>${escapeHtml(state.selectedPackageName || '')}</strong></span>
-    <button type="button" class="btn-link" onclick="clearContractPackage()">حذف پکیج</button>`
+    <button type="button" class="btn-link" data-contract-action="clear-package">حذف پکیج</button>`
 }
 
 function camOrdinalLabel(i) {
@@ -464,6 +484,7 @@ function applyContractPackage(id) {
   const pkg = DB.find('packages', p => p.id === id)
   if (!pkg || typeof PackageCatalog === 'undefined') return
   PackageCatalog.applyToContractForm(pkg, state)
+  state.selectedPackageSnapshot = PackageCatalog.snapshot(pkg)
   renderPackagePicker()
   calcTotals()
   toast(`پکیج «${pkg.name}» اعمال شد`, 'success')
@@ -477,6 +498,7 @@ function clearContractPackage() {
     state.selectedPackageName = ''
     state.packageExtras = []
   }
+  state.selectedPackageSnapshot = null
   renderPackagePicker()
   calcTotals()
 }
@@ -583,7 +605,7 @@ function renderPdfFormatGrid() {
   const grid = document.getElementById('pdf-format-grid')
   if (!grid) return
   grid.innerHTML = Object.values(PDF_FORMATS).map(f => `
-    <div class="pdf-format-card${f.id === pdfFormatId ? ' active' : ''}" data-format="${f.id}" onclick="setPdfFormat('${f.id}')">
+    <div class="pdf-format-card${f.id === pdfFormatId ? ' active' : ''}" data-format="${f.id}" data-contract-action="set-pdf-format">
       <div class="pdf-format-icon">${f.icon}</div>
       <div class="pdf-format-name">${f.label}</div>
       <div class="pdf-format-size">${f.size}</div>
@@ -727,8 +749,10 @@ function openInvoice() {
 function exportPDF(forcedFormat) {
   const fmt = getPdfFormat(forcedFormat)
   const element = document.getElementById('inv-doc')
-  if (!element || typeof html2pdf === 'undefined') {
-    toast('کتابخانه PDF در دسترس نیست', 'error')
+  if (!element) return
+  if (typeof html2pdf === 'undefined') {
+    toast('پنجره چاپ باز شد؛ مقصد «ذخیره به‌صورت PDF» را انتخاب کنید', 'info')
+    printContract()
     return
   }
   const opt = {
@@ -864,6 +888,15 @@ document.addEventListener('DOMContentLoaded', () => {
   populateDepositBanks()
   calcTotals()
   renderPackagePicker()
+  try {
+    const prefill = JSON.parse(sessionStorage.getItem('sm_contract_prefill') || 'null')
+    if (prefill) {
+      const set = (id, value) => { const field = document.getElementById(id); if (field && value) field.value = value }
+      set('groom-name', prefill.groom || prefill.name)
+      set('groom-phone', prefill.phone)
+      sessionStorage.removeItem('sm_contract_prefill')
+    }
+  } catch { sessionStorage.removeItem('sm_contract_prefill') }
 })
 
 function personMatchesStaffRole(p, keywords) {
@@ -1039,13 +1072,22 @@ function buildContractObject(isFinalized) {
   const phoneBride = gv('bride-phone') || gv('c-phone-b');
   const phoneGroom = gv('groom-phone') || gv('c-phone-g');
 
-  if (!bride || !groom) {
+  const contractTypes = selectedContractTypes()
+  const industrialOnly = contractTypes.length === 1 && contractTypes[0] === 'صنعتی'
+  const clientName = gv('client-name')
+  const clientPhone = normalizePhoneField('client-phone')
+
+  if ((!industrialOnly && (!bride || !groom)) || (industrialOnly && !clientName)) {
     toast('نام عروس و داماد الزامی است', 'error');
     return null;
   }
 
   const total = state.total || 0
   const depositVal = parseMoney(gv('deposit'))
+  if (depositVal < 0 || depositVal > total) {
+    toast('بیعانه نمی‌تواند منفی یا بیشتر از مبلغ کل قرارداد باشد', 'error')
+    return null
+  }
   const contractId = gv('contract-num') || generateContractNum(gv('event-date')) || ('TMP-' + Date.now())
   const venue = gv('event-venue') || '—'
   const eventDate = gv('event-date') || todayFa()
@@ -1057,7 +1099,9 @@ function buildContractObject(isFinalized) {
   const assignedStaff = getAssignedStaff()
   return {
     id: contractId,
-    couple: bride + ' و ' + groom,
+    couple: industrialOnly ? clientName : bride + ' و ' + groom,
+    clientName: clientName || '',
+    phone: clientPhone || '',
     bride: bride,
     groom: groom,
     phoneBride: normalizePhoneField('bride-phone'),
@@ -1067,7 +1111,8 @@ function buildContractObject(isFinalized) {
     date: eventDate,
     contractDate,
     venue,
-    type: 'عروسی',
+    type: contractTypes[0] || 'عروسی',
+    types: contractTypes,
     makeup: gv('event-makeup') || '',
     music: gv('event-music') || '',
     tailor: gv('event-tailor') || '',
@@ -1104,6 +1149,7 @@ function buildContractObject(isFinalized) {
     }, {}),
     packageId: state.selectedPackageId || '',
     packageName: state.selectedPackageName || '',
+    packageSnapshot: state.selectedPackageSnapshot || null,
     verification: getVerificationSnapshot(!isFinalized),
     createdAt: todayFa()
   };

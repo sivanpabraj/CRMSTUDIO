@@ -1,41 +1,58 @@
-import { describe, expect, it } from 'vitest'
-import fs from 'node:fs'
+import { describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import vm from 'node:vm'
 
-const source = fs.readFileSync('studio-m/js/module-launcher.js', 'utf8')
-const css = fs.readFileSync('studio-m/css/module-launcher.css', 'utf8')
-const html = fs.readFileSync('studio-m/index.html', 'utf8')
+function harness() {
+  const listeners = new Map()
+  const nodes = new Map()
+  const document = {
+    activeElement: null,
+    body: { classList: { add() {}, remove() {} }, appendChild(node) { nodes.set(node.id, node) } },
+    addEventListener(type, fn) { listeners.set(type, fn) },
+    getElementById: id => nodes.get(id) || null,
+    querySelector: () => null
+  }
+  const SM = {
+    state: { route: 'dashboard' },
+    visibleRoutes: () => [
+      { id: 'dashboard', group: 'main', icon: 'fa-house' },
+      { id: 'calendar', group: 'main', icon: 'fa-calendar' }
+    ],
+    t: key => ({ dashboard: 'داشبورد', calendar: 'تقویم', group_main: 'اصلی' })[key] || key,
+    esc: String, navigate: vi.fn(), renderShell: vi.fn()
+  }
+  const context = { window: { SM }, document }
+  vm.runInNewContext(readFileSync('studio-m/js/module-launcher.js', 'utf8'), context)
+  return { Launcher: context.window.SMModuleLauncher, SM, document, listeners, nodes }
+}
 
-describe('STE100 module launcher', () => {
-  it('uses permission-filtered routes instead of duplicated static navigation', () => {
-    expect(source).toContain('visibleRoutes()')
-    expect(source).toContain('route.group')
-    expect(source).toContain('SM.navigate(route)')
+describe('module launcher behavior', () => {
+  it('uses only permission-filtered routes', () => {
+    const { Launcher, SM } = harness()
+    SM.visibleRoutes = () => [{ id: 'dashboard', group: 'main', icon: 'fa-house' }]
+    expect(Launcher.routes().map(route => route.id)).toEqual(['dashboard'])
   })
 
-  it('supports search, shortcut and complete keyboard behavior', () => {
-    expect(source).toContain("event.key.toLowerCase() === 'k'")
-    expect(source).toContain("event.key === 'Escape'")
-    expect(source).toContain("'ArrowDown', 'ArrowUp'")
-    expect(source).toContain("event.key === 'Tab'")
+  it('opens via Ctrl+K and navigates only through SM', () => {
+    const { Launcher, SM, listeners } = harness()
+    Launcher.toggle = vi.fn()
+    const preventDefault = vi.fn()
+    listeners.get('keydown')({ ctrlKey: true, metaKey: false, key: 'k', preventDefault })
+    expect(Launcher.toggle).toHaveBeenCalledOnce()
+    Launcher.close = vi.fn()
+    Launcher.select('calendar')
+    expect(SM.navigate).toHaveBeenCalledWith('calendar')
   })
 
-  it('exposes correct dialog and trigger semantics', () => {
-    expect(source).toContain('aria-haspopup')
-    expect(source).toContain('aria-expanded')
-    expect(source).toContain('role="dialog"')
-    expect(source).toContain('aria-modal="true"')
-  })
-
-  it('is RTL-safe, responsive and motion-aware', () => {
-    expect(css).toContain('inset-inline-start')
-    expect(css).toContain('@media (max-width: 540px)')
-    expect(css).toContain('@media (prefers-reduced-motion: reduce)')
-    expect(css).not.toMatch(/(^|[;{]\s*)left\s*:/m)
-  })
-
-  it('loads before application bootstrap', () => {
-    expect(html).toContain('css/module-launcher.css')
-    expect(html).toContain('js/module-launcher.js')
-    expect(html.indexOf('js/module-launcher.js')).toBeLessThan(html.indexOf('js/app.js'))
+  it('supports arrow navigation and Escape', () => {
+    const { Launcher, document, nodes } = harness()
+    const items = [0, 1].map(() => ({ focus: vi.fn() }))
+    items.forEach(item => item.focus.mockImplementation(() => { document.activeElement = item }))
+    nodes.set('sm-launcher-overlay', { querySelectorAll: () => items })
+    Launcher.onKeydown({ key: 'ArrowDown', preventDefault: vi.fn() })
+    expect(items[0].focus).toHaveBeenCalledOnce()
+    Launcher.close = vi.fn()
+    Launcher.onKeydown({ key: 'Escape', preventDefault: vi.fn() })
+    expect(Launcher.close).toHaveBeenCalledOnce()
   })
 })

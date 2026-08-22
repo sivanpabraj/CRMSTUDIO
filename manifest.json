@@ -2,7 +2,7 @@
   "name": "Studio M — Photography Studio ERP/CRM",
   "short_name": "Studio M",
   "description": "Premium photography & videography studio management platform",
-  "version": "6.0.0",
+  "version": "1.0.1",
   "start_url": "./site.html",
   "scope": "./",
   "display": "standalone",

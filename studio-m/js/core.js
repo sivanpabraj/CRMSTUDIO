@@ -34,7 +34,11 @@ const SM = {
   },
 
   esc(v) {
-    return typeof Utils !== 'undefined' ? Utils.escapeHtml(v == null ? '' : String(v)) : String(v ?? '')
+    const value = v == null ? '' : String(v)
+    if (typeof Utils !== 'undefined') return Utils.escapeHtml(value)
+    return value.replace(/[&<>'"]/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    })[char])
   },
 
   toast(msg, type = 'info') {
@@ -59,6 +63,11 @@ const SM = {
     if (typeof Access !== 'undefined') {
       if (perm === 'manage_users') return Access.canManageUsers(user)
       if (perm === 'manage_system' || perm === 'all') return Access.isSystemAdmin(user)
+      // Finance writes/views require manage_finance — not granted by view_all alone
+      if (perm === 'manage_finance') {
+        return Access.isSystemAdmin(user) || Access.isStudioManager(user) ||
+          !!Auth.userHasPermission?.('manage_finance')
+      }
       if (Access.isSystemAdmin(user) || Access.isStudioManager(user)) return true
     } else if (Auth.isAdmin?.()) return true
     return Auth.userHasPermission?.(perm) || Auth.userHasPermission?.('view_all') || false
@@ -81,6 +90,15 @@ const SM = {
     document.documentElement.dir = this.state.locale === 'fa' ? 'rtl' : 'ltr'
     document.body.dataset.theme = this.state.theme
     document.body.dataset.accent = this.state.accent
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    const applyMotionPreference = event => {
+      document.body.classList.toggle('sm-reduced-motion', Boolean(event?.matches))
+    }
+    applyMotionPreference(media)
+    if (media && !this._motionMedia) {
+      media.addEventListener?.('change', applyMotionPreference)
+      this._motionMedia = media
+    }
   },
 
   setLocale(loc) {
@@ -102,18 +120,19 @@ const SM = {
     if (this._routes) return this._routes
     this._routes = [
       { id: 'dashboard', icon: 'fa-chart-line', group: 'main', perm: null },
+      { id: 'crm', icon: 'fa-user-tag', group: 'business', perm: 'view_contract' },
       { id: 'bookings', icon: 'fa-calendar-check', group: 'main', perm: 'calendar' },
       { id: 'calendar', icon: 'fa-calendar-days', group: 'main', perm: 'calendar' },
       { id: 'timeline', icon: 'fa-clock', group: 'main', perm: 'view_contract' },
       { id: 'contracts', icon: 'fa-file-signature', group: 'business', perm: 'view_contract' },
       { id: 'packages', icon: 'fa-box-open', group: 'business', perm: 'view_all' },
-      { id: 'invoices', icon: 'fa-file-invoice-dollar', group: 'finance', perm: 'view_all' },
-      { id: 'accounting', icon: 'fa-calculator', group: 'finance', perm: 'view_all' },
-      { id: 'expenses', icon: 'fa-receipt', group: 'finance', perm: 'view_all' },
-      { id: 'reports', icon: 'fa-chart-pie', group: 'finance', perm: 'view_all' },
+      { id: 'invoices', icon: 'fa-file-invoice-dollar', group: 'finance', perm: 'manage_finance' },
+      { id: 'accounting', icon: 'fa-calculator', group: 'finance', perm: 'manage_finance' },
+      { id: 'expenses', icon: 'fa-receipt', group: 'finance', perm: 'manage_finance' },
+      { id: 'reports', icon: 'fa-chart-pie', group: 'finance', perm: 'manage_finance' },
       { id: 'employees', icon: 'fa-users', group: 'hr', perm: 'view_all' },
       { id: 'attendance', icon: 'fa-user-clock', group: 'hr', perm: 'view_all' },
-      { id: 'payroll', icon: 'fa-money-check-alt', group: 'hr', perm: 'view_all' },
+      { id: 'payroll', icon: 'fa-money-check-alt', group: 'hr', perm: 'manage_finance' },
       { id: 'equipment', icon: 'fa-camera', group: 'assets', perm: 'view_all' },
       { id: 'custody', icon: 'fa-right-left', group: 'assets', perm: 'view_all' },
       { id: 'files', icon: 'fa-folder-open', group: 'assets', perm: 'view_all' },
@@ -140,12 +159,16 @@ const SM = {
     document.getElementById('sm-sidebar')?.classList.add('open')
     document.getElementById('sm-sidebar-overlay')?.classList.add('open')
     document.body.classList.add('sm-sidebar-open')
+    const button = document.querySelector('.sm-menu-toggle')
+    button?.setAttribute('aria-expanded', 'true')
   },
 
   closeSidebar() {
     document.getElementById('sm-sidebar')?.classList.remove('open')
     document.getElementById('sm-sidebar-overlay')?.classList.remove('open')
     document.body.classList.remove('sm-sidebar-open')
+    const button = document.querySelector('.sm-menu-toggle')
+    button?.setAttribute('aria-expanded', 'false')
   },
 
   toggleSidebar() {
@@ -163,6 +186,34 @@ const SM = {
   },
 
   navigate(route) {
+    if (!this.guard()) return false
+    route = this._normalizeRoute(route)
+    const routes = this.getRoutes()
+    let meta = routes.find(r => r.id === route)
+    const allowed = meta && this.visibleRoutes().some(item => item.id === meta.id)
+    if (!allowed) {
+      this.toast(meta ? 'دسترسی به این بخش ندارید' : 'بخش درخواستی وجود ندارد', 'error')
+      route = 'dashboard'
+      meta = routes.find(r => r.id === route)
+    }
+    const lazyModules = typeof window !== 'undefined' ? window.SMLazyModules : null
+    if (lazyModules && !lazyModules.isLoaded(route)) {
+      this.state.route = route
+      this.state.viewStack = []
+      location.hash = route
+      const main = document.getElementById('sm-content')
+      if (main) {
+        main.innerHTML = `<div class="sm-empty" role="status"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><div class="sm-empty-title">در حال بارگذاری ${this.esc(this.t(route))}…</div></div>`
+      }
+      return lazyModules.ensure(route)
+        .then(() => this.state.route === route ? this.navigate(route) : false)
+        .catch(error => {
+          console.error('[SM.lazyRoute]', error)
+          if (main) main.innerHTML = SMUI.empty('fa-triangle-exclamation', 'بارگذاری این بخش ناموفق بود')
+          this.toast('بارگذاری بخش ناموفق بود', 'error')
+          return false
+        })
+    }
     this.state.route = route
     this.state.viewStack = []
     location.hash = route
@@ -182,6 +233,7 @@ const SM = {
         main.innerHTML = `<div class="sm-empty"><i class="fas fa-puzzle-piece"></i><div class="sm-empty-title">${this.t(route)}</div></div>`
       }
     }
+    this._focusMain(main)
     const faTitles = {
       dashboard: ['داشبورد', ''],
       crm: ['CRM', ''],
@@ -220,6 +272,64 @@ const SM = {
     }
     document.getElementById('sm-sidebar')?.classList.remove('open')
     this.closeSidebar()
+    this._paintLiveBadge()
+  },
+
+  /** Soft re-render current module after peer sync (no hash thrash). */
+  refreshCurrentView({ silent = true } = {}) {
+    if (this.state.viewStack?.length) return false
+    const route = this.state.route
+    const main = document.getElementById('sm-content')
+    if (!main || !route) return false
+    if (this.isModuleDisabled(route)) return false
+    const mod = typeof SMModules !== 'undefined' ? SMModules[route] : null
+    if (!mod?.render) return false
+    try {
+      mod.render(main)
+      if (!silent) this.toast('همگام با دستگاه دیگر', 'info')
+      return true
+    } catch (e) {
+      console.warn('[SM.refreshCurrentView]', e)
+      return false
+    }
+  },
+
+  _hasOpenModal() {
+    return !!document.querySelector('#sm-modal-root .sm-modal-overlay, #sm-modal-root .sm-modal')
+  },
+
+  _paintLiveBadge() {
+    const el = document.getElementById('sm-live-sync')
+    if (!el) return
+    const live = typeof Cloud !== 'undefined' && Cloud.realtimeStatus?.() === 'live'
+    const on = typeof Cloud !== 'undefined' && Cloud.isEnabled?.()
+    el.hidden = !on
+    el.classList.toggle('is-live', !!live)
+    el.title = live ? 'همگام‌سازی لحظه‌ای فعال' : 'ابر فعال — realtime قطع'
+    el.innerHTML = live
+      ? '<i class="fas fa-bolt"></i><span>زنده</span>'
+      : '<i class="fas fa-cloud"></i><span>ابر</span>'
+  },
+
+  bindLiveSync() {
+    if (this._liveSyncBound) return
+    this._liveSyncBound = true
+    window.addEventListener('sm-sync-pull', (ev) => {
+      const detail = ev?.detail || {}
+      const ok = typeof LiveSyncUi !== 'undefined' && LiveSyncUi.shouldRefreshUiAfterPull
+        ? LiveSyncUi.shouldRefreshUiAfterPull(detail, {
+          hasOpenModal: this._hasOpenModal(),
+          route: this.state.route,
+          liveUiEnabled: true
+        })
+        : (detail.applied > 0 && !this._hasOpenModal())
+      if (ok) this.refreshCurrentView({ silent: true })
+    })
+    window.addEventListener('sm-realtime-status', () => this._paintLiveBadge())
+    this._paintLiveBadge()
+    if (typeof Cloud !== 'undefined' && Cloud.ensureLiveSync) {
+      Cloud.ensureLiveSync().catch(() => {})
+    }
   },
 
   pushSubView(title, renderHtml) {
@@ -234,11 +344,22 @@ const SM = {
     else this.navigate(this.state.route)
   },
 
+  _focusMain(main = document.getElementById('sm-content')) {
+    if (!main) return
+    if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1')
+    try {
+      main.focus({ preventScroll: true })
+    } catch {
+      try { main.focus() } catch { /* older browsers */ }
+    }
+  },
+
   _renderSubView() {
     const view = this.state.viewStack[this.state.viewStack.length - 1]
     const main = document.getElementById('sm-content')
     if (!main || !view) return
-    main.innerHTML = `${SMUI.backBar(view.title, 'SM.popSubView()')}${view.html}`
+    main.innerHTML = `${SMUI.backBar(view.title)}${view.html}`
+    this._focusMain(main)
     this._updateHeaderBack()
     const ht = document.getElementById('sm-header-title')
     const hs = document.getElementById('sm-header-sub')
@@ -269,7 +390,9 @@ const SM = {
       comms: this.t('group_comms'),
       system: this.t('group_system')
     }
-    const unread = (typeof DB !== 'undefined' ? DB.get('notifications') : []).filter(n => !n.read).length
+    const unread = (typeof DB !== 'undefined'
+      ? (typeof DB.active === 'function' ? DB.active('notifications') : DB.get('notifications'))
+      : []).filter(n => !n.read && !n._deleted).length
 
     let navHtml = ''
     for (const [gid, label] of Object.entries(groups)) {
@@ -278,8 +401,9 @@ const SM = {
       navHtml += `<div class="sm-nav-group"><div class="sm-nav-label">${label}</div>`
       navHtml += items.map(r => {
         const off = this.isModuleDisabled(r.id)
+        const navAttrs = SMEvents.attrs('SM.navigate', [r.id])
         return `
-        <button type="button" class="sm-nav-item${this.state.route === r.id ? ' active' : ''}${off ? ' sm-nav-item--off' : ''}" data-route="${r.id}" onclick="SM.navigate('${r.id}')">
+        <button ${navAttrs} class="sm-nav-item${this.state.route === r.id ? ' active' : ''}${off ? ' sm-nav-item--off' : ''}" data-route="${r.id}">
           <i class="fas ${r.icon}"></i><span>${this.t(r.id)}</span>
           ${off ? '<span class="sm-nav-soon">به‌زودی</span>' : ''}
           ${r.id === 'notifications' && unread ? `<span class="sm-nav-badge">${unread}</span>` : ''}
@@ -292,7 +416,7 @@ const SM = {
 
     document.getElementById('sm-root').innerHTML = `
       <div class="sm-shell">
-        <div class="sm-sidebar-overlay" id="sm-sidebar-overlay" onclick="SM.closeSidebar()" aria-hidden="true"></div>
+        <div class="sm-sidebar-overlay" id="sm-sidebar-overlay" ${SMEvents.elAttrs('SM.closeSidebar')} aria-hidden="true"></div>
         <aside class="sm-sidebar" id="sm-sidebar">
           <div class="sm-sidebar-head">
             <div class="sm-brand">
@@ -307,7 +431,7 @@ const SM = {
           </div>
           <nav class="sm-nav">${navHtml}</nav>
           <div class="sm-sidebar-foot">
-            <button type="button" class="sm-sidebar-foot-btn" onclick="SM.openProfile()" title="پروفایل و تنظیمات">
+            <button type="button" class="sm-sidebar-foot-btn" ${SMEvents.attrs('SM.openProfile')} title="پروفایل و تنظیمات">
               <div class="sm-user-avatar">${studio.logo
                 ? (Utils.safeImgHtml(studio.logo, 'class="sm-user-avatar-img"') || this.esc((user?.name || '?').charAt(0)))
                 : this.esc((user?.name || '?').charAt(0))}</div>
@@ -317,24 +441,26 @@ const SM = {
               </div>
               <i class="fas fa-chevron-left sm-user-chevron"></i>
             </button>
-            <button type="button" class="sm-btn-icon" onclick="SM.logout()" title="${this.t('logout')}"><i class="fas fa-right-from-bracket"></i></button>
+            <button type="button" class="sm-btn-icon" ${SMEvents.attrs('SM.logout')} title="${this.t('logout')}"><i class="fas fa-right-from-bracket"></i></button>
           </div>
         </aside>
         <div class="sm-main">
           <header class="sm-header">
-            <button type="button" class="sm-btn-icon sm-menu-toggle" onclick="SM.toggleSidebar()" aria-label="${this.t('menu')}"><i class="fas fa-bars"></i></button>
-            <button type="button" class="sm-btn-icon sm-header-back" id="sm-header-back" hidden onclick="SM.goBack()" title="${this.t('back')}"><i class="fas fa-arrow-right"></i></button>
+            <button type="button" class="sm-btn-icon sm-menu-toggle" ${SMEvents.attrs('SM.toggleSidebar')} aria-label="${this.t('menu')}" aria-controls="sm-sidebar" aria-expanded="false"><i class="fas fa-bars"></i></button>
+            <button type="button" class="sm-btn-icon sm-header-back" id="sm-header-back" hidden ${SMEvents.attrs('SM.goBack')} title="${this.t('back')}"><i class="fas fa-arrow-right"></i></button>
             <div class="sm-header-titles">
               <div class="sm-header-title" id="sm-header-title">${this.t('dashboard')}</div>
               <div class="sm-header-sub" id="sm-header-sub" hidden></div>
             </div>
             <div class="sm-header-actions">
-              <button type="button" class="sm-btn-icon" onclick="SM.toggleTheme()" title="${this.t('theme')}"><i class="fas fa-${this.state.theme === 'light' ? 'moon' : 'sun'}"></i></button>
+              <span class="sm-live-sync" id="sm-live-sync" hidden title="همگام‌سازی"><i class="fas fa-cloud"></i><span>ابر</span></span>
+              <button type="button" class="sm-btn-icon" ${SMEvents.attrs('SM.toggleTheme')} title="${this.t('theme')}"><i class="fas fa-${this.state.theme === 'light' ? 'moon' : 'sun'}"></i></button>
             </div>
           </header>
-          <main class="sm-content" id="sm-content"></main>
+          <main class="sm-content" id="sm-content" tabindex="-1"></main>
         </div>
       </div>`
+    this._paintLiveBadge()
   },
 
   getModuleSearch(route) {
@@ -348,10 +474,12 @@ const SM = {
       if (!main) return
       if (this.isModuleDisabled(route)) {
         main.innerHTML = SMUI.moduleDisabled(route)
+        this._focusMain(main)
         return
       }
       const mod = SMModules[route]
       if (mod?.render) mod.render(main)
+      this._focusMain(main)
     }
   },
 
@@ -364,12 +492,14 @@ const SM = {
     window.location.href = '../index.html?logout=1'
   },
 
-  openProfile() {
-    if (typeof SMSettings !== 'undefined') {
-      SMSettings.setTab('profile')
-      return
-    }
-    SM.navigate('settings')
+  async openProfile() {
+    await this.navigate('settings')
+    if (typeof SMSettings !== 'undefined') SMSettings.setTab('profile')
+  },
+
+  async openSettingsTab(tab) {
+    await this.navigate('settings')
+    if (typeof SMSettings !== 'undefined' && tab) SMSettings.setTab(tab)
   },
 
   guard() {

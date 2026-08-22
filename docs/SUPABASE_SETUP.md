@@ -47,13 +47,26 @@ npm run dev
 > **Redirect URLs:** `http://localhost:5173/**`  
 > برای dev ساده‌تر: Authentication → Providers → Email → **Confirm email** را خاموش کنید.
 
-## ۵. Sync
+## ۵. ورود با Google (OAuth)
+
+1. در [Google Cloud Console](https://console.cloud.google.com/) یک OAuth Client (Web) بسازید.
+2. Authorized redirect URI را روی callback سوپابیس بگذارید:
+   `https://YOUR_PROJECT.supabase.co/auth/v1/callback`
+3. Supabase Dashboard → **Authentication → Providers → Google** را Enable کنید.
+4. **Client ID** و **Client Secret** را فقط در Dashboard وارد کنید — در اپ، git، یا چت نگذارید.
+5. Audience → Test users: ایمیل گوگل خودتان را اضافه کنید (حالت Testing).
+6. Auth URL Configuration:
+   - Site URL: `http://localhost:5173/studio-m/auth-callback.html` (یا دامنه پرود)
+   - Redirect URLs: `http://localhost:5173/**` و دامنه پرود
+7. در اپ: Settings → ابر → ذخیره URL/Anon Key → **ورود با Google**
+
+## ۶. Sync
 
 | عمل | زمان |
 |-----|------|
-| entity | ۲.۵ ثانیه بعد از ذخیره |
+| entity | ~۰.۷s بعد از ذخیره |
 | snapshot | ۶۰ ثانیه (پشتیبان) |
-| realtime | فوری پس از تغییر ابری |
+| realtime | نزدیک لحظه‌ای |
 | دستی | Settings → «ارسال کامل» / «دریافت کامل» |
 | تعارض | Settings → ابر → انتخاب محلی/ابری |
 

@@ -1,0 +1,40 @@
+name: Supabase RLS integration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/supabase-rls.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-rls-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-database:
+    name: Migrations and JWT role-resource matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
+        with:
+          version: 2.111.0
+      - name: Start local Supabase and apply every migration
+        run: supabase start -x studio,mailpit,imgproxy,logflare,vector,supavisor
+      - name: Reset schema from migrations
+        run: supabase db reset --local
+      - name: Execute pgTAP RLS matrix
+        run: supabase test db
+      - name: Prove concurrent personnel overlap rejection
+        run: bash scripts/test-assignment-concurrency.sh
+        env:
+          SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup

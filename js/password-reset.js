@@ -84,6 +84,21 @@ const PasswordReset = {
       return { ok: false, error: 'شماره موبایل نامعتبر است' }
     }
 
+    const localIdentity = typeof AppConfig.allowsLocalIdentity === 'function'
+      ? AppConfig.allowsLocalIdentity()
+      : AppConfig.isLocalDev?.()
+    if (!localIdentity) {
+      if (typeof Cloud === 'undefined' || !Cloud.isConfigured?.()) {
+        return { ok: false, code: 'cloud_required', error: 'سرویس بازیابی رمز در دسترس نیست' }
+      }
+      const result = await Cloud.sendPhoneOtp(phone, { shouldCreateUser: false })
+      // A uniform response prevents account enumeration. Supabase owns rate
+      // limiting, TTL and one-time consumption in production.
+      return result.ok
+        ? { ok: true, maskedPhone: this._maskPhone(phone), cloudOtp: true }
+        : { ok: false, error: 'ارسال کد بازیابی ممکن نشد؛ کمی بعد دوباره تلاش کنید' }
+    }
+
     const user = this.findManagerByPhone(phone)
     if (!user) {
       return { ok: false, error: 'این شماره به‌عنوان مدیر استودیو در سیستم ثبت نشده است' }
@@ -134,6 +149,21 @@ const PasswordReset = {
     phone = Utils.normalizePhone(phone)
     otp = Utils.faToEn(String(otp || '')).replace(/\D/g, '')
 
+    const localIdentity = typeof AppConfig.allowsLocalIdentity === 'function'
+      ? AppConfig.allowsLocalIdentity()
+      : AppConfig.isLocalDev?.()
+    if (!localIdentity) {
+      const pwErr = Auth.validatePassword(newPassword)
+      if (pwErr) return { ok: false, error: pwErr }
+      if (typeof Cloud === 'undefined') return { ok: false, error: 'سرویس بازیابی رمز در دسترس نیست' }
+      const verified = await Cloud.verifyPhoneOtp(phone, otp)
+      if (!verified.ok) return { ok: false, error: 'کد نامعتبر یا منقضی است' }
+      const changed = await Cloud.updateAuthPassword(newPassword)
+      if (!changed.ok) return changed
+      await Cloud.signOut()
+      return { ok: true }
+    }
+
     const session = this.getSession()
     if (!session) {
       return { ok: false, error: 'کد منقضی شده. دوباره «ارسال کد» بزنید.' }
@@ -155,7 +185,15 @@ const PasswordReset = {
     }
 
     sessionStorage.removeItem(this.SESSION_KEY)
-    return Auth.resetManagerPassword(phone, newPassword, { otpVerified: true })
+    if (typeof SignedProof !== 'undefined' && SignedProof.issue) {
+      await SignedProof.issue(Auth.PW_RESET_PROOF_KEY || 'talar_pw_reset_proof', {
+        phone,
+        purpose: 'pw_reset'
+      }, AppConfig.OTP_TTL_MS || 300000)
+    }
+    const result = await Auth.resetManagerPassword(phone, newPassword, { otpVerified: true })
+    if (typeof SignedProof !== 'undefined') SignedProof.clear?.(Auth.PW_RESET_PROOF_KEY || 'talar_pw_reset_proof')
+    return result
   }
 }
 

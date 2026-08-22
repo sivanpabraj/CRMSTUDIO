@@ -4,11 +4,8 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>ثبت قرارداد جدید — مدیریت استودیو</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/icons.css"/>
   <link rel="stylesheet" href="contract.css"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body class="contract-body">
 <div class="bg-orbs">
@@ -37,18 +34,18 @@
     <div class="contract-id-badge">
       شناسه: <span id="contract-id-display">جدید</span>
     </div>
-    <button class="btn-save" onclick="saveContractDraft()">💾 ذخیره پیش‌نویس</button>
+    <button class="btn-save" data-contract-action="save-draft">💾 ذخیره پیش‌نویس</button>
   </div>
 </header>
 
 <!-- ════ STEP BAR ════ -->
 <div class="step-bar">
   <div class="step-track">
-    <div class="step-item active" id="si-1" onclick="gotoStep(1)"><div class="step-circle">۱</div><div class="step-label">اطلاعات طرفین</div></div>
+    <div class="step-item active" id="si-1" data-contract-action="goto-step" data-step="1"><div class="step-circle">۱</div><div class="step-label">اطلاعات طرفین</div></div>
     <div class="step-line"></div>
-    <div class="step-item" id="si-2" onclick="gotoStep(2)"><div class="step-circle">۲</div><div class="step-label">مراسم و خدمات</div></div>
+    <div class="step-item" id="si-2" data-contract-action="goto-step" data-step="2"><div class="step-circle">۲</div><div class="step-label">مراسم و خدمات</div></div>
     <div class="step-line"></div>
-    <div class="step-item" id="si-3" onclick="gotoStep(3)"><div class="step-circle">۳</div><div class="step-label">خلاصه مالی</div></div>
+    <div class="step-item" id="si-3" data-contract-action="goto-step" data-step="3"><div class="step-circle">۳</div><div class="step-label">خلاصه مالی</div></div>
   </div>
 </div>
 
@@ -66,16 +63,16 @@
       <div class="form-grid-2">
         <div class="party-box groom">
           <div class="party-head"><span>🤵</span> داماد</div>
-          <div class="fg"><label>نام و نام‌خانوادگی <span class="req">*</span></label><input id="groom-name" class="fi" type="text" placeholder="علی رضایی" oninput="syncPreview()"/></div>
+          <div class="fg"><label>نام و نام‌خانوادگی <span class="req">*</span></label><input id="groom-name" class="fi" type="text" placeholder="علی رضایی" data-contract-input="sync-preview"/></div>
           <div class="fg"><label>کد ملی <span class="req">*</span></label><input id="groom-nid" class="fi digit-field" type="text" inputmode="numeric" placeholder="۰۰۱۲۳۴۵۶۷۸" maxlength="10"/></div>
-          <div class="fg"><label>شماره تماس <span class="req">*</span></label><input id="groom-phone" class="fi digit-field" type="tel" inputmode="numeric" placeholder="۰۹۱۲۱۲۳۴۵۶۷" maxlength="11" oninput="onVerifyPhoneChange('groom')"/></div>
+          <div class="fg"><label>شماره تماس <span class="req">*</span></label><input id="groom-phone" class="fi digit-field" type="tel" inputmode="numeric" placeholder="۰۹۱۲۱۲۳۴۵۶۷" maxlength="11" data-contract-input="verify-phone" data-role="groom"/></div>
           <div class="verify-box" id="verify-groom">
             <div class="verify-head"><i class="fas fa-shield-halved"></i> استعلام و تأیید شماره</div>
             <p class="verify-hint">کد تأیید به همین شماره پیامک می‌شود. با وارد کردن کد، داماد مالکیت شماره و این قرارداد را تأیید می‌کند.</p>
-            <button type="button" class="btn-verify-send" onclick="sendVerifySms('groom')"><i class="fas fa-paper-plane"></i> ارسال کد پیامکی</button>
+            <button type="button" class="btn-verify-send" data-contract-action="send-verify" data-role="groom"><i class="fas fa-paper-plane"></i> ارسال کد پیامکی</button>
             <div class="verify-input-row">
               <input id="verify-input-groom" class="fi digit-field verify-code-input" type="text" inputmode="numeric" placeholder="کد دریافتی از پیامک" maxlength="6"/>
-              <button type="button" class="btn-verify-confirm" onclick="confirmVerify('groom')">تأیید</button>
+              <button type="button" class="btn-verify-confirm" data-contract-action="confirm-verify" data-role="groom">تأیید</button>
             </div>
             <div class="verify-status pending" id="status-groom">در انتظار استعلام</div>
           </div>
@@ -84,21 +81,38 @@
 
         <div class="party-box bride">
           <div class="party-head"><span>👰</span> عروس</div>
-          <div class="fg"><label>نام و نام‌خانوادگی <span class="req">*</span></label><input id="bride-name" class="fi" type="text" placeholder="مریم احمدی" oninput="syncPreview()"/></div>
+          <div class="fg"><label>نام و نام‌خانوادگی <span class="req">*</span></label><input id="bride-name" class="fi" type="text" placeholder="مریم احمدی" data-contract-input="sync-preview"/></div>
           <div class="fg"><label>کد ملی</label><input id="bride-nid" class="fi digit-field" type="text" inputmode="numeric" placeholder="۰۰۱۲۳۴۵۶۷۸" maxlength="10"/></div>
-          <div class="fg"><label>شماره تماس</label><input id="bride-phone" class="fi digit-field" type="tel" inputmode="numeric" placeholder="۰۹۱۲۱۲۳۴۵۶۷" maxlength="11" oninput="onVerifyPhoneChange('bride')"/></div>
+          <div class="fg"><label>شماره تماس</label><input id="bride-phone" class="fi digit-field" type="tel" inputmode="numeric" placeholder="۰۹۱۲۱۲۳۴۵۶۷" maxlength="11" data-contract-input="verify-phone" data-role="bride"/></div>
           <div class="verify-box" id="verify-bride">
             <div class="verify-head"><i class="fas fa-shield-halved"></i> استعلام و تأیید شماره</div>
             <p class="verify-hint">کد تأیید به همین شماره پیامک می‌شود. با وارد کردن کد، عروس مالکیت شماره و این قرارداد را تأیید می‌کند.</p>
-            <button type="button" class="btn-verify-send" onclick="sendVerifySms('bride')"><i class="fas fa-paper-plane"></i> ارسال کد پیامکی</button>
+            <button type="button" class="btn-verify-send" data-contract-action="send-verify" data-role="bride"><i class="fas fa-paper-plane"></i> ارسال کد پیامکی</button>
             <div class="verify-input-row">
               <input id="verify-input-bride" class="fi digit-field verify-code-input" type="text" inputmode="numeric" placeholder="کد دریافتی از پیامک" maxlength="6"/>
-              <button type="button" class="btn-verify-confirm" onclick="confirmVerify('bride')">تأیید</button>
+              <button type="button" class="btn-verify-confirm" data-contract-action="confirm-verify" data-role="bride">تأیید</button>
             </div>
             <div class="verify-status pending" id="status-bride">در انتظار استعلام</div>
           </div>
           <div class="fg"><label>آدرس</label><input id="bride-addr" class="fi" type="text" placeholder="شهر — خیابان..."/></div>
         </div>
+      </div>
+
+      <div class="section-sep"></div>
+
+      <h3 class="block-title">نوع پروژه یا قرارداد</h3>
+      <p class="block-desc">برای یک مشتری می‌توانید چند نوع خدمت را هم‌زمان انتخاب کنید.</p>
+      <div class="contract-type-grid" id="contract-type-grid">
+        <label><input type="checkbox" name="contract-type" value="عروسی" checked data-contract-change="contract-types"/> عروسی</label>
+        <label><input type="checkbox" name="contract-type" value="عقد" data-contract-change="contract-types"/> عقد</label>
+        <label><input type="checkbox" name="contract-type" value="فرمالیته" data-contract-change="contract-types"/> فرمالیته</label>
+        <label><input type="checkbox" name="contract-type" value="کلیپ" data-contract-change="contract-types"/> کلیپ</label>
+        <label><input type="checkbox" name="contract-type" value="آلبوم" data-contract-change="contract-types"/> آلبوم</label>
+        <label><input type="checkbox" name="contract-type" value="صنعتی" data-contract-change="contract-types"/> صنعتی</label>
+      </div>
+      <div id="industrial-client-fields" class="form-grid-2" hidden>
+        <div class="fg"><label>نام مشتری / مجموعه</label><input id="client-name" class="fi" type="text" placeholder="نام شخص، برند یا شرکت"/></div>
+        <div class="fg"><label>شماره تماس مشتری</label><input id="client-phone" class="fi digit-field" type="tel" inputmode="numeric" maxlength="11" placeholder="۰۹۱۲۱۲۳۴۵۶۷"/></div>
       </div>
 
       <div class="section-sep"></div>
@@ -118,7 +132,7 @@
 
       <div class="step-foot">
         <div></div>
-        <button class="btn-next" onclick="gotoStep(2)">مرحله بعد — مراسم ←</button>
+        <button class="btn-next" data-contract-action="goto-step" data-step="2">مرحله بعد — مراسم ←</button>
       </div>
     </div>
 
@@ -156,53 +170,53 @@
         <div class="fg">
           <label>تعداد دوربین فیلمبرداری</label>
           <div class="price-inline">
-            <select id="pkg-cameras" class="fi" onchange="updateCamOperators(); calcTotals()">
+            <select id="pkg-cameras" class="fi" data-contract-change="cameras">
               <option value="1">۱ دوربین</option>
               <option value="2">۲ دوربین</option>
               <option value="3" selected>۳ دوربین</option>
               <option value="4">۴ دوربین</option>
               <option value="5">۵ دوربین</option>
             </select>
-            <input id="price-cameras" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="مبلغ کل پکیج (تومان)" oninput="calcTotals()"/>
+            <input id="price-cameras" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="مبلغ کل پکیج (تومان)" data-contract-input="calc-totals"/>
           </div>
           <div class="price-subtotal" id="hint-cameras"></div>
         </div>
         <div class="fg">
           <label>کیفیت تصویر</label>
           <div class="price-inline">
-            <select id="pkg-quality" class="fi" onchange="toggleQualityPrice()">
+            <select id="pkg-quality" class="fi" data-contract-change="quality">
               <option value="fullhd">Full HD</option>
               <option value="4k" selected>4K UHD</option>
             </select>
-            <input id="price-quality-4k" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="مبلغ 4K (اختیاری)" oninput="calcTotals()"/>
+            <input id="price-quality-4k" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="مبلغ 4K (اختیاری)" data-contract-input="calc-totals"/>
           </div>
         </div>
       </div>
 
       <div class="price-options">
         <div class="price-option">
-          <label class="price-option-label"><input type="checkbox" id="pkg-photo-venue" onchange="calcTotals()"/> 📸 عکاسی مراسم (تالار)</label>
-          <input id="price-photo-venue" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" oninput="calcTotals()"/>
+          <label class="price-option-label"><input type="checkbox" id="pkg-photo-venue" data-contract-change="calc-totals"/> 📸 عکاسی مراسم (تالار)</label>
+          <input id="price-photo-venue" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" data-contract-input="calc-totals"/>
         </div>
         <div class="price-option">
-          <label class="price-option-label"><input type="checkbox" id="pkg-photo-garden" onchange="calcTotals()"/> 🌳 عکاسی باغ (جداگانه)</label>
-          <input id="price-photo-garden" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت باغ (تومان)" oninput="calcTotals()"/>
+          <label class="price-option-label"><input type="checkbox" id="pkg-photo-garden" data-contract-change="calc-totals"/> 🌳 عکاسی باغ (جداگانه)</label>
+          <input id="price-photo-garden" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت باغ (تومان)" data-contract-input="calc-totals"/>
         </div>
         <div class="price-option">
-          <label class="price-option-label"><input type="checkbox" id="pkg-helishot" onchange="calcTotals()"/> 🚁 هلی‌شات</label>
-          <input id="price-helishot" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" oninput="calcTotals()"/>
+          <label class="price-option-label"><input type="checkbox" id="pkg-helishot" data-contract-change="calc-totals"/> 🚁 هلی‌شات</label>
+          <input id="price-helishot" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" data-contract-input="calc-totals"/>
         </div>
         <div class="price-option">
-          <label class="price-option-label"><input type="checkbox" id="pkg-fpv" onchange="calcTotals()"/> 🎮 FPV</label>
-          <input id="price-fpv" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" oninput="calcTotals()"/>
+          <label class="price-option-label"><input type="checkbox" id="pkg-fpv" data-contract-change="calc-totals"/> 🎮 FPV</label>
+          <input id="price-fpv" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" data-contract-input="calc-totals"/>
         </div>
         <div class="price-option">
-          <label class="price-option-label"><input type="checkbox" id="pkg-crane" onchange="calcTotals()"/> 🏗️ جرثقیل (کرین)</label>
-          <input id="price-crane" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" oninput="calcTotals()"/>
+          <label class="price-option-label"><input type="checkbox" id="pkg-crane" data-contract-change="calc-totals"/> 🏗️ جرثقیل (کرین)</label>
+          <input id="price-crane" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" data-contract-input="calc-totals"/>
         </div>
         <div class="price-option">
-          <label class="price-option-label"><input type="checkbox" id="pkg-tv" onchange="calcTotals()"/> 📺 پروژکشن / TV شهری</label>
-          <input id="price-tv" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" oninput="calcTotals()"/>
+          <label class="price-option-label"><input type="checkbox" id="pkg-tv" data-contract-change="calc-totals"/> 📺 پروژکشن / TV شهری</label>
+          <input id="price-tv" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت (تومان)" data-contract-input="calc-totals"/>
         </div>
       </div>
 
@@ -211,29 +225,29 @@
       <p class="block-desc">سفارش‌های بعد از مراسم — جدا از پکیج روز عروسی</p>
       <div class="price-options">
         <div class="price-option stacked">
-          <label class="price-option-label"><input type="checkbox" id="ord-album" onchange="toggleAlbumFields(); calcTotals()"/> 📔 سفارش آلبوم</label>
+          <label class="price-option-label"><input type="checkbox" id="ord-album" data-contract-change="album"/> 📔 سفارش آلبوم</label>
           <div id="album-fields" class="option-extra" hidden>
-            <select id="album-size" class="fi" onchange="calcTotals()">
+            <select id="album-size" class="fi" data-contract-change="calc-totals">
               <option value="20x20">۲۰×۲۰ سانتی</option>
               <option value="25x25">۲۵×۲۵ سانتی</option>
               <option value="30x30">۳۰×۳۰ سانتی</option>
               <option value="luxury">لوکس / سفارشی</option>
             </select>
-            <input id="price-album" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت آلبوم" oninput="calcTotals()"/>
+            <input id="price-album" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت آلبوم" data-contract-input="calc-totals"/>
           </div>
         </div>
         <div class="price-option stacked">
-          <label class="price-option-label"><input type="checkbox" id="ord-prints" onchange="togglePrintFields(); calcTotals()"/> 🖨️ چاپ / یادگاری مراسم</label>
+          <label class="price-option-label"><input type="checkbox" id="ord-prints" data-contract-change="prints"/> 🖨️ چاپ / یادگاری مراسم</label>
           <div id="print-fields" class="option-extra" hidden>
             <input id="print-qty" class="fi digit-field" type="text" inputmode="numeric" placeholder="تعداد"/>
-            <input id="price-prints" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت کل چاپ" oninput="calcTotals()"/>
+            <input id="price-prints" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت کل چاپ" data-contract-input="calc-totals"/>
           </div>
         </div>
         <div class="price-option stacked">
-          <label class="price-option-label"><input type="checkbox" id="ord-photo-pack" onchange="togglePhotoPackFields(); calcTotals()"/> 🖼️ بسته عکس جدا (مثلاً ۲۰ یا ۳۰ عدد)</label>
+          <label class="price-option-label"><input type="checkbox" id="ord-photo-pack" data-contract-change="photo-pack"/> 🖼️ بسته عکس جدا (مثلاً ۲۰ یا ۳۰ عدد)</label>
           <div id="photo-pack-fields" class="option-extra" hidden>
             <input id="photo-pack-qty" class="fi digit-field" type="text" inputmode="numeric" placeholder="تعداد عکس"/>
-            <input id="price-photo-pack" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت بسته" oninput="calcTotals()"/>
+            <input id="price-photo-pack" class="fi price-inp digit-field" type="text" inputmode="numeric" placeholder="قیمت بسته" data-contract-input="calc-totals"/>
           </div>
         </div>
       </div>
@@ -253,8 +267,8 @@
       <div id="vid-cam-slots" class="form-grid-2" style="margin-top:12px"></div>
 
       <div class="step-foot">
-        <button class="btn-prev" onclick="gotoStep(1)">← مرحله قبل</button>
-        <button class="btn-next" onclick="gotoStep(3)">خلاصه مالی ←</button>
+        <button class="btn-prev" data-contract-action="goto-step" data-step="1">← مرحله قبل</button>
+        <button class="btn-next" data-contract-action="goto-step" data-step="3">خلاصه مالی ←</button>
       </div>
     </div>
 
@@ -275,18 +289,18 @@
         <div class="fg">
           <label>بیعانه پرداخت‌شده (تومان)</label>
           <div class="price-row">
-            <input id="deposit" class="fi price-fi" type="text" placeholder="۰" oninput="calcTotals()"/>
+            <input id="deposit" class="fi price-fi" type="text" placeholder="۰" data-contract-input="calc-totals"/>
             <span class="toman">تومان</span>
           </div>
           <div class="quick-btns">
-            <button type="button" onclick="quickDeposit(0.2)">۲۰٪</button>
-            <button type="button" onclick="quickDeposit(0.3)">۳۰٪</button>
-            <button type="button" onclick="quickDeposit(0.5)">۵۰٪</button>
+            <button type="button" data-contract-action="quick-deposit" data-ratio="0.2">۲۰٪</button>
+            <button type="button" data-contract-action="quick-deposit" data-ratio="0.3">۳۰٪</button>
+            <button type="button" data-contract-action="quick-deposit" data-ratio="0.5">۵۰٪</button>
           </div>
         </div>
         <div class="fg">
           <label>واریز بیعانه به حساب بانکی</label>
-          <select class="fi" id="deposit-bank" onchange="onDepositBankChange()">
+          <select class="fi" id="deposit-bank" data-contract-change="deposit-bank">
             <option value="">— انتخاب حساب —</option>
           </select>
           <div id="deposit-bank-preview" class="fin-bank-preview-wrap"></div>
@@ -330,9 +344,9 @@
       <div class="totals-box" id="totals-box"></div>
 
       <div class="step-foot" style="margin-top:20px">
-        <button class="btn-prev" onclick="gotoStep(2)">← مرحله قبل</button>
-        <button class="btn-invoice" onclick="openInvoice()">📄 صدور قرارداد رسمی</button>
-        <button class="btn-save" style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;padding:12px 32px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer" onclick="finalizeContract()">✅ ثبت نهایی و ابلاغ به پرسنل</button>
+        <button class="btn-prev" data-contract-action="goto-step" data-step="2">← مرحله قبل</button>
+        <button class="btn-invoice" data-contract-action="open-invoice">📄 صدور قرارداد رسمی</button>
+        <button class="btn-save" style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;padding:12px 32px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer" data-contract-action="finalize">✅ ثبت نهایی و ابلاغ به پرسنل</button>
       </div>
     </div>
 
@@ -364,12 +378,12 @@
             <div class="pdf-panel-title">📁 خروجی PDF — انتخاب سایز و دانلود</div>
             <div class="pdf-panel-desc">فایل در پوشه سایز مربوطه ذخیره می‌شود (مثلاً قراردادها/A4/...)</div>
           </div>
-          <button class="inv-tb-btn close" onclick="document.getElementById('inv-backdrop').classList.remove('open')">✕ بستن</button>
+          <button class="inv-tb-btn close" data-contract-action="close-invoice">✕ بستن</button>
         </div>
         <div class="pdf-format-grid" id="pdf-format-grid"></div>
         <div class="pdf-actions">
-          <button class="inv-tb-btn primary" id="btn-pdf-download" onclick="exportPDF()">📄 دانلود PDF</button>
-          <button class="inv-tb-btn" onclick="printContract()">🖨️ چاپ</button>
+          <button class="inv-tb-btn primary" id="btn-pdf-download" data-contract-action="export-pdf">📄 دانلود PDF</button>
+          <button class="inv-tb-btn" data-contract-action="print-contract">🖨️ چاپ</button>
         </div>
         <div class="pdf-selected-hint" id="pdf-selected-hint"></div>
       </div>
@@ -450,43 +464,19 @@
 <script src="js/utils.js" defer></script>
 <script src="js/roles.js" defer></script>
 <script src="js/db.js" defer></script>
-<script src="js/finance-sync.js" defer></script>
+<script src="js/secure-db.js" defer></script>
+<script src="js/finance-sync.js" type="module"></script>
 <script src="js/sms.js" defer></script>
 <script src="js/package-catalog.js" defer></script>
 <script src="js/jalali-picker.js" defer></script>
 <script src="js/lib/signed-proof.js" type="module" defer></script>
+<script src="js/session-sign.js" defer></script>
 <script src="js/auth.js" defer></script>
 <script src="js/page-nav.js" defer></script>
 <script src="js/bootstrap.js" defer></script>
+<script src="js/lib/contract-render-security.js" type="module"></script>
 <script src="contract.js" defer></script>
 <script src="js/sw-register.js"></script>
-<script defer>
-document.addEventListener('DOMContentLoaded', () => {
-  Bootstrap.start(async () => {
-    if (typeof PageNav !== 'undefined') PageNav.render('contractNew')
-    if (typeof Auth !== 'undefined' && !Auth.isLoggedIn()) {
-      window.location.href = 'index.html?next=' + encodeURIComponent('contract.html')
-      return
-    }
-    if (typeof Auth !== 'undefined' && Auth.getHomePage() === 'portal') {
-      window.location.href = 'index.html?view=portal'
-      return
-    }
-    const info = DB.get('studioInfo') || {}
-    const sn = document.getElementById('studio-name')
-    if (sn && !sn.value) sn.value = info.name || ''
-    if (typeof populatePersonnelDropdowns === 'function') populatePersonnelDropdowns()
-    if (typeof populateDepositBanks === 'function') populateDepositBanks()
-    if (typeof toggleQualityPrice === 'function') toggleQualityPrice()
-    if (typeof updateCamOperators === 'function') updateCamOperators()
-    if (typeof calcTotals === 'function') calcTotals()
-    if (typeof initVerifyUi === 'function') initVerifyUi()
-    if (typeof renderPackagePicker === 'function') renderPackagePicker()
-    if (typeof JalaliPicker !== 'undefined') {
-      JalaliPicker.attach('event-date', d => { if (typeof onEventDatePicked === 'function') onEventDatePicked(d) })
-    }
-  })
-})
-</script>
+<script src="js/contract-page.js" defer></script>
 </body>
 </html>

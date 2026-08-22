@@ -73,8 +73,24 @@ supabase/migrations/006_contracts_manager_rls.sql
 
 ## محدودیت‌های باقی‌مانده
 
-- Session محلی client-only است (بدون HMAC سرور-side)
-- TypeScript + E2E tests گسترده‌تر
+- Session محلی هنوز client-HMAC است
+- Outbox می‌تواند کوتاه‌مدت از ledger جلو بزند تا flush
+- سهمیه پلن نرم است — درگاه پرداخت هنوز نیست
+- Ledger accept-log + version head است نه double-entry کامل
+- E2E مالی authenticated با `E2E_LOGIN_*`
+- سقف امتیاز: [`docs/QUALITY_SCORES.md`](./QUALITY_SCORES.md)
+
+## فاز SaaS P0–P1 (پیاده‌شده)
+
+| لایه | نقش |
+|------|-----|
+| `mutateRequiredWhenOnline` | قبل از commit محلی (آنلاین) |
+| `financeOutbox` | صف آفلاین + flush |
+| `008`/`009` | ledger entries + version heads + register harden |
+| `claim_ledger_version` | تعارض ۴۰۹ |
+| پنل مدیریت | فقط Studio M؛ سورس Classic حذف شده است |
+| `PlanLimits` | سقف نرم trial/starter/pro |
+| RLS tests | `tests/rls-isolation-policy.test.js` |
 
 ## Migration 002
 

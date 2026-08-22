@@ -15,12 +15,14 @@ const FirstSetup = {
 
   /** فقط وقتی هیچ مدیر فعالی نیست — یک حساب اولیه می‌سازد */
   async ensureFirstAdmin() {
+    const localIdentity = typeof AppConfig.allowsLocalIdentity === 'function'
+      ? AppConfig.allowsLocalIdentity()
+      : AppConfig.isLocalDev?.()
+    if (!localIdentity) return null
     if (this.hasManager()) return null
 
-    const phone = Utils.normalizePhone(AppConfig.INITIAL_ADMIN_PHONE)
-    const password = AppConfig.isLocalDev()
-      ? AppConfig.INITIAL_ADMIN_PASSWORD
-      : Utils.generateRandomPassword(12)
+    const phone = Utils.normalizePhone(AppConfig.generateBootstrapPhone())
+    const password = Utils.generateRandomPassword(16)
     const creds = await Auth.hashCredentials(password)
 
     let admin
@@ -35,6 +37,7 @@ const FirstSetup = {
       avatar: 'م',
       mustChangePassword: true,
       isDefaultPassword: true,
+      isBootstrapAdmin: true,
       profileCompleted: false,
       createdAt: Utils.todayJalali()
     })
@@ -44,7 +47,7 @@ const FirstSetup = {
       DB.insert('banks', {
         id: 'bank_cash_' + Date.now(),
         name: 'صندوق نقدی',
-        accountNumber: '', shaba: '', card: '',
+        account: '', accountNumber: '', iban: '', shaba: '', card: '',
         balance: 0, color: '#22C55E', icon: '💰'
       })
     }
@@ -63,13 +66,11 @@ const FirstSetup = {
     })
 
     Utils.storage.set(this.HINT_KEY, true)
-    if (!AppConfig.isLocalDev()) {
-      try {
-        sessionStorage.setItem('talar_first_setup_creds', JSON.stringify({
-          phone, password, expires: Date.now() + 300000
-        }))
-      } catch { /* */ }
-    }
+    try {
+      sessionStorage.setItem('talar_first_setup_creds', JSON.stringify({
+        phone, password, expires: Date.now() + 300000
+      }))
+    } catch { /* */ }
     return admin
   },
 

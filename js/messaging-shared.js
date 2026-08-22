@@ -87,28 +87,6 @@ const MessagingShared = {
       text: '{studio} — {bride} عزیز، از دو ماه قبل مراسم شب‌ها زود بخوابید و استراحت کافی داشته باشید. پوست و چهره‌تان در روز عروسی درخشان‌تر می‌شود. ({daysLeft} روز مانده)'
     },
     {
-      id: 'tpl-groom-suit-60',
-      name: 'داماد — سفارش کت و شلوار',
-      category: 'two_months',
-      channel: 'sms',
-      audience: 'groom',
-      daysBefore: 60,
-      frequency: 'once',
-      enabled: true,
-      text: '{studio} — {groom} عزیز، لطفاً نسبت به سفارش کت و شلوار رسمی خود اقدام کنید. حداقل ۶۰ روز قبل مراسم زمان لازم است. در صورت نیاز راهنمایی می‌دهیم.'
-    },
-    {
-      id: 'tpl-groom-shoes-30',
-      name: 'داماد — کفش رسمی',
-      category: 'one_month',
-      channel: 'sms',
-      audience: 'groom',
-      daysBefore: 30,
-      frequency: 'once',
-      enabled: true,
-      text: '{studio} — {groom} عزیز، کفش رسمی با پاشنه حدود ۳ تا ۵ سانتی‌متر تهیه کنید. از یک ماه قبل آماده باشید تا روز مراسم راحت باشید.'
-    },
-    {
       id: 'tpl-bride-beauty-30',
       name: 'عروس — مهلت عمل زیبایی',
       category: 'one_month',
@@ -129,39 +107,6 @@ const MessagingShared = {
       frequency: 'once',
       enabled: true,
       text: '{studio} — {bride} عزیز، از ۴–۵ روز قبل مراسم ورزش سنگین و بدنسازی را قطع کنید. بدن استراحت کند و در روز عروسی سرحال باشید.'
-    },
-    {
-      id: 'tpl-groom-pickup-suit',
-      name: 'داماد — تحویل کت از منزل',
-      category: 'one_week',
-      channel: 'sms',
-      audience: 'groom',
-      daysBefore: 3,
-      frequency: 'once',
-      enabled: true,
-      text: '{studio} — {groom} عزیز، ۲–۳ روز دیگر برای دریافت کت و لوازم از منزل شما می‌آییم. لطفاً کت، پیراهن و کفش را آماده کنید. هماهنگی: {studio}.'
-    },
-    {
-      id: 'tpl-dance-14',
-      name: 'تمرین رقص — دو هفته قبل',
-      category: 'two_weeks',
-      channel: 'sms',
-      audience: 'both',
-      daysBefore: 14,
-      frequency: 'once',
-      enabled: true,
-      text: '{studio} — {couple} عزیز، اگر رقص ورودی دارید، دو هفته قبل مراسم تمرین منظم را ادامه دهید. سرعت و هماهنگی مهم است.'
-    },
-    {
-      id: 'tpl-dance-7',
-      name: 'تمرین رقص — یک هفته قبل',
-      category: 'one_week',
-      channel: 'sms',
-      audience: 'both',
-      daysBefore: 7,
-      frequency: 'once',
-      enabled: true,
-      text: '{studio} — {couple} عزیز، یک هفته تا مراسم — رقص را با لباس نزدیک به روز عروسی یک‌بار کامل تمرین کنید.'
     },
     {
       id: 'tpl-venue-equipment',
@@ -206,7 +151,7 @@ const MessagingShared = {
       daysBefore: 35,
       frequency: 'once',
       enabled: true,
-      text: '{studio} — {couple} عزیز، ۵ هفته تا مراسم. لطفاً برنامه آرایش، لباس، رقص و هماهنگی تالار را مرور کنید.'
+      text: '{studio} — {couple} عزیز، ۵ هفته تا مراسم. لطفاً زمان‌بندی تصویربرداری، لوکیشن و هماهنگی تالار را مرور کنید.'
     },
     {
       id: 'tpl-14-days',
@@ -256,6 +201,8 @@ const MessagingShared = {
 
   ensureTemplates() {
     const existing = DB.get('smsTemplates') || []
+    const retired = new Set(['tpl-groom-suit-60', 'tpl-groom-shoes-30', 'tpl-groom-pickup-suit', 'tpl-dance-14', 'tpl-dance-7'])
+    existing.filter(t => retired.has(t.id) && t.builtin !== false).forEach(t => DB.delete('smsTemplates', t.id))
     const ids = new Set(existing.map(t => t.id))
     let added = 0
     this.DEFAULT_TEMPLATES.forEach(t => {
@@ -348,7 +295,7 @@ const MessagingShared = {
   dueToday() {
     this.ensureTemplates()
     const templates = (DB.get('smsTemplates') || []).filter(t => t.enabled !== false && (t.channel || 'sms') === 'sms')
-    const contracts = (DB.get('contracts') || []).filter(c => c.status !== 'cancelled')
+    const contracts = (DB.active('contracts') || []).filter(c => c.status !== 'cancelled')
     const today = Utils.todayJalali()
     const queue = []
 

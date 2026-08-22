@@ -25,32 +25,36 @@ const Bootstrap = {
     }
   },
 
+  _showFatalError(error) {
+    const root = document.getElementById('sm-root') || document.body
+    root.innerHTML = `<main class="sm-bootstrap-error" role="alert">
+      <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+      <h1>بارگذاری کامل نشد</h1>
+      <p>داده‌ها تغییر نکرده‌اند. اتصال و فضای ذخیره‌سازی مرورگر را بررسی کنید.</p>
+      <div><button type="button" id="sm-bootstrap-retry">تلاش مجدد</button><button type="button" id="sm-bootstrap-logout">خروج امن</button></div>
+      <details><summary>جزئیات فنی</summary><code>${String(error?.message || 'bootstrap_failed').replace(/[<>&]/g, '')}</code></details>
+    </main>`
+    document.getElementById('sm-bootstrap-retry')?.addEventListener('click', () => location.reload())
+    document.getElementById('sm-bootstrap-logout')?.addEventListener('click', () => {
+      try { Auth?.logout?.() } catch { /* */ }
+      location.href = './index.html?logout=1'
+    })
+  },
+
   _bindGlobalErrorHandler() {
     if (this._errorBound) return
     this._errorBound = true
     const handler = (msg, src, line, col, err) => {
-      console.error('Global error', msg, src, line, col, err)
-      if (typeof Utils !== 'undefined' && Utils.toast) Utils.toast('خطای غیرمنتظره رخ داد', 'error')
-      if (typeof DB !== 'undefined') {
-        try {
-          if (typeof SecureDB !== 'undefined' && SecureDB.systemInsert) {
-            SecureDB.systemInsert('logs', {
-              action: 'error',
-              detail: `${msg} @ ${src}:${line}:${col}`,
-              timestamp: new Date().toISOString(),
-              stack: err?.stack || ''
-            })
-          } else if (DB.insert) {
-            DB.insert('logs', {
-              action: 'error',
-              detail: `${msg} @ ${src}:${line}:${col}`,
-              timestamp: new Date().toISOString(),
-              stack: err?.stack || ''
-            })
-          }
-          DB.flush?.()
-        } catch { /* */ }
+      if (typeof SMObservability !== 'undefined') {
+        SMObservability.captureError('global', err || new Error(String(msg || 'error')), {
+          src: src || '',
+          line: line || 0,
+          col: col || 0
+        })
+      } else {
+        console.error('Global error', msg, src, line, col, err)
       }
+      if (typeof Utils !== 'undefined' && Utils.toast) Utils.toast('خطای غیرمنتظره رخ داد', 'error')
       return false
     }
     window.addEventListener('error', e => handler(e.message, e.filename, e.lineno, e.colno, e.error))
@@ -62,13 +66,22 @@ const Bootstrap = {
     try {
       this._bindGlobalErrorHandler()
       if (typeof DB !== 'undefined' && DB.ready) await DB.ready
+      await this._waitCloud()
       if (typeof Auth !== 'undefined' && Auth.verifySessionSignature) {
-        try { await Auth.verifySessionSignature() } catch { /* */ }
+        try {
+          await Auth.verifySessionSignature()
+        } catch (e) {
+          if (typeof SMObservability !== 'undefined') {
+            SMObservability.captureError('session_verify', e)
+          } else {
+            console.error('[Bootstrap] session verify failed', e)
+          }
+          try { Auth.logout?.() } catch { /* */ }
+        }
       }
       if (typeof Auth !== 'undefined' && Auth.getCsrfToken) {
         Auth.getCsrfToken()
       }
-      await this._waitCloud()
       if (typeof Cloud !== 'undefined' && Cloud.bootstrap) {
         try {
           await Promise.race([
@@ -84,6 +97,7 @@ const Bootstrap = {
     } catch (e) {
       console.error('Bootstrap failed:', e)
       if (typeof Utils !== 'undefined') Utils.toast('خطا در بارگذاری داده‌ها', 'error')
+      this._showFatalError(e)
     } finally {
       this._hideLoader()
     }

@@ -13,7 +13,8 @@ describe('CSRF session recovery', () => {
       SESSION_TIMEOUT_MS: 8 * 60 * 60 * 1000,
       LOCKOUT_THRESHOLD: 8,
       LOCKOUT_DURATION_MS: 15 * 60 * 1000,
-      OTP_LOGIN_PROOF_KEY: 'talar_otp_login_proof'
+      OTP_LOGIN_PROOF_KEY: 'talar_otp_login_proof',
+      allowsLocalIdentity: () => true
     })
     vi.stubGlobal('sessionStorage', {
       getItem: k => store.get(k) ?? null,

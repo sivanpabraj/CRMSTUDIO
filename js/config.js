@@ -5,12 +5,15 @@
 const AppConfig = {
   APP_NAME: 'Studio M',
   DEFAULT_STUDIO_NAME: 'Studio M',
-  APP_VERSION: '6.0.0',
+  APP_VERSION: '1.0.1',
   BUILD_DATE: '2026-07-04',
   SW_CACHE: 'studio-m-v23',
+  // Must be injected by a dedicated local-demo entry before config.js loads.
+  // The normal development and production builds intentionally default off.
+  LOCAL_DEMO_BUILD: globalThis.__SM_BUILD_FLAGS__?.localDemo === true,
 
   DB_KEY: 'studio_db_v5',
-  DB_VERSION: 20,
+  DB_VERSION: 24,
   IDB_NAME: 'talar_studio_v5',
   IDB_STORE: 'main',
   IDB_BACKUP_STORE: 'backups',
@@ -26,9 +29,11 @@ const AppConfig = {
   BACKUP_PREFIX: 'studio_bu_',
 
   MIN_PASSWORD_LENGTH: 8,
-  /** فقط برای seed تست محلی — در production رمز تصادفی ساخته می‌شود */
-  INITIAL_ADMIN_PHONE: '09121000000',
-  INITIAL_ADMIN_PASSWORD: '12345678',
+  /** هیچ credential ثابتی در کد نگهداری نمی‌شود. */
+  generateBootstrapPhone() {
+    const bytes = crypto.getRandomValues(new Uint8Array(9))
+    return `09${Array.from(bytes, value => value % 10).join('')}`
+  },
 
   isLocalDev() {
     try {
@@ -39,6 +44,15 @@ const AppConfig = {
 
   isProduction() {
     return !this.isLocalDev()
+  },
+
+  /**
+   * Local credentials are a developer demo facility, never a production
+   * identity provider.  Keeping this decision in one place prevents a page
+   * from silently falling back to IndexedDB when cloud auth is unavailable.
+   */
+  allowsLocalIdentity() {
+    return this.isLocalDev() && this.LOCAL_DEMO_BUILD === true
   },
   SESSION_TIMEOUT_MS: 8 * 60 * 60 * 1000,
   CUSTOMER_SESSION_MS: 24 * 60 * 60 * 1000,

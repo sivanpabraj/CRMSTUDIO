@@ -100,7 +100,7 @@ const NotificationTicker = {
       })
     })
 
-    ;(DB.get('cheques') || []).forEach(c => {
+    ;(DB.active('cheques') || []).forEach(c => {
       if (c.status === 'passed' || c.status === 'cancelled') return
       const d = Utils.daysUntil(c.dueDate)
       if (d === null || d < 0 || d > 7) return
@@ -126,7 +126,7 @@ const NotificationTicker = {
       })
     }
 
-    ;(DB.get('contracts') || []).forEach(c => {
+    ;(DB.active('contracts') || []).forEach(c => {
       if (c.status === 'cancelled') return
       const d = Utils.daysUntil(c.eventDate || c.date)
       if (d === null || d < 0 || d > 7) return

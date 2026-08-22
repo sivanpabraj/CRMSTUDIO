@@ -15,12 +15,46 @@ const BackupService = {
     return !!(s.autoBackup && (s.backupHourly || s.backupDaily))
   },
 
+  async checksum(json) {
+    const bytes = new TextEncoder().encode(String(json || ''))
+    const hash = await crypto.subtle.digest('SHA-256', bytes)
+    return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+  },
+
+  async verify(json, expectedChecksum) {
+    if (!json || !expectedChecksum) return false
+    return (await this.checksum(json)) === String(expectedChecksum).toLowerCase()
+  },
+
+  async envelope(json) {
+    return JSON.stringify({
+      format: 'studio-m-backup-v1',
+      createdAt: new Date().toISOString(),
+      checksum: await this.checksum(json),
+      payload: String(json || '')
+    })
+  },
+
+  async decode(text) {
+    let parsed
+    try { parsed = JSON.parse(text) } catch { return { ok: false, error: 'فایل JSON معتبر نیست' } }
+    if (parsed?.format !== 'studio-m-backup-v1') {
+      return { ok: true, payload: text, verified: false, legacy: true }
+    }
+    if (typeof parsed.payload !== 'string' || !await this.verify(parsed.payload, parsed.checksum)) {
+      return { ok: false, error: 'صحت پشتیبان تأیید نشد؛ فایل ناقص یا دست‌کاری شده است' }
+    }
+    return { ok: true, payload: parsed.payload, verified: true, legacy: false }
+  },
+
   async run(label = 'manual') {
     try {
       const json = DB.exportJSON()
       const ts = Date.now()
       const key = `${AppConfig.BACKUP_PREFIX}${ts}`
-      await DB.saveBackup(key, json)
+      const checksum = await this.checksum(json)
+      const archive = await this.envelope(json)
+      await DB.saveBackup(key, archive)
       const now = new Date().toISOString()
       const prev = this.settings()
       const jalaliAt = typeof Utils !== 'undefined' ? Utils.formatJalaliDateTime(ts) : Utils.todayJalali()
@@ -29,16 +63,25 @@ const BackupService = {
         backupLastAt: now,
         backupLastKey: key,
         backupLastLabel: label,
-        backupLastDisplay: jalaliAt
+        backupLastDisplay: jalaliAt,
+        backupLastChecksum: checksum
       })
       await DB.flush?.()
 
+      let cloud = { ok: false, skipped: true }
+      if (typeof Cloud !== 'undefined' && Cloud.isEnabled?.() && Cloud.createBackupArchive) {
+        cloud = await Cloud.createBackupArchive(label)
+        if (!cloud.ok && !cloud.skipped) {
+          console.warn('Cloud backup failed:', cloud.error)
+        }
+      }
+
       if (prev.backupAutoDownload || label === 'manual') {
-        this._download(json, key, label)
+        this._download(archive, key, label)
       }
 
       if (typeof SM !== 'undefined' && SM.log) SM.log('backup_auto', `${label} — ${key}`)
-      return { ok: true, key, at: now }
+      return { ok: true, key, at: now, checksum, cloud }
     } catch (e) {
       console.warn('Backup failed:', e)
       return { ok: false, error: String(e) }

@@ -4,7 +4,11 @@
 
 const DemoSeed = {
   KEY: 'man_demo_seeded_v1',
-  get ADMIN_PASSWORD() { return AppConfig.INITIAL_ADMIN_PASSWORD },
+  _adminPassword: '',
+  get ADMIN_PASSWORD() {
+    if (!this._adminPassword) this._adminPassword = Utils.generateRandomPassword(16)
+    return this._adminPassword
+  },
 
   isDemoMode() {
     if (!AppConfig.isLocalDev()) return false
@@ -75,8 +79,8 @@ const DemoSeed = {
 
     if (!DB.get('printShops').length) {
       await SecureDB.insert('printShops', {
-        name: 'چاپخانه رویال', card: '6037991234567890',
-        shaba: 'IR120170000000123456789001', phone: '02188776655', address: 'تهران'
+        name: 'چاپخانه رویال (دمو)', card: '',
+        shaba: '', phone: '', address: 'نشانی نمونه'
       })
     }
 
@@ -209,9 +213,10 @@ const DemoSeed = {
     await this.ensurePendingSignup()
     await DB.flush()
     if (AppConfig.isLocalDev()) {
-      console.info('[Demo] مدیر: ' + AppConfig.INITIAL_ADMIN_PHONE + ' / ' + AppConfig.INITIAL_ADMIN_PASSWORD)
+      const manager = DB.find('users', user => (user.roles || []).includes('studio_manager'))
+      console.info('[Demo] مدیر: ' + (manager?.phone || 'ساخته نشده') + ' / رمز یک‌بارمصرف راه‌اندازی')
       console.info('[Demo] مشتری: قرارداد 0001 / 09123333333')
-      console.info('[Demo] پرسنل نمونه: 09121111111 / ' + AppConfig.INITIAL_ADMIN_PASSWORD)
+      console.info('[Demo] پرسنل نمونه: 09121111111 / رمز تصادفی نشست دمو')
     }
     return true
   }

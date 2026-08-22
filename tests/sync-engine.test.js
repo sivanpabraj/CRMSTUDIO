@@ -25,24 +25,28 @@ describe('compareRows', () => {
 })
 
 describe('mergeCollection', () => {
-  it('applies remote rows that win LWW', () => {
-    const local = [{ id: '1', name: 'old', updatedAtIso: '2026-01-01T00:00:00.000Z' }]
+  it('applies a newer server revision regardless of timestamp', () => {
+    const local = [{ id: '1', name: 'old', _serverRevision: 1, updatedAtIso: '2099-01-01T00:00:00.000Z' }]
     const remote = [{
       local_id: '1',
       payload: { id: '1', name: 'new' },
-      updated_at: '2026-06-01T00:00:00.000Z'
+      revision: 2,
+      updated_seq: 8,
+      updated_at: '2026-01-01T00:00:00.000Z'
     }]
     const r = mergeCollection(local, remote)
     expect(r.applied).toBe(1)
     expect(r.items[0].name).toBe('new')
   })
 
-  it('skips older remote rows', () => {
-    const local = [{ id: '1', name: 'local', updatedAtIso: '2026-06-01T00:00:00.000Z' }]
+  it('skips an older server revision', () => {
+    const local = [{ id: '1', name: 'local', _serverRevision: 3, updatedAtIso: '2026-06-01T00:00:00.000Z' }]
     const remote = [{
       local_id: '1',
       payload: { id: '1', name: 'stale' },
-      updated_at: '2026-01-01T00:00:00.000Z'
+      revision: 2,
+      updated_seq: 8,
+      updated_at: '2099-01-01T00:00:00.000Z'
     }]
     const r = mergeCollection(local, remote)
     expect(r.applied).toBe(0)
@@ -53,6 +57,16 @@ describe('mergeCollection', () => {
 describe('entities registry', () => {
   it('includes contracts', () => {
     expect(isSyncEntity('contracts')).toBe(true)
+  })
+
+  it.each([
+    'persProjects',
+    'persContracts',
+    'calendarReminders',
+    'galleries',
+    'customerCustody'
+  ])('row-syncs operational collection %s', collection => {
+    expect(isSyncEntity(collection)).toBe(true)
   })
 
   it('excludes users', () => {

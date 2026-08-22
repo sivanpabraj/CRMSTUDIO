@@ -4,12 +4,13 @@
    ══════════════════════════════════════════════ */
 
 const DB_KEY = AppConfig.DB_KEY
-const DB_VERSION = 20
+const DB_VERSION = 24
 const DB_OBJECT_KEYS = new Set(['studioInfo', 'securityState'])
 const SYNC_TOUCH_KEYS = new Set([
   'contracts', 'transactions', 'invoices', 'bookings', 'personnel', 'equipment',
   'workflows', 'packages', 'expenses', 'leads', 'banks', 'cheques',
-  'appointments', 'customerRequests', 'fileAssets'
+  'appointments', 'customerRequests', 'fileAssets', 'salaryPayments',
+  'attendance', 'notifications'
 ])
 
 function createDefaultData() {
@@ -61,7 +62,9 @@ function createDefaultData() {
     commLogs: [],
     apiKeys: [],
     payrollRuns: [],
+    salaryPayments: [],
     customerCustody: [],
+    financeOutbox: [],
     securityState: { loginAttempts: {}, otpSend: {}, otpVerify: {} }
   }
 }
@@ -288,6 +291,63 @@ const DB_MIGRATIONS = {
     }
     data._meta.dbVersion = 20
     return data
+  },
+  21(data) {
+    ;(data.banks || []).forEach(b => {
+      const account = b.account || b.accountNumber || ''
+      const iban = b.iban || b.shaba || ''
+      b.account = account
+      b.accountNumber = account
+      b.iban = iban
+      b.shaba = iban
+      if (b.card == null) b.card = ''
+      if (b.holder == null) b.holder = ''
+      b.balance = Number(b.balance) || 0
+    })
+    ;(data.cheques || []).forEach(c => {
+      const type = c.type || c.direction || 'incoming'
+      const number = c.number || c.chequeNumber || ''
+      const client = c.client || c.drawer || c.party || ''
+      c.type = type
+      c.direction = type
+      c.number = number
+      c.chequeNumber = number
+      c.client = client
+      c.party = client
+      if (!c.drawer) c.drawer = client
+      if (!c.status) c.status = 'pending'
+    })
+    data._meta.dbVersion = 21
+    return data
+  },
+  22(data) {
+    if (!data.salaryPayments) data.salaryPayments = []
+    if (!data.attendance) data.attendance = []
+    if (!data.notifications) data.notifications = []
+    data._meta.dbVersion = 22
+    return data
+  },
+  23(data) {
+    if (!data.financeOutbox) data.financeOutbox = []
+    if (data.studioInfo && data.studioInfo.ledgerVersion == null) {
+      data.studioInfo.ledgerVersion = 0
+    }
+    if (data.studioInfo && !data.studioInfo.planTier) {
+      data.studioInfo.planTier = data.studioInfo.licenseTier || 'trial'
+    }
+    data._meta.dbVersion = 23
+    return data
+  },
+  24(data) {
+    if (data.studioInfo && typeof data.studioInfo === 'object') {
+      for (const key of Object.keys(data.studioInfo)) {
+        if (/^sms/i.test(key) && /(key|secret|token|password|username|provider|line|proxy)/i.test(key)) {
+          delete data.studioInfo[key]
+        }
+      }
+    }
+    data._meta.dbVersion = 24
+    return data
   }
 }
 
@@ -295,6 +355,7 @@ const DB = {
   _data: null,
   _ready: null,
   ready: null,
+  _initError: null,
 
   init() {
     this._ready = this._initAsync()
@@ -328,9 +389,12 @@ const DB = {
       await this._migrateBackupsFromLocalStorage()
       this._purgeLocalStorageMirror()
       this.syncAllPersonnel()
+      this._bindUnloadFlush()
     } catch (e) {
-      console.warn('DB init failed, using defaults:', e)
-      this._data = createDefaultData()
+      this._initError = e
+      this._data = null
+      console.error('DB init failed — startup blocked:', e)
+      throw e
     }
     return this
   },
@@ -355,18 +419,72 @@ const DB = {
     } catch { /* */ }
   },
 
-  async _persist() {
-    try {
-      await IdbStore.set(AppConfig.IDB_STORE, DB_KEY, this._data)
-      if (typeof Cloud !== 'undefined' && Cloud.schedulePush) Cloud.schedulePush()
-    } catch (e) {
-      console.error('DB persist failed:', e)
-      if (typeof Utils !== 'undefined') {
-        Utils.toast('خطا در ذخیره‌سازی داده‌ها', 'error')
+  async _persist(opts = {}) {
+    const run = async () => {
+      try {
+        await IdbStore.set(AppConfig.IDB_STORE, DB_KEY, this._data)
+        this._dirty = false
+        if (!opts.skipCloud && typeof Cloud !== 'undefined' && Cloud.schedulePush) Cloud.schedulePush()
+      } catch (e) {
+        console.error('DB persist failed:', e)
+        this._dirty = true
+        if (typeof Utils !== 'undefined') {
+          Utils.toast('خطا در ذخیره‌سازی داده‌ها', 'error')
+        }
+        if (typeof SMObservability !== 'undefined') {
+          // Do not DB.log here — that would re-dirty and reschedule persist
+          SMObservability.captureError('db_persist', e, { noDbLog: true })
+        }
+        throw e
       }
     }
+    this._persistChain = (this._persistChain || Promise.resolve()).then(run, run)
+    return this._persistChain
   },
 
+  _dirty: false,
+  _persistTimer: null,
+  _pendingNeedCloud: false,
+  _persistChain: Promise.resolve(),
+
+  /**
+   * Coalesce rapid writes. skipCloud only if EVERY pending op in the burst skipped cloud.
+   * Any non-skip write forces cloud schedule on flush.
+   */
+  _schedulePersist(opts = {}) {
+    this._dirty = true
+    if (!opts.skipCloud) this._pendingNeedCloud = true
+
+    clearTimeout(this._persistTimer)
+    const delay = opts.delay ?? 120
+    this._persistTimer = setTimeout(() => {
+      this._persistTimer = null
+      const skipCloud = !this._pendingNeedCloud
+      this._pendingNeedCloud = false
+      this._persist({ skipCloud }).catch(() => {})
+    }, delay)
+  },
+
+  _scheduleLogPersist() {
+    this._schedulePersist({ skipCloud: true, delay: 2000 })
+  },
+
+  _bindUnloadFlush() {
+    if (this._unloadBound || typeof window === 'undefined') return
+    this._unloadBound = true
+    const flush = () => {
+      try {
+        clearTimeout(this._persistTimer)
+        this._persistTimer = null
+        if (this._dirty) {
+          // sync best-effort via keepalive is unavailable for IDB; fire async
+          this._persist({ skipCloud: false }).catch(() => {})
+        }
+      } catch { /* */ }
+    }
+    window.addEventListener('pagehide', flush)
+    window.addEventListener('beforeunload', flush)
+  },
   _normalizePhone(phone) {
     if (!phone) return ''
     const map = { '۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9' }
@@ -386,13 +504,19 @@ const DB = {
   findPersonnelByPhone(phone) {
     const norm = this._normalizePhone(phone)
     if (!norm) return null
-    return this.find('personnel', p => this._normalizePhone(p.phone) === norm) ?? null
+    return this.active('personnel').find(p => this._normalizePhone(p.phone) === norm) ?? null
   },
 
   findPersonnelByUserId(userId) {
-    const user = this.find('users', u => u.id === userId)
+    const user = this.find('users', u => u.id === userId && !u._deleted)
     if (!user) return null
-    return this.findPersonnelByPhone(user.phone) || this.find('personnel', p => p.userId === userId)
+    return this.findPersonnelByPhone(user.phone) ||
+      this.active('personnel').find(p => p.userId === userId) || null
+  },
+
+  /** Find active row by id (skips tombstones) */
+  findActive(collection, predicate) {
+    return this.active(collection).find(predicate) ?? null
   },
 
   syncPersonnelFromUser(user) {
@@ -439,11 +563,7 @@ const DB = {
   },
 
   save() {
-    return this._persist()
-  },
-
-  async flush() {
-    if (this._data) await this._persist()
+    return this.flush()
   },
 
   async exportData() {
@@ -462,25 +582,43 @@ const DB = {
     const currentVersion = this._data._meta?.dbVersion || 1
     if (currentVersion >= DB_VERSION) return
 
-    for (let v = currentVersion + 1; v <= DB_VERSION; v++) {
-      if (DB_MIGRATIONS[v]) {
-        try {
+    const before = this._clone(this._data)
+    try {
+      for (let v = currentVersion + 1; v <= DB_VERSION; v++) {
+        if (DB_MIGRATIONS[v]) {
           DB_MIGRATIONS[v](this._data)
           this._data._meta.dbVersion = v
-          await this._persist()
-        } catch (e) {
-          console.error(`DB migration v${v} failed:`, e)
         }
       }
-    }
 
-    const def = createDefaultData()
-    let changed = false
-    for (const key of Object.keys(def)) {
-      if (key === '_meta') continue
-      if (!(key in this._data)) { this._data[key] = def[key]; changed = true }
+      const def = createDefaultData()
+      for (const key of Object.keys(def)) {
+        if (key === '_meta') continue
+        if (!(key in this._data)) this._data[key] = def[key]
+      }
+      this._data._meta.dbVersion = DB_VERSION
+      this._data._meta.migrationChecksum = await this._checksum(this._data)
+      await this._persist()
+    } catch (e) {
+      this._data = before
+      console.error(`DB migration failed; rolled back target v${DB_VERSION}:`, e)
+      throw e
     }
-    if (changed) await this._persist()
+  },
+
+  _clone(value) {
+    if (value == null) return value
+    if (typeof structuredClone === 'function') return structuredClone(value)
+    return JSON.parse(JSON.stringify(value))
+  },
+
+  async _checksum(data) {
+    if (!crypto?.subtle) throw new Error('WebCrypto is required for migration checksums')
+    const copy = this._clone(data)
+    if (copy?._meta) delete copy._meta.migrationChecksum
+    const bytes = new TextEncoder().encode(JSON.stringify(copy))
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
+    return [...digest].map(byte => byte.toString(16).padStart(2, '0')).join('')
   },
 
   _defaultFor(collection) {
@@ -491,19 +629,32 @@ const DB = {
   },
 
   get(collection) {
-    if (!this._data) return this._defaultFor(collection)
-    if (collection === '_meta') return this._data._meta ?? this._defaultFor('_meta')
+    if (!this._data) return this._clone(this._defaultFor(collection))
+    if (collection === '_meta') return this._clone(this._data._meta ?? this._defaultFor('_meta'))
     const val = this._data[collection]
     if (DB_OBJECT_KEYS.has(collection)) {
-      if (val == null || Array.isArray(val)) return this._defaultFor(collection)
-      return val
+      if (val == null || Array.isArray(val)) return this._clone(this._defaultFor(collection))
+      return this._clone(val)
     }
-    return val ?? []
+    return this._clone(val ?? [])
+  },
+
+  /** Active rows only (excludes soft-deleted) */
+  active(collection) {
+    return this.get(collection).filter(i => i && !i._deleted)
   },
 
   set(collection, data) {
-    this._data[collection] = data
-    return this._persist().catch(err => console.error('[DB] persist error', err))
+    this._data[collection] = this._clone(data)
+    const skipCloud = collection === 'logs'
+    this._schedulePersist({ skipCloud })
+    return Promise.resolve(true)
+  },
+
+  async flush() {
+    clearTimeout(this._persistTimer)
+    this._persistTimer = null
+    if (this._data) await this._persist({ skipCloud: false, force: true })
   },
 
   find(collection, predicate) {
@@ -516,12 +667,13 @@ const DB = {
 
   insert(collection, item) {
     const col = this.get(collection)
-    item.id = item.id || crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    item.createdAt = item.createdAt || this._today()
-    this._touchSyncMeta(collection, item)
-    col.push(item)
+    const row = this._clone(item)
+    row.id = row.id || crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    row.createdAt = row.createdAt || this._today()
+    this._touchSyncMeta(collection, row)
+    col.push(row)
     this.set(collection, col)
-    return item
+    return this._clone(row)
   },
 
   update(collection, id, changes) {
@@ -532,7 +684,7 @@ const DB = {
     this._touchSyncMeta(collection, merged)
     col[idx] = merged
     this.set(collection, col)
-    return col[idx]
+    return this._clone(col[idx])
   },
 
   delete(collection, id) {
@@ -550,13 +702,20 @@ const DB = {
 
   log(action, detail) {
     const MAX_LOGS = 500
-    const logs = this.get('logs')
-    if (logs.length >= MAX_LOGS) this._data.logs = logs.slice(-MAX_LOGS + 1)
-    this.insert('logs', {
+    if (!this._data) return
+    if (!Array.isArray(this._data.logs)) this._data.logs = []
+    if (this._data.logs.length >= MAX_LOGS) {
+      this._data.logs = this._data.logs.slice(-MAX_LOGS + 1)
+    }
+    // Direct push — avoid insert()→set()→full cloud schedule on every log
+    this._data.logs.push({
+      id: crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       action,
       detail: typeof detail === 'object' ? JSON.stringify(detail) : String(detail),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      createdAt: this._today()
     })
+    this._scheduleLogPersist()
   },
 
   _today() {
@@ -568,6 +727,7 @@ const DB = {
     if (!SYNC_TOUCH_KEYS.has(collection)) return
     item.updatedAtIso = new Date().toISOString()
     item._syncRev = (Number(item._syncRev) || 0) + 1
+    item._syncMutationId = crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
   },
 
   async reset() {
@@ -582,12 +742,16 @@ const DB = {
   },
 
   async importJSON(json) {
+    const previous = this._clone(this._data)
     try {
+      if (new TextEncoder().encode(String(json)).byteLength > 25 * 1024 * 1024) {
+        throw new Error('حجم فایل پشتیبان بیش از حد مجاز است')
+      }
       const data = JSON.parse(json)
-      if (!data || typeof data !== 'object') throw new Error('Invalid format')
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid format')
       const def = createDefaultData()
       const validKeys = new Set(Object.keys(def))
-      const objectKeys = new Set(['_meta', 'studioInfo'])
+      const objectKeys = new Set(['_meta', 'studioInfo', 'securityState'])
       for (const key of Object.keys(data)) {
         if (key === '_meta') continue
         if (!validKeys.has(key)) throw new Error(`کلید ناشناخته: ${key}`)
@@ -604,6 +768,7 @@ const DB = {
       await this._persist()
       return { ok: true }
     } catch (e) {
+      this._data = previous
       return { ok: false, error: e.message }
     }
   },
