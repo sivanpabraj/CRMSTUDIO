@@ -286,14 +286,26 @@ const Cloud = {
     const raw = typeof DB !== 'undefined' ? JSON.parse(DB.exportJSON()) : {}
     const json = sanitizeSnapshotForCloud(raw)
     const meta = json._meta || {}
+    const expectedAt = DB.get('studioInfo')?.cloudLastSyncAt || null
 
     const { data, error } = await c.rpc('upsert_studio_snapshot', {
       p_studio_id: studioId,
       p_data: json,
       p_db_version: meta.dbVersion || AppConfig.DB_VERSION,
-      p_app_version: AppConfig.APP_VERSION
+      p_app_version: AppConfig.APP_VERSION,
+      p_expected_updated_at: expectedAt || null
     })
-    if (error) return { ok: false, error: error.message }
+    if (error) {
+      const msg = error.message || ''
+      if (/snapshot_conflict/i.test(msg)) {
+        return {
+          ok: false,
+          conflict: true,
+          error: 'تعارض همگام‌سازی snapshot — ابتدا «دریافت از ابر» بزنید، بعد دوباره ارسال کنید'
+        }
+      }
+      return { ok: false, error: msg }
+    }
 
     await SecureDB.merge('studioInfo', {
       ...DB.get('studioInfo'),

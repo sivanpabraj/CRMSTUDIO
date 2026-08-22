@@ -157,8 +157,7 @@ const PortalInvite = {
       portalStatus: 'pending_verify',
       portalOtp: {
         ...otpStored,
-        // نگه داشتن کد خام فقط برای نمایش به مدیر در همان لحظه (در UI، نه در sync ابر)
-        code,
+        /* plaintext code returned only in this response for manager toast — never persisted */
         sentAt: new Date().toISOString(),
         verified: false,
         phone: user.phone

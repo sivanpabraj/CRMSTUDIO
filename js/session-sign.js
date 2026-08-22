@@ -45,9 +45,8 @@ const SessionSign = {
 
   async verify(session) {
     if (!session?.userId) return false
-    if (!session.sig) {
-      return typeof AppConfig !== 'undefined' && AppConfig.isLocalDev?.()
-    }
+    /* Missing signature is always invalid — never trust unsigned session payloads. */
+    if (!session.sig) return false
     try {
       const secret = sessionStorage.getItem(this.SECRET_KEY)
       if (!secret) return false

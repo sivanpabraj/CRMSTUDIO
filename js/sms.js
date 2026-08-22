@@ -13,6 +13,8 @@ const SmsProvider = {
   isConfigured() {
     const cfg = this.getStudioConfig()
     if (cfg.proxyUrl) return true
+    /* Production: only proxy counts as configured (no browser API keys). */
+    if (typeof AppConfig !== 'undefined' && AppConfig.isProduction?.()) return false
     if (cfg.provider === 'melipayamak') {
       const hasUserPass = !!(cfg.username && cfg.apiKey)
       const hasCombined = typeof cfg.apiKey === 'string' && cfg.apiKey.includes(':')
@@ -33,8 +35,16 @@ const SmsProvider = {
       return this._sendViaProxy(cfg.proxyUrl, list, text)
     }
 
-    const secure = this._isSecureEnv()
-    if (!secure) {
+    /* P0: production must use Edge proxy — never send provider API keys from the browser. */
+    const allowDirect = typeof AppConfig !== 'undefined' && AppConfig.isLocalDev?.()
+    if (!allowDirect) {
+      return {
+        ok: false,
+        error: 'برای ارسال پیامک، URL پراکسی Supabase (functions/v1/send-sms) را در تنظیمات بگذارید. ارسال مستقیم از مرورگر در production غیرفعال است.'
+      }
+    }
+
+    if (!this._isSecureEnv()) {
       return { ok: false, error: 'ارسال پیامک روی این دامنه غیرفعال است. از پراکسی Supabase Edge (send-sms) استفاده کنید.' }
     }
     if (!cfg.provider || !cfg.apiKey) {

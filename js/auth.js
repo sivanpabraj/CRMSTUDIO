@@ -359,9 +359,9 @@ const Auth = {
       this.logout()
       return null
     }
-    if (typeof SessionSign !== 'undefined' && session.sig) {
-      /* verify async signature on next tick — sync path trusts expiry only if verify pending */
-      if (session._sigInvalid) {
+    /* P0: unsigned / invalid sessions are never trusted (no auto-sign of forged payloads). */
+    if (typeof SessionSign !== 'undefined') {
+      if (!session.sig || session._sigInvalid) {
         this.logout()
         return null
       }
@@ -377,15 +377,15 @@ const Auth = {
       return true
     }
 
-    let working = { ...session }
-    if (!working.csrf) {
-      working.csrf = this._regenerateCsrf()
-      try { sessionStorage.setItem(this.CSRF_KEY, working.csrf) } catch { /* */ }
+    if (!session.sig) {
+      this.logout()
+      return false
     }
 
-    if (!working.sig) {
-      await this._sessionSetSigned(this.SESSION_KEY, working)
-      return true
+    let working = { ...session }
+    if (!working.csrf) {
+      this.logout()
+      return false
     }
 
     let ok = await SessionSign.verify(working)
@@ -398,15 +398,11 @@ const Auth = {
     }
 
     if (!ok) {
-      session._sigInvalid = true
       this.logout()
       return false
     }
 
     try { sessionStorage.setItem(this.CSRF_KEY, working.csrf) } catch { /* */ }
-    if (session.csrf !== working.csrf || session.sig !== working.sig) {
-      await this._sessionSetSigned(this.SESSION_KEY, working)
-    }
     return true
   },
 

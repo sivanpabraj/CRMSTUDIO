@@ -58,9 +58,10 @@
 | OTP پرسنل | `auth.js` + `unified-login.js` | proof امضاشده قبل از `loginWithOtp` |
 | نوشتن DB | `secure-db.js` | CSRF روی set/insert/update/**delete** |
 | Sync | `js/sync/engine.js` | cursor + pagination (۵۰۰ ردیف) |
-| SMS edge | `send-sms/index.ts` | rate limit، اعتبارسنجی phone/text |
+| Snapshot | `007_snapshot_optimistic.sql` + `cloud.js` | تعارض نسخه روی push |
+| SMS edge | `send-sms/index.ts` | rate limit + studio_manager + Origin allowlist |
 | RLS قرارداد | `006_contracts_manager_rls.sql` | فقط manager می‌نویسد |
-| OTP پرتال | `portal-invite.js` | hash OTP (نه plain-text) |
+| OTP پرتال | `portal-invite.js` | hash OTP (بدون plaintext در DB) |
 | Deploy | `.dockerignore`, `docker/nginx.conf`, CI | CSP، build ایزوله |
 
 ### Migration 006
@@ -73,8 +74,25 @@ supabase/migrations/006_contracts_manager_rls.sql
 
 ## محدودیت‌های باقی‌مانده
 
-- Session محلی client-only است (بدون HMAC سرور-side)
+- Session محلی هنوز client-only است (HMAC در مرورگر؛ بدون سرور session)
 - TypeScript + E2E tests گسترده‌تر
+- `ALLOWED_ORIGINS` روی Edge `send-sms` باید ست شود (وگرنه فقط localhost)
+
+## P0 hardening (2026-08)
+
+| Fix | فایل |
+|-----|------|
+| رد session بدون `sig` (بدون auto-sign) | `auth.js`, `session-sign.js` |
+| OTP بدون plaintext در storage | `unified-login.js`, `customer-login.js`, `portal-invite.js` |
+| SMS فقط از پراکسی در production | `js/sms.js` |
+| Edge SMS فقط `studio_manager` + CORS سخت | `supabase/functions/send-sms` |
+| Snapshot optimistic concurrency | `007_snapshot_optimistic.sql` + `cloud.js` |
+
+Migration 007 را در SQL Editor اجرا کنید:
+
+```
+supabase/migrations/007_snapshot_optimistic.sql
+```
 
 ## Migration 002
 
