@@ -136,6 +136,24 @@ const UnifiedLogin = {
     sessionStorage.setItem(this.OTP_KEY, JSON.stringify(data))
   },
 
+  async _hashPendingCode(code) {
+    const salt = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+      .map(b => b.toString(16).padStart(2, '0')).join('')
+    const codeHash = await Utils.legacyHashPassword(String(code).trim(), salt)
+    return { codeHash, codeSalt: salt }
+  },
+
+  async _pendingCodeMatches(pending, inputCode) {
+    if (!pending) return false
+    const code = Utils.faToEn(String(inputCode || '')).replace(/\D/g, '')
+    if (pending.codeHash && pending.codeSalt) {
+      const hash = await Utils.legacyHashPassword(code, pending.codeSalt)
+      return hash === pending.codeHash
+    }
+    /* legacy plaintext pending (one release) */
+    return !!(pending.code && code === pending.code)
+  },
+
   clearPending() {
     sessionStorage.removeItem(this.OTP_KEY)
   },
@@ -159,9 +177,11 @@ const UnifiedLogin = {
         PortalInvite.needsOtpVerification(resolved.user)) {
       const inv = await PortalInvite.sendInvite(resolved.user.id)
       if (!inv.ok) return inv
+      const inviteCode = inv.code || inv.demoCode || ''
+      const hashed = inviteCode ? await this._hashPendingCode(inviteCode) : null
       this._setPending({
         phone,
-        code: inv.code,
+        ...(hashed || {}),
         kind: resolved.kind,
         label: resolved.label,
         userId: resolved.user.id,
@@ -182,9 +202,10 @@ const UnifiedLogin = {
     const studio = DB.get('studioInfo')?.name || AppConfig.DEFAULT_STUDIO_NAME
     const text = `${studio}\nکد ورود: ${code}\nاعتبار: ۵ دقیقه`
 
+    const hashed = await this._hashPendingCode(code)
     this._setPending({
       phone,
-      code,
+      ...hashed,
       kind: resolved.kind,
       label: resolved.label,
       userId: resolved.user?.id || null,
@@ -234,7 +255,7 @@ const UnifiedLogin = {
     if (otpLocked) {
       return { ok: false, error: `تعداد تلاش بیش از حد. ${otpLocked} دقیقه دیگر تلاش کنید.` }
     }
-    if (code !== pending.code) {
+    if (!(await this._pendingCodeMatches(pending, code))) {
       if (typeof Auth !== 'undefined') {
         const mins = Auth.recordOtpVerifyFail(verifyKey)
         if (mins) return { ok: false, error: `تعداد تلاش بیش از حد. ${mins} دقیقه دیگر تلاش کنید.` }

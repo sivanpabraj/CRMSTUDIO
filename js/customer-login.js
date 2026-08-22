@@ -119,6 +119,23 @@ const CustomerLogin = {
     sessionStorage.setItem(this._otpKey, JSON.stringify(data))
   },
 
+  async _hashOtp(code) {
+    const salt = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+      .map(b => b.toString(16).padStart(2, '0')).join('')
+    const codeHash = await Utils.legacyHashPassword(String(code).trim(), salt)
+    return { codeHash, codeSalt: salt }
+  },
+
+  async _otpMatches(pending, input) {
+    if (!pending) return false
+    const code = Utils.faToEn(String(input || '')).replace(/\D/g, '')
+    if (pending.codeHash && pending.codeSalt) {
+      const hash = await Utils.legacyHashPassword(code, pending.codeSalt)
+      return hash === pending.codeHash
+    }
+    return !!(pending.code && code === pending.code)
+  },
+
   _clearOtp() {
     sessionStorage.removeItem(this._otpKey)
   },
@@ -164,9 +181,10 @@ const CustomerLogin = {
     const couple = this._pickContract(contracts)?.couple || 'قرارداد شما'
     const text = `${studio}\nکد ورود پورتال مشتری: ${otp}\n${couple}\nاعتبار: ۱۰ دقیقه`
 
+    const hashed = await this._hashOtp(otp)
     this._setOtp({
       phone,
-      code: otp,
+      ...hashed,
       joinCode: code,
       contractIds: contracts.map(c => c.id),
       expires: Date.now() + this.OTP_TTL_MS
@@ -204,7 +222,7 @@ const CustomerLogin = {
     }
 
     const input = Utils.faToEn(document.getElementById('cl-otp')?.value || '').replace(/\D/g, '')
-    if (input !== pending.code) {
+    if (!(await this._otpMatches(pending, input))) {
       CustomerSession?.recordFailedAttempt?.(pending.phone)
       showErr('کد وارد‌شده نادرست است.')
       return

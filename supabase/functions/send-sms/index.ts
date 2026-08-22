@@ -23,8 +23,16 @@ function allowedOrigin(req: Request): string | null {
     .split(',')
     .map(s => s.trim())
     .filter(Boolean)
+  if (allowList.length === 0) {
+    /* Fail closed unless localhost (dev) — never reflect arbitrary Origin. */
+    if (!reqOrigin) return null
+    try {
+      const u = new URL(reqOrigin)
+      if (['localhost', '127.0.0.1', '::1'].includes(u.hostname)) return reqOrigin
+    } catch { /* */ }
+    return null
+  }
   if (!reqOrigin) return allowList[0] || null
-  if (allowList.length === 0) return reqOrigin
   return allowList.includes(reqOrigin) ? reqOrigin : null
 }
 
@@ -75,6 +83,19 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userErr } = await supabase.auth.getUser()
     if (userErr || !user) {
       return json({ ok: false, error: 'not authenticated' }, 401, origin)
+    }
+
+    /* P0: only active studio managers may send SMS (project-wide spam abuse). */
+    const { data: membership, error: memErr } = await supabase
+      .from('studio_members')
+      .select('studio_id, roles, status')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .contains('roles', ['studio_manager'])
+      .limit(1)
+      .maybeSingle()
+    if (memErr || !membership?.studio_id) {
+      return json({ ok: false, error: 'forbidden: studio_manager required' }, 403, origin)
     }
 
     if (!checkRate(user.id)) {
