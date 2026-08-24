@@ -20,7 +20,6 @@ const FactoryReset = {
       AppConfig.DRAFT_KEY,
       'customer_session',
       'talar_unified_otp',
-      'talar_customer_otp',
       'talar_pw_reset_otp',
       'man_demo_mode',
       ...(AppConfig.LEGACY_DB_KEYS || [])

@@ -250,6 +250,22 @@ describe('cloud-backup edge handler', () => {
     expect((await createCloudBackupHandler(unsafe.deps)(request(valid))).status).toBe(422)
   })
 
+  it('lists only metadata through the service RPC and maps authorization and validation failures', async () => {
+    const backups = [{ id: 'b1', manifest: { format: 'crmstudio-aes-gcm-v1' } }]
+    const ok = setup({ rpc: vi.fn(async () => ({ data: backups, error: null })) })
+    const res = await createCloudBackupHandler(ok.deps)(request({ studioId, action: 'list', limit: 999 }))
+    expect(res.status).toBe(200)
+    expect(await payload(res)).toEqual({ ok: true, backups })
+    expect(ok.service.rpc).toHaveBeenCalledWith('list_encrypted_studio_backups', {
+      p_studio_id: studioId, p_actor_id: 'u1', p_limit: 100
+    })
+    expect((await createCloudBackupHandler(ok.deps)(request({ studioId, action: 'list', limit: 0 }))).status).toBe(400)
+    const denied = setup({ rpc: vi.fn(async () => ({ data: null, error: { message: 'permission 42501' } })) })
+    expect((await createCloudBackupHandler(denied.deps)(request({ studioId, action: 'list' }))).status).toBe(403)
+    const failed = setup({ rpc: vi.fn(async () => ({ data: null, error: { message: 'database down' } })) })
+    expect((await createCloudBackupHandler(failed.deps)(request({ studioId, action: 'list' }))).status).toBe(500)
+  })
+
   it('restores an authorized encrypted archive and maps read/key failures', async () => {
     const record = { ciphertext: 'cipher', nonce: 'nonce', checksum: 'sum', manifest: { keyVersion: 1, aad: 'aad' } }
     const ok = setup({ rpc: vi.fn(async () => ({ data: record, error: null })) })

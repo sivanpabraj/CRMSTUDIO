@@ -84,7 +84,6 @@ export const browserGlobals = {
   PortalMessages: "readonly",
   UnifiedLogin: "readonly",
   CustomerSession: "readonly",
-  CustomerLogin: "readonly",
   CustomerPortal: "readonly",
   Admin: "readonly",
   AdminSections: "readonly",

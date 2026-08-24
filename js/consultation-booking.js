@@ -77,7 +77,7 @@ const ConsultationBooking = {
         <div class="auth-date-grid">
           ${nextWeek.map(d => this._dateChip(d, d.weekday)).join('')}
         </div>
-        <button type="button" class="auth-calendar-toggle" onclick="ConsultationBooking.toggleCalendar()">
+        <button type="button" class="auth-calendar-toggle" data-csp-action="ConsultationBooking.toggleCalendar">
           <i class="fas fa-calendar-alt"></i> ${this._showCalendar ? 'بستن تقویم' : 'نمایش تقویم ماه'}
         </button>
         <div id="auth-cal-panel" class="auth-cal-panel" style="display:${this._showCalendar ? 'block' : 'none'}"></div>
@@ -96,7 +96,7 @@ const ConsultationBooking = {
     const sel = this._selectedDate === d.jalali ? ' auth-chip--active' : ''
     const sub = `${d.jd}/${d.jm}`
     return `<button type="button" class="auth-date-chip${sel}" data-date="${d.jalali}"
-      onclick="ConsultationBooking.pickDate('${d.jalali}')">
+      data-csp-action="ConsultationBooking.pickDate" data-csp-arg="${d.jalali}">
       <span class="auth-date-chip-label">${Utils.escapeHtml(label)}</span>
       <span class="auth-date-chip-sub" dir="ltr">${sub}</span>
     </button>`
@@ -135,19 +135,20 @@ const ConsultationBooking = {
       const cls = past ? 'auth-cal-day auth-cal-past' : `auth-cal-day${sel}`
       daysHtml += past
         ? `<span class="${cls}">${d}</span>`
-        : `<button type="button" class="${cls}" onclick="ConsultationBooking.pickDate('${date}')">${d}</button>`
+        : `<button type="button" class="${cls}" data-csp-action="ConsultationBooking.pickDate" data-csp-arg="${date}">${d}</button>`
     }
 
     panel.innerHTML = `
       <div class="auth-cal-head">
-        <button type="button" class="auth-cal-nav" onclick="ConsultationBooking._shiftMonth(-1)"><i class="fas fa-chevron-right"></i></button>
+        <button type="button" class="auth-cal-nav" data-csp-action="ConsultationBooking._shiftMonth" data-csp-arg="-1"><i class="fas fa-chevron-right"></i></button>
         <span>${Utils.jalaliMonthName(jm)} ${jy.toLocaleString('fa-IR')}</span>
-        <button type="button" class="auth-cal-nav" onclick="ConsultationBooking._shiftMonth(1)"><i class="fas fa-chevron-left"></i></button>
+        <button type="button" class="auth-cal-nav" data-csp-action="ConsultationBooking._shiftMonth" data-csp-arg="1"><i class="fas fa-chevron-left"></i></button>
       </div>
       <div class="auth-cal-grid">${daysHtml}</div>`
   },
 
   _shiftMonth(delta) {
+    delta = Number(delta)
     let jy = this._viewYear
     let jm = this._viewMonth + delta
     if (jm < 1) { jm = 12; jy-- }
@@ -167,7 +168,7 @@ const ConsultationBooking = {
         const sel = this._selectedTime === time ? ' auth-chip--active' : ''
         const dis = booked ? ' auth-time-chip--busy' : ''
         return `<button type="button" class="auth-time-chip${sel}${dis}" ${booked ? 'disabled' : ''}
-          onclick="ConsultationBooking.pickTime('${time}')">${time}</button>`
+          data-csp-action="ConsultationBooking.pickTime" data-csp-arg="${time}">${time}</button>`
       }).join('')
     }
     mk(morning, 'auth-time-morning')

@@ -75,7 +75,7 @@ select throws_ok($$
   select public.apply_studio_entity_commands(
     '21000000-0000-4000-8000-000000000001','transactions',
     '[{"local_id":"tx-1","idempotency_key":"sync-finance-001","op":"upsert","expected_revision":0,"payload":{"amount":1}}]'::jsonb)
-$$,'42501','sync_permission_denied','photographer cannot sync finance payloads');
+$$,'42501','sync_server_authoritative_entity','generic sync rejects finance payloads before role evaluation');
 select throws_ok($$
   select public.apply_studio_entity_commands(
     '21000000-0000-4000-8000-000000000001','equipment',
@@ -85,12 +85,12 @@ select throws_ok($$
   select * from public.pull_studio_entity_deltas(
     '21000000-0000-4000-8000-000000000001','transactions',0,
     '00000000-0000-0000-0000-000000000000',200)
-$$,'42501','sync_permission_denied','photographer cannot pull finance payloads');
+$$,'42501','sync_server_authoritative_entity','generic sync cannot read finance payloads');
 select throws_ok($$
   select * from public.pull_studio_entity_deltas(
     '21000000-0000-4000-8000-000000000001','salaryPayments',0,
     '00000000-0000-0000-0000-000000000000',200)
-$$,'42501','sync_permission_denied','photographer cannot pull payroll payloads');
+$$,'42501','sync_server_authoritative_entity','generic sync cannot read payroll payloads');
 select throws_ok($$
   select public.reserve_sms_dispatch('21000000-0000-4000-8000-000000000001','generic',1,'sms-photo-0001')
 $$,'42501','sms_permission_denied','photographer cannot send generic SMS');
@@ -217,9 +217,8 @@ select ok(not has_function_privilege('authenticated',
 select ok(has_function_privilege('service_role',
   'public.store_encrypted_studio_backup(uuid,uuid,text,text,text,bigint,jsonb)','EXECUTE'),
   'only service role has encrypted backup storage capability');
-select ok(not has_function_privilege('authenticated',
-  'public.create_studio_backup(uuid,jsonb,text,text,integer,text)','EXECUTE'),
-  'plaintext backup RPC is retired');
+select ok(to_regprocedure('public.create_studio_backup(uuid,jsonb,text,text,integer,text)') is null,
+  'plaintext backup RPC is permanently removed');
 
 select ok(not has_table_privilege('service_role','public.finance_journal_lines','INSERT'),
   'service role cannot bypass the finance command boundary with direct journal inserts');

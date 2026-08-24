@@ -3,9 +3,15 @@ import { test, expect } from '@playwright/test'
 const RUN_ID = String(Date.now())
 const PHONE = `09${RUN_ID.slice(-9)}`
 const PASSWORD = `Visual-${RUN_ID}-A1`
+const INLINE_EVENT_SELECTOR = [
+  'onclick', 'onchange', 'oninput', 'onsubmit', 'onkeydown', 'onkeyup',
+  'onkeypress', 'onfocus', 'onblur', 'onload', 'onerror', 'onmouseover',
+  'onmouseout', 'onpointerdown', 'onpointerup', 'ontouchstart', 'ontouchend'
+].map(name => `[${name}]`).join(',')
 
 async function createStudio(page) {
   await page.goto('/start.html')
+  await expect(page.locator(INLINE_EVENT_SELECTOR)).toHaveCount(0)
   await page.locator('#st-studio-name').fill('استودیو ماندنی')
   await page.locator('#st-manager-name').fill('مدیر کنترل کیفیت')
   await page.locator('#st-phone').fill(PHONE)
@@ -27,6 +33,7 @@ async function createStudio(page) {
     await expect(onboarding).toBeHidden()
   }
 
+  await page.evaluate(() => window.SMLazyModules.ensure('packages'))
   await page.evaluate(async () => {
     PackageCatalog.ensureDefaults()
     const today = Utils.todayJalali()
@@ -52,6 +59,7 @@ async function createStudio(page) {
 async function capture(page, route, name) {
   await page.evaluate(value => SM.navigate(value), route)
   await expect(page.locator('#sm-content')).toBeVisible()
+  await expect(page.locator(INLINE_EVENT_SELECTOR)).toHaveCount(0)
   await page.waitForTimeout(250)
   await page.screenshot({ path: `test-results/visual/${name}.png`, fullPage: true })
 }

@@ -143,11 +143,8 @@ export const SyncEngine = {
     return { ok: true, count: accepted, entityType }
   },
 
-  async pushContractsTable(cloud) {
-    if (typeof cloud.syncContractsFromLocal === 'function') {
-      return cloud.syncContractsFromLocal()
-    }
-    return { ok: true, skipped: true }
+  async pushContractsTable(_cloud) {
+    return { ok: false, skipped: true, code: 'server_authority_required' }
   },
 
   async pushAll(cloud) {
@@ -170,8 +167,6 @@ export const SyncEngine = {
       if (r.ok) total += r.count || 0
       else if (!r.skipped) errors.push(`${entityType}: ${r.error}`)
     }
-
-    await this.pushContractsTable(cloud)
 
     const at = new Date().toISOString()
     await SecureDB.merge('studioInfo', {

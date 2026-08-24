@@ -251,15 +251,24 @@ describe('Cloud behavior coverage', () => {
     Cloud._callBackupEdge.mockResolvedValueOnce({ ok: true, payload: { x: 1 }, manifest: {} })
     expect((await Cloud.restoreBackupArchive('b1')).ok).toBe(true)
 
-    const backupsQ = query({ data: [{ id: 'b1' }], error: null })
     const snapshotQ = query({ data: { data: { remote: 1 }, updated_at: '2026-01-02' }, error: null })
-    client.from.mockImplementation(name => name === 'studio_backup_archives' ? backupsQ : snapshotQ)
+    client.from.mockReturnValue(snapshotQ)
+    Cloud._callBackupEdge.mockResolvedValueOnce({ ok: true, backups: [{ id: 'b1' }] })
     expect((await Cloud.listBackupArchives(999)).backups).toHaveLength(1)
+    expect(Cloud._callBackupEdge).toHaveBeenLastCalledWith({ action: 'list', studioId: 'studio-1', limit: 100 })
     expect((await Cloud.pullSnapshot({ force: true })).ok).toBe(true)
     expect(DB.importJSON).toHaveBeenCalled()
   })
 
   it('calls the backup Edge function and handles HTTP and network failures', async () => {
+    info.supabaseUrl = ''
+    expect((await Cloud._callBackupEdge({})).error).toBe('ورود ابری لازم است')
+    info.supabaseUrl = 'https://local.supabase.co'
+    info.supabaseAnonKey = ''
+    expect((await Cloud._callBackupEdge({})).error).toBe('ورود ابری لازم است')
+    info.supabaseAnonKey = 'publishable'
+    client.auth.getSession.mockResolvedValueOnce({ data: { session: null } })
+    expect((await Cloud._callBackupEdge({})).error).toBe('ورود ابری لازم است')
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) })))
     expect((await Cloud._callBackupEdge({ action: 'create' })).ok).toBe(true)
     fetch.mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({ error: 'denied' }) })
@@ -268,19 +277,25 @@ describe('Cloud behavior coverage', () => {
     expect((await Cloud._callBackupEdge({})).error).toBe('backup_network_failed')
   })
 
-  it('syncs contracts and orchestrates entity/snapshot sync', async () => {
+  it('rejects browser-authoritative contract sync and uses only ordered entity sync', async () => {
     DB.get.mockImplementation(name => name === 'studioInfo' ? info : name === 'contracts' ? [{ id: '1', groom: 'G', total: '10' }] : {})
     client.from.mockReturnValue(query({ data: null, error: null }))
-    expect((await Cloud.syncContractsFromLocal()).count).toBe(1)
+    expect(await Cloud.syncContractsFromLocal()).toMatchObject({
+      ok: false,
+      skipped: true,
+      code: 'server_authority_required'
+    })
     expect((await Cloud.pushEntities()).ok).toBe(true)
     expect((await Cloud.pullEntities({ force: true })).ok).toBe(true)
-    vi.spyOn(Cloud, 'pushSnapshot').mockResolvedValue({ ok: true })
+    const pushSnapshot = vi.spyOn(Cloud, 'pushSnapshot')
     expect((await Cloud.pushAll()).ok).toBe(true)
+    expect(pushSnapshot).not.toHaveBeenCalled()
     mocks.sync.pullAll.mockResolvedValueOnce({ ok: true, applied: 2 })
     expect((await Cloud.pullAll()).applied).toBe(2)
     mocks.sync.pullAll.mockResolvedValueOnce({ ok: true, applied: 0 })
-    vi.spyOn(Cloud, 'pullSnapshot').mockResolvedValue({ ok: true })
+    const pullSnapshot = vi.spyOn(Cloud, 'pullSnapshot')
     expect((await Cloud.pullAll()).ok).toBe(true)
+    expect(pullSnapshot).not.toHaveBeenCalled()
     Cloud.schedulePush()
     expect(mocks.sync.scheduleEntityPush).toHaveBeenCalled()
     expect((await Cloud.flushPushNow()).ok).toBe(true)
@@ -345,6 +360,19 @@ describe('Cloud behavior coverage', () => {
     await Cloud._saveStudioLink('')
   })
 
+  it('completes studio registration and tenant lookup through server authority', async () => {
+    vi.spyOn(Cloud, '_registerStudio').mockResolvedValue({ ok: true, studioId: 'server-studio' })
+    vi.spyOn(Cloud, 'restoreAuthoritativeIdentity')
+      .mockResolvedValueOnce({ ok: true, identity: { studioId: 'server-studio' } })
+      .mockResolvedValueOnce({ ok: true, identity: { studioId: 'server-studio' } })
+      .mockResolvedValueOnce({ ok: false, code: 'not_authenticated' })
+    expect(await Cloud.registerCurrentStudio({ studioName: 'S', phone: '0912', name: 'N' }))
+      .toMatchObject({ ok: true, identity: { studioId: 'server-studio' } })
+    AppConfig.allowsLocalIdentity = () => false
+    expect(await Cloud._loadMemberStudioId()).toBe('server-studio')
+    expect(await Cloud._loadMemberStudioId()).toBeNull()
+  })
+
   it('debounces snapshot pushes and throttles duplicate error notifications', async () => {
     Cloud._snapshotPending = true
     vi.spyOn(Cloud, 'pushSnapshot').mockResolvedValue({ ok: true })
@@ -355,20 +383,21 @@ describe('Cloud behavior coverage', () => {
     expect(Utils.toast).toHaveBeenCalledTimes(1)
   })
 
-  it('bootstraps from entity sync, snapshot fallback and conflict outcomes', async () => {
+  it('bootstraps only from authoritative entity sync and never resurrects a snapshot', async () => {
     mocks.sync.pullAll.mockResolvedValueOnce({ ok: true, applied: 3, conflictCount: 0 })
     expect((await Cloud.bootstrap()).applied).toBe(3)
 
     mocks.sync.pullAll.mockResolvedValueOnce({ ok: false, applied: 0, conflictCount: 2, skipped: false, error: 'entity' })
-    vi.spyOn(Cloud, 'pullSnapshot').mockResolvedValueOnce({ ok: true, skipped: false })
-    expect((await Cloud.bootstrap()).ok).toBe(true)
+    const pullSnapshot = vi.spyOn(Cloud, 'pullSnapshot')
+    expect((await Cloud.bootstrap()).ok).toBe(false)
     expect(Utils.toast).toHaveBeenCalledWith(expect.stringContaining('تعارض'), 'warning')
+    expect(pullSnapshot).not.toHaveBeenCalled()
 
     mocks.sync.pullAll.mockResolvedValueOnce({ ok: false, applied: 0, conflictCount: 0, skipped: false, error: 'entity' })
-    Cloud.pullSnapshot.mockResolvedValueOnce({ ok: false, skipped: false, error: 'snapshot' })
     const notify = vi.spyOn(Cloud, '_notifyCloudError').mockImplementation(() => {})
     expect((await Cloud.bootstrap()).ok).toBe(false)
-    expect(notify).toHaveBeenCalledWith('snapshot')
+    expect(notify).toHaveBeenCalledWith('entity')
+    expect(pullSnapshot).not.toHaveBeenCalled()
 
     vi.spyOn(Cloud, 'isConfigured').mockReturnValueOnce(false)
     expect((await Cloud.bootstrap()).skipped).toBe(true)
@@ -447,11 +476,11 @@ describe('Cloud behavior coverage', () => {
     DB.importJSON.mockResolvedValueOnce({ ok: false, error: 'import failed' })
     expect(await Cloud.restoreBackupArchive('b')).toMatchObject({ ok: false })
 
-    DB.get.mockImplementation(name => name === 'studioInfo' ? info : name === 'contracts' ? [] : {})
-    expect(await Cloud.syncContractsFromLocal()).toMatchObject({ ok: true, count: 0 })
-    DB.get.mockImplementation(name => name === 'studioInfo' ? info : name === 'contracts' ? [{ id: 'c' }] : {})
-    client.from.mockReturnValue(query({ data: null, error: { message: 'upsert failed' } }))
-    expect(await Cloud.syncContractsFromLocal()).toMatchObject({ ok: false })
+    expect(await Cloud.syncContractsFromLocal()).toMatchObject({
+      ok: false,
+      skipped: true,
+      code: 'server_authority_required'
+    })
   })
 
   it('covers missing global/configuration fallbacks without trusting browser state', async () => {
@@ -532,7 +561,7 @@ describe('Cloud behavior coverage', () => {
     client.from.mockReturnValue(memberError)
     expect(await Cloud._loadMemberStudioId()).toBeNull()
     info.supabaseStudioId = 's1'
-    client.from.mockReturnValue(query({ data: null, error: { message: 'archive failed' } }))
+    vi.spyOn(Cloud, '_callBackupEdge').mockResolvedValueOnce({ ok: false, error: 'archive failed' })
     expect(await Cloud.listBackupArchives()).toMatchObject({ ok: false, backups: [] })
   })
 
@@ -543,7 +572,7 @@ describe('Cloud behavior coverage', () => {
     vi.spyOn(Cloud, 'restoreAuthoritativeIdentity').mockResolvedValueOnce({ ok: false, code: 'not_authenticated' })
     expect(await Cloud.bootstrap()).toMatchObject({ skipped: true, reason: 'not_authenticated' })
     mocks.realtime.status.mockReturnValueOnce('off')
-    expect(Cloud.syncModeLabel()).toBe('entity + snapshot')
+    expect(Cloud.syncModeLabel()).toBe('authoritative delta')
   })
 
   it('covers remaining optional auth and payload defaults', async () => {

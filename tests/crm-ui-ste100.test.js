@@ -13,7 +13,7 @@ function lazyHarness() {
         dispatch(type) { listeners.get(type)?.() }
       }
     },
-    head: { appendChild(script) { appended.push(script.src); Promise.resolve().then(() => script.dispatch('load')) } }
+    head: { appendChild(script) { appended.push({ src: script.src, type: script.type || 'classic' }); Promise.resolve().then(() => script.dispatch('load')) } }
   }
   const context = { window: {}, document, Promise, Set, Map, Error }
   vm.runInNewContext(readFileSync('studio-m/js/lazy-modules.js', 'utf8'), context)
@@ -41,8 +41,15 @@ describe('CRM route integration', () => {
     const { lazy, appended } = lazyHarness()
     expect(lazy.isLoaded('crm')).toBe(false)
     await lazy.ensure('crm')
-    expect(appended).toEqual(['js/modules-crm.js'])
+    expect(appended).toEqual([{ src: 'js/modules-crm.js', type: 'classic' }])
     expect(lazy.isLoaded('crm')).toBe(true)
+  })
+
+  it('loads the finance export as an ES module before accounting consumers', async () => {
+    const { lazy, appended } = lazyHarness()
+    await lazy.ensure('accounting')
+    expect(appended[0]).toEqual({ src: '../js/finance-sync.js', type: 'module' })
+    expect(appended.at(-1)).toEqual({ src: 'js/accounting.js', type: 'classic' })
   })
 
   it('renders escaped lead data and a contract conversion action', () => {

@@ -210,15 +210,15 @@ describe('authoritative sync runtime behavior', () => {
   })
 
   it('pulls a server delta, applies it, and persists the authoritative sequence cursor', async () => {
-    const rpc = vi.fn(async (_name, params) => params.p_entity_type === 'contracts'
+    const rpc = vi.fn(async (_name, params) => params.p_entity_type === 'bookings'
       ? { data: [{ local_id: 'remote', payload: { id: 'remote', amount: 9 }, revision: 1, updated_seq: 4, updated_at: '2026-01-01T00:00:00Z' }], error: null }
       : { data: [], error: null })
     cloud.client.mockResolvedValue({ rpc })
     const result = await SyncEngine.pullAll(cloud, { force: true })
     expect(result.ok).toBe(true)
     expect(result.applied).toBe(1)
-    expect(data.contracts[0]).toMatchObject({ id: 'remote', amount: 9, _serverRevision: 1 })
-    expect(data.studioInfo.syncSequenceCursors.contracts.seq).toBe(4)
+    expect(data.bookings[0]).toMatchObject({ id: 'remote', amount: 9, _serverRevision: 1 })
+    expect(data.studioInfo.syncSequenceCursors.bookings.seq).toBe(4)
   })
 
   it('returns pull RPC errors without persisting a cursor', async () => {

@@ -55,13 +55,21 @@ describe('mergeCollection', () => {
 })
 
 describe('entities registry', () => {
-  it('includes contracts', () => {
-    expect(isSyncEntity('contracts')).toBe(true)
+  it.each([
+    'contracts',
+    'transactions',
+    'invoices',
+    'expenses',
+    'banks',
+    'cheques',
+    'salaryPayments',
+    'persProjects',
+    'persContracts'
+  ])('excludes server-authoritative collection %s', collection => {
+    expect(isSyncEntity(collection)).toBe(false)
   })
 
   it.each([
-    'persProjects',
-    'persContracts',
     'calendarReminders',
     'galleries',
     'customerCustody'

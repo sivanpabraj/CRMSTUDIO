@@ -65,7 +65,7 @@ describe('sync entity registry branch contracts', () => {
     expect(activeRows([null, { id: 'deleted', _deleted: true }, { id: 'active' }])).toEqual([{ id: 'active' }])
     expect(isSyncEntity('users')).toBe(false)
     expect(isSyncEntity('unknown')).toBe(false)
-    expect(isTombstoneEntity('contracts')).toBe(true)
+    expect(isTombstoneEntity('contracts')).toBe(false)
   })
 
   it('strips each sensitive and server-only payload class without mutating input', () => {

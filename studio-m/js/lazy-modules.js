@@ -33,6 +33,7 @@
 
   const loaded = new Set()
   const pending = new Map()
+  const MODULE_FILES = new Set(['../js/finance-sync.js'])
 
   function loadScript(src) {
     if (loaded.has(src)) return Promise.resolve()
@@ -40,6 +41,7 @@
     const promise = new Promise((resolve, reject) => {
       const script = document.createElement('script')
       script.src = src
+      if (MODULE_FILES.has(src)) script.type = 'module'
       script.async = false
       script.dataset.smLazy = src
       script.addEventListener('load', () => {

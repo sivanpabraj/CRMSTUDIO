@@ -16,7 +16,7 @@
 
 ## Sync model (Phase 2–3 + live multi-device)
 
-1. **Entity sync** (primary, ~0.7s debounce) — 18 entity types → `studio_entities`
+1. **Entity sync** (primary, ~0.7s debounce) — فقط aggregateهای غیرحساس → `studio_entities`؛ contract/finance/payroll/bank در migration 044 از generic sync حذف شده‌اند.
 2. **Realtime** — `postgres_changes` on `studio_entities` (+ `studio_sync_events`) → pull (~0.4s)
 3. **UI live refresh** — Pro re-renders current module on `sm-sync-pull` (skips open modals)
 4. **Snapshot** (fallback, 60s) — sanitized JSON → `studio_snapshots`
@@ -35,7 +35,7 @@
 
 ## Migration
 
-Migrationها به‌ترتیب `001` تا `026` اجرا می‌شوند و فایل قدیمی هرگز ویرایش نمی‌شود. از 010 به بعد هسته مالی، مجوزها، دعوت امن، پیامک، احراز هویت، سخت‌سازی RLS، ارتباط مشتری و تاریخچه پشتیبان ابری تکمیل شده‌اند.
+Migrationها به‌ترتیب `001` تا `044` اجرا می‌شوند و فایل قدیمی هرگز ویرایش نمی‌شود. Migration 044 آخرین مرز امنیتی نسخه 1.0.1 است: backup plaintext را بازنشسته، tenant قرارداد را immutable و generic sync را از aggregateهای server-authoritative جدا می‌کند.
 
 ## انتشار
 

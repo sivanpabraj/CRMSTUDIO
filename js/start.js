@@ -53,7 +53,7 @@ const StartPortal = {
               </div>
               ${PasswordSecurity.meterHtml('start')}
               <div class="auth-error" id="st-error"></div>
-              <button type="button" class="auth-btn auth-btn-primary" onclick="StartPortal.submit()"><i class="fas fa-rocket"></i> ساخت استودیو</button>
+              <button type="button" class="auth-btn auth-btn-primary" data-csp-action="StartPortal.submit"><i class="fas fa-rocket"></i> ساخت استودیو</button>
               <p class="pw-hint"><a href="site.html">← بازگشت به صفحه اصلی</a></p>
             </div>
           </div>
@@ -71,7 +71,7 @@ const StartPortal = {
             <div style="font-size:3rem;margin:16px 0">✅</div>
             <h1 class="auth-title">${Utils.escapeHtml(studioName)}</h1>
             <p class="auth-sub">استودیو آماده است — مستقیم وارد پنل شوید</p>
-            <button type="button" class="auth-btn auth-btn-primary" onclick="StartPortal.enterAdmin()"><i class="fas fa-cog"></i> ورود به پنل مدیر</button>
+            <button type="button" class="auth-btn auth-btn-primary" data-csp-action="StartPortal.enterAdmin"><i class="fas fa-cog"></i> ورود به پنل مدیر</button>
             <p class="pw-hint" style="margin-top:16px">پرسنل را بعداً از پنل اضافه کنید: نام + موبایل → یک کد ورود بگیرید.</p>
           </div>
         </div>

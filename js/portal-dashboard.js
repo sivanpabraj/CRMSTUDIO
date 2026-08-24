@@ -44,7 +44,7 @@ const PortalDashboard = {
         ${tabs.map(t => {
           const count = t.id === 'all' ? allProjects.filter(p => p.accepted !== false).length
             : PortalShared.filterProjectsByTab(allProjects, t.id, personnel).filter(p => p.accepted !== false).length
-          return `<button class="portal-tab ${this.state.tab === t.id ? 'active' : ''}" onclick="PortalDashboard.setTab('${t.id}')">
+          return `<button class="portal-tab ${this.state.tab === t.id ? 'active' : ''}" data-csp-action="PortalDashboard.setTab" data-csp-arg="${Utils.escapeHtml(t.id)}">
             ${t.icon} ${t.label} <span class="tab-count">${count}</span>
           </button>`
         }).join('')}
@@ -159,8 +159,8 @@ const PortalDashboard = {
             <input class="profile-input ltr" id="emp-contract-code-${c.id}" placeholder="کد ۶ رقمی SMS" inputmode="numeric" maxlength="6"/>
           </div>
           <div class="actions">
-            <button class="accept" onclick="Portal.verifyEmploymentContract('${c.id}')">✓ تأیید با کد SMS</button>
-            <button class="reject" onclick="Portal.rejectEmploymentContract('${c.id}')">✕ رد</button>
+            <button class="accept" data-csp-action="Portal.verifyEmploymentContract" data-csp-arg="${Utils.escapeHtml(c.id)}">✓ تأیید با کد SMS</button>
+            <button class="reject" data-csp-action="Portal.rejectEmploymentContract" data-csp-arg="${Utils.escapeHtml(c.id)}">✕ رد</button>
           </div>
         </div>`).join('')
       html += '</div>'
@@ -207,14 +207,14 @@ const PortalDashboard = {
         ${open ? `
           <div class="portal-att-status in">
             <span>ورود: <strong dir="ltr">${Utils.escapeHtml(open.checkIn || '—')}</strong></span>
-            <button type="button" class="accept" onclick="Portal.attendanceCheckOut()">ثبت خروج</button>
+            <button type="button" class="accept" data-csp-action="Portal.attendanceCheckOut">ثبت خروج</button>
           </div>` : done ? `
           <div class="portal-att-status done">
             <span>امروز: ورود <strong dir="ltr">${Utils.escapeHtml(done.checkIn || '—')}</strong> — خروج <strong dir="ltr">${Utils.escapeHtml(done.checkOut || '—')}</strong></span>
           </div>` : `
           <div class="portal-att-status">
             <span>امروز هنوز ورود ثبت نشده</span>
-            <button type="button" class="accept" onclick="Portal.attendanceCheckIn()">ثبت ورود</button>
+            <button type="button" class="accept" data-csp-action="Portal.attendanceCheckIn">ثبت ورود</button>
           </div>`}
       </div>
       <div class="portal-stats" style="margin:12px 0">
@@ -251,8 +251,8 @@ const PortalDashboard = {
         </div>
       </div>
       <div class="actions">
-        <button class="accept" onclick="event.stopPropagation();Portal.acceptInvitation('${p.id}')">✓ قبول آفیش</button>
-        <button class="reject" onclick="event.stopPropagation();Portal.rejectInvitation('${p.id}')">✕ رد</button>
+        <button class="accept" data-csp-action="Portal.acceptInvitation" data-csp-arg="${Utils.escapeHtml(p.id)}" data-csp-stop>✓ قبول آفیش</button>
+        <button class="reject" data-csp-action="Portal.rejectInvitation" data-csp-arg="${Utils.escapeHtml(p.id)}" data-csp-stop>✕ رد</button>
       </div>
     </div>`
   },
@@ -265,7 +265,7 @@ const PortalDashboard = {
     const steps = ['active', 'editing', 'rendering', 'finished', 'delivered']
     const stepIdx = steps.indexOf(p.status)
 
-    return `<div class="project-card ${isProblem ? 'problem' : ''}" onclick="PortalDashboard.openProject('${p.id}')">
+    return `<div class="project-card ${isProblem ? 'problem' : ''}" role="button" tabindex="0" data-csp-action="PortalDashboard.openProject" data-csp-arg="${Utils.escapeHtml(p.id)}">
       <div class="project-card-top">
         <div>
           <div class="project-card-title">${Utils.escapeHtml(p.couple)}</div>
@@ -337,7 +337,7 @@ const PortalDashboard = {
     overlay.className = 'portal-modal-overlay open'
     overlay.id = 'portal-project-modal'
     overlay.innerHTML = `
-      <div class="portal-modal" onclick="event.stopPropagation()">
+      <div class="portal-modal">
         <h3>${Utils.escapeHtml(p.couple)}</h3>
         <div class="portal-modal-sub">${RolesHelper.emoji(p.roleId)} ${Utils.escapeHtml(p.role)} — ${p.eventDate || ''}</div>
         ${issues.length ? `<div class="issue-box">${issues.map(i => `⚠️ ${Utils.escapeHtml(i.description)}`).join('<br>')}</div>` : ''}
@@ -346,12 +346,14 @@ const PortalDashboard = {
         <div class="status-grid" id="status-grid">
           ${statuses.map(s => `
             <button class="status-option ${p.status === s.v ? 'selected' : ''} ${s.v === 'finished' || s.v === 'delivered' ? 'done-opt' : ''}"
-              data-status="${s.v}" onclick="PortalDashboard.selectStatus('${s.v}')">${s.l}</button>`).join('')}
+              data-status="${s.v}" data-csp-action="PortalDashboard.selectStatus" data-csp-arg="${s.v}">${s.l}</button>`).join('')}
         </div>
-        <button class="portal-btn portal-btn-success" onclick="PortalDashboard.saveStatus('${projectId}')">💾 ذخیره وضعیت</button>
-        <button class="portal-btn portal-btn-ghost" onclick="PortalDashboard.closeModal()">بستن</button>
+        <button class="portal-btn portal-btn-success" data-csp-action="PortalDashboard.saveStatus" data-csp-arg="${Utils.escapeHtml(projectId)}">💾 ذخیره وضعیت</button>
+        <button class="portal-btn portal-btn-ghost" data-csp-action="PortalDashboard.closeModal">بستن</button>
       </div>`
-    overlay.onclick = () => this.closeModal()
+    overlay.onclick = event => {
+      if (event.target === overlay) this.closeModal()
+    }
     document.body.appendChild(overlay)
     this._selectedStatus = p.status
   },

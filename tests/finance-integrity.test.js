@@ -19,9 +19,9 @@ describe('tombstone sync', () => {
     expect(row._deleted).toBe(true)
   })
 
-  it('marks finance collections as tombstone entities', () => {
-    expect(isTombstoneEntity('transactions')).toBe(true)
-    expect(isTombstoneEntity('salaryPayments')).toBe(true)
+  it('keeps server-authoritative finance collections outside generic tombstone sync', () => {
+    expect(isTombstoneEntity('transactions')).toBe(false)
+    expect(isTombstoneEntity('salaryPayments')).toBe(false)
     expect(isTombstoneEntity('users')).toBe(false)
   })
 

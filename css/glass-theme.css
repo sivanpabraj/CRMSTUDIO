@@ -321,6 +321,10 @@ body.glass-app {
   .glass-preset-grid { grid-template-columns: repeat(4, 1fr); }
 }
 .glass-preset-tile {
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
   aspect-ratio: 16/10;
   border-radius: 14px;
   border: 2px solid transparent;
@@ -328,6 +332,10 @@ body.glass-app {
   position: relative;
   overflow: hidden;
   transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+.glass-preset-tile:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
 }
 .glass-preset-tile:hover { transform: scale(1.03); }
 .glass-preset-tile.selected {

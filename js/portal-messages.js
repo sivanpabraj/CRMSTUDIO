@@ -64,8 +64,8 @@ const PortalMessages = {
             </div>`).join('')}
         </div>
         ${canAct ? `<div class="actions" style="margin-top:10px">
-          ${!req.readByStaff ? `<button class="accept" onclick="PortalMessages.markRead('${req.id}')">✓ مشاهده شد</button>` : ''}
-          <button class="reject" onclick="PortalMessages.reply('${req.id}')">پاسخ پرسنل</button>
+          ${!req.readByStaff ? `<button class="accept" data-csp-action="PortalMessages.markRead" data-csp-arg="${Utils.escapeHtml(req.id)}">✓ مشاهده شد</button>` : ''}
+          <button class="reject" data-csp-action="PortalMessages.reply" data-csp-arg="${Utils.escapeHtml(req.id)}">پاسخ پرسنل</button>
         </div>` : ''}
       </div>`
   },

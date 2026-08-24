@@ -5,26 +5,17 @@
 /** @typedef {{ table?: string, rpc?: boolean, excludeFields?: string[] }} EntityConfig */
 
 export const SYNC_ENTITIES = [
-  'contracts',
-  'transactions',
-  'invoices',
   'bookings',
   'personnel',
   'equipment',
   'workflows',
   'packages',
-  'expenses',
   'leads',
-  'banks',
-  'cheques',
   'appointments',
   'customerRequests',
   'fileAssets',
-  'salaryPayments',
   'attendance',
   'notifications',
-  'persProjects',
-  'persContracts',
   'calendarReminders',
   'galleries',
   'customerCustody'
@@ -35,6 +26,17 @@ export const TOMBSTONE_ENTITIES = new Set(SYNC_ENTITIES)
 
 /** Collections never row-synced (snapshot / server-only) */
 export const SYNC_EXCLUDED = new Set([
+  // These domains are server-authoritative and may only change through typed
+  // commands/RPCs. A browser-originated generic JSON payload is never trusted.
+  'contracts',
+  'transactions',
+  'invoices',
+  'expenses',
+  'banks',
+  'cheques',
+  'salaryPayments',
+  'persProjects',
+  'persContracts',
   'users',
   'securityState',
   'logs',

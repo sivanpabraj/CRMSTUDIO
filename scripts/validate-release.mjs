@@ -20,7 +20,7 @@ for (const [source, version] of versions) {
 }
 if (pkg.version !== '1.0.1') throw new Error(`release version must be 1.0.1, got ${pkg.version}`)
 const migrations = readdirSync('supabase/migrations').filter(name => /^\d{3}_.+\.sql$/.test(name)).sort()
-const expectedLastMigration = '043_contract_child_table_specific_triggers.sql'
+const expectedLastMigration = '044_server_authority_and_backup_retirement.sql'
 if (migrations.at(-1) !== expectedLastMigration) {
   throw new Error(`v1.0.1 migration manifest must end at ${expectedLastMigration}, got ${migrations.at(-1)}`)
 }

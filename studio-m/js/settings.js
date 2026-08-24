@@ -434,7 +434,7 @@ const SMSettings = {
         </div>
         <div class="sm-card-body">
           <p style="font-size:.82rem;color:var(--sm-text-muted);line-height:1.7;margin:0 0 14px">
-            همگام‌سازی زنده بین سیستم و موبایل: entity (~۰.۷s) + realtime (~۰.۴s) + snapshot پشتیبان (۶۰s).
+            همگام‌سازی زنده بین سیستم و موبایل: delta ترتیبی سمت سرور + realtime. بازیابی پشتیبان فقط از آرشیو رمزنگاری‌شده انجام می‌شود.
             حالت: <strong>${SM.esc(typeof Cloud !== 'undefined' ? Cloud.syncModeLabel() : '—')}</strong>
             · Realtime: ${SMUI.badge(rt === 'live' ? 'زنده — چنددستگاه' : 'قطع', rt === 'live' ? 'success' : 'muted')}
           </p>
@@ -478,7 +478,7 @@ const SMSettings = {
       <div class="sm-card">
         <div class="sm-card-head"><div class="sm-card-title"><i class="fas fa-arrows-rotate"></i> Sync دستی</div></div>
         <div class="sm-card-body">
-          <p style="font-size:.78rem;color:var(--sm-text-muted);margin:0 0 10px">آخرین entity sync: ${SM.esc(lastEntity)} · snapshot: ${SM.esc(last)}</p>
+          <p style="font-size:.78rem;color:var(--sm-text-muted);margin:0 0 10px">آخرین delta sync: ${SM.esc(lastEntity)} · آخرین آرشیو: ${SM.esc(last)}</p>
           <p style="font-size:.72rem;color:var(--sm-text-muted);margin:0 0 12px">Studio ID: <code dir="ltr">${SM.esc(info.supabaseStudioId || '—')}</code></p>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMSettings.cloudPush')}><i class="fas fa-cloud-upload-alt"></i> ارسال کامل</button>
@@ -639,8 +639,8 @@ const SMSettings = {
   async cloudPush() {
     if (typeof Cloud === 'undefined') return
     const r = await Cloud.pushAll()
-    const ok = r.ok || r.entities?.ok
-    SM.toast(ok ? 'ارسال entity + snapshot انجام شد' : (r.entities?.error || r.snapshot?.error || 'خطا'), ok ? 'success' : 'error')
+    const ok = r.ok
+    SM.toast(ok ? 'ارسال delta ترتیبی انجام شد' : (r.error || 'خطا'), ok ? 'success' : 'error')
     SMSettings.setTab('cloud')
   },
 

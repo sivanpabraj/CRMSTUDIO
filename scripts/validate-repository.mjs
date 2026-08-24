@@ -5,6 +5,30 @@ const fail = (message) => {
   process.exitCode = 1
 }
 
+const walkFiles = (directory, predicate, files = []) => {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = `${directory}/${entry.name}`
+    if (entry.isDirectory()) walkFiles(path, predicate, files)
+    else if (predicate(path)) files.push(path)
+  }
+  return files
+}
+
+const cspTemplateFiles = [
+  ...readdirSync('.').filter(name => name.endsWith('.html')),
+  ...walkFiles('js', path => path.endsWith('.js')),
+  ...walkFiles('studio-m', path => path.endsWith('.html') || path.endsWith('.js')),
+  'contract.js'
+]
+const inlineEventPattern = /<[^>]*?\s(on(?:click|change|input|submit|keydown|keyup|keypress|focus|blur|load|error|mouseover|mouseout|pointerdown|pointerup|touchstart|touchend))\s*=/gis
+for (const file of cspTemplateFiles) {
+  const source = readFileSync(file, 'utf8')
+  for (const match of source.matchAll(inlineEventPattern)) {
+    const line = source.slice(0, match.index).split('\n').length
+    fail(`${file}:${line} contains forbidden inline event attribute ${match[1]}`)
+  }
+}
+
 for (const required of ['package-lock.json', '.env.example', 'Dockerfile', 'docker/nginx.conf']) {
   if (!existsSync(required)) fail(`missing required file: ${required}`)
 }
@@ -62,6 +86,9 @@ for (const requiredSecret of ['SUPABASE_DB_URL', 'DEPLOYMENT_HEALTH_URL', 'DEPLO
 }
 if (existsSync('admin.html') || existsSync('admin.js') || existsSync('admin.css')) {
   fail('classic admin source must not be shipped')
+}
+if (existsSync('js/customer-login.js')) {
+  fail('legacy browser-authoritative customer OTP source must not be shipped')
 }
 
 if (process.exitCode) process.exit(process.exitCode)

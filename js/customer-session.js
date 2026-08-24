@@ -5,6 +5,10 @@
 const CustomerSession = {
   KEY: 'customer_session',
 
+  _requiresServerAuthority() {
+    return !(typeof AppConfig !== 'undefined' && AppConfig.allowsLocalIdentity?.())
+  },
+
   _sessionPayload(session) {
     return `${session.contractId}|${session.cloudContractId || ''}|${session.studioId || ''}|${session.phone}|${session.token}|${session.expiresAt}`
   },
@@ -80,6 +84,28 @@ const CustomerSession = {
         return null
       }
     }
+
+    if (this._requiresServerAuthority()) {
+      if (!raw.cloudContractId || !raw.studioId ||
+          typeof Cloud === 'undefined' || !Cloud.isConfigured?.()) {
+        this.clear()
+        return null
+      }
+      try {
+        const claimed = await Cloud.claimCustomerContracts()
+        const authorized = claimed?.ok && Array.isArray(claimed.contracts) &&
+          claimed.contracts.some(row =>
+            String(row.contract_id || row.id) === String(raw.cloudContractId) &&
+            String(row.studio_id) === String(raw.studioId))
+        if (!authorized) {
+          this.clear()
+          return null
+        }
+      } catch {
+        this.clear()
+        return null
+      }
+    }
     const result = this.validate(raw)
     if (!result.ok) {
       this.clear()
@@ -89,6 +115,9 @@ const CustomerSession = {
   },
 
   async save(session) {
+    if (this._requiresServerAuthority() && (!session?.cloudContractId || !session?.studioId)) {
+      throw new Error('server_customer_context_required')
+    }
     let payload = session
     if (typeof SignedProof !== 'undefined' && SignedProof.signObject) {
       payload = await SignedProof.signObject(session, s => this._sessionPayload(s))

@@ -42,7 +42,7 @@ const JoinPortal = {
               </div>
               ${PasswordSecurity.meterHtml('join')}
               <div class="auth-error" id="join-error"></div>
-              <button type="button" class="auth-btn auth-btn-primary" onclick="JoinPortal.submit()"><i class="fas fa-paper-plane"></i> ارسال درخواست عضویت</button>
+              <button type="button" class="auth-btn auth-btn-primary" data-csp-action="JoinPortal.submit"><i class="fas fa-paper-plane"></i> ارسال درخواست عضویت</button>
               <p class="pw-hint">پس از تأیید مدیر می‌توانید از <a href="index.html">صفحه ورود</a> وارد شوید.</p>
               <p class="pw-hint"><a href="site.html">← بازگشت به صفحه اصلی</a></p>
             </div>

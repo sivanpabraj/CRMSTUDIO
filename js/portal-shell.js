@@ -46,7 +46,7 @@ Object.assign(Portal, {
     document.getElementById('portal-app').innerHTML = `
       <div class="portal-shell">
         <header class="portal-header">
-          <button type="button" class="profile-header-tap user-info" onclick="Portal.showSection('profile')" aria-label="پروفایل">
+          <button type="button" class="profile-header-tap user-info" data-csp-action="Portal.showSection" data-csp-arg="profile" aria-label="پروفایل">
             <div class="avatar">${Utils.escapeHtml((displayName || '?').charAt(0))}</div>
             <div>
               <div class="name">${Utils.escapeHtml(displayName || '')}</div>
@@ -54,23 +54,23 @@ Object.assign(Portal, {
             </div>
           </button>
           <div class="portal-header-actions">
-            <button type="button" class="portal-header-btn" onclick="GlassTheme.openPicker()" title="ظاهر" aria-label="ظاهر">
+            <button type="button" class="portal-header-btn" data-csp-action="GlassTheme.openPicker" title="ظاهر" aria-label="ظاهر">
               <i class="fas fa-wand-magic-sparkles"></i>
             </button>
-            <button type="button" class="logout-btn" onclick="Portal.logout()">خروج</button>
+            <button type="button" class="logout-btn" data-csp-action="Portal.logout">خروج</button>
           </div>
         </header>
         <main class="portal-content" id="portal-content" aria-live="polite"></main>
         <nav class="portal-bottom-nav" aria-label="منوی پرسنل">
-          <button type="button" class="portal-nav-item${this.state.currentSection === 'overview' ? ' active' : ''}" onclick="Portal.showSection('overview')">
+          <button type="button" class="portal-nav-item${this.state.currentSection === 'overview' ? ' active' : ''}" data-csp-action="Portal.showSection" data-csp-arg="overview">
             <i class="fas fa-th-large"></i><span>پروژه‌ها</span>
             ${pendingInvites ? `<span class="portal-nav-badge">${pendingInvites}</span>` : ''}
           </button>
-          <button type="button" class="portal-nav-item${this.state.currentSection === 'messages' ? ' active' : ''}" onclick="Portal.showSection('messages')">
+          <button type="button" class="portal-nav-item${this.state.currentSection === 'messages' ? ' active' : ''}" data-csp-action="Portal.showSection" data-csp-arg="messages">
             <i class="fas fa-comments"></i><span>پیام‌ها</span>
             ${unreadMsgs ? `<span class="portal-nav-badge">${unreadMsgs}</span>` : ''}
           </button>
-          <button type="button" class="portal-nav-item${this.state.currentSection === 'profile' ? ' active' : ''}" onclick="Portal.showSection('profile')">
+          <button type="button" class="portal-nav-item${this.state.currentSection === 'profile' ? ' active' : ''}" data-csp-action="Portal.showSection" data-csp-arg="profile">
             <i class="fas fa-user"></i><span>پروفایل</span>
           </button>
         </nav>

@@ -14,7 +14,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'npm run preview -- --host 127.0.0.1 --port 5173',
+    command: './node_modules/.bin/vite preview --host 127.0.0.1 --port 5173',
     url: 'http://127.0.0.1:5173/site.html',
     reuseExistingServer: true,
     timeout: 60_000

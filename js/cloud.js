@@ -1,6 +1,7 @@
 /**
  * Studio M — Supabase Cloud (Auth + Hybrid Sync)
- * Phase 2: entity row-sync (primary) + full snapshot (fallback, 60s)
+ * Authoritative row/command sync. Legacy full snapshots are deliberately not
+ * part of automatic sync because client timestamps can resurrect stale data.
  */
 import { createClient } from '@supabase/supabase-js'
 import { SyncEngine } from './sync/engine.js'
@@ -588,7 +589,6 @@ const Cloud = {
   schedulePush() {
     if (!this.isEnabled()) return
     SyncEngine.scheduleEntityPush(this)
-    SyncEngine.scheduleSnapshotPush(this)
   },
 
   /** Immediate push of pending entity changes (before tab sleep / switch device). */
@@ -705,16 +705,12 @@ const Cloud = {
   async listBackupArchives(limit = 20) {
     if (!this.isEnabled()) return { ok: false, skipped: true, backups: [] }
     const studioId = this.studioCloudConfig().studioId || await this._loadMemberStudioId()
-    const c = await this.client()
-    if (!studioId || !c || !await this.session()) return { ok: false, error: 'ورود ابری لازم است', backups: [] }
+    if (!studioId || !await this.session()) return { ok: false, error: 'ورود ابری لازم است', backups: [] }
     const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20))
-    const { data, error } = await c
-      .from('studio_backup_archives')
-      .select('id, source, checksum, size_bytes, db_version, app_version, manifest, created_at, created_by')
-      .eq('studio_id', studioId)
-      .order('created_at', { ascending: false })
-      .limit(safeLimit)
-    return error ? { ok: false, error: error.message, backups: [] } : { ok: true, backups: data || [] }
+    const result = await this._callBackupEdge({ action: 'list', studioId, limit: safeLimit })
+    return result.ok
+      ? { ok: true, backups: Array.isArray(result.backups) ? result.backups : [] }
+      : { ok: false, error: result.error || 'backup_list_failed', backups: [] }
   },
 
   async pullSnapshot({ force = false } = {}) {
@@ -762,35 +758,12 @@ const Cloud = {
   },
 
   async syncContractsFromLocal() {
-    if (!this.isEnabled()) return { ok: false, skipped: true }
-    const sess = await this.session()
-    if (!sess) return { ok: false, error: 'not signed in' }
-
-    let studioId = this.studioCloudConfig().studioId
-    if (!studioId) studioId = await this._loadMemberStudioId()
-    if (!studioId) return { ok: false, error: 'no studio' }
-
-    const c = await this.client()
-    const rows = (DB.get('contracts') || []).map(ct => ({
-      studio_id: studioId,
-      local_id: ct.id,
-      contract_num: ct.contractNum || ct.contract_num || '',
-      groom: ct.groom || '',
-      bride: ct.bride || '',
-      groom_phone: ct.groomPhone || ct.phoneGroom || '',
-      bride_phone: ct.bridePhone || ct.phoneBride || '',
-      event_date: ct.eventDate || ct.date || '',
-      status: ct.status || 'active',
-      total: Number(ct.total) || 0,
-      payload: ct,
-      updated_at: new Date().toISOString()
-    }))
-
-    if (!rows.length) return { ok: true, count: 0 }
-
-    const { error } = await c.from('contracts').upsert(rows, { onConflict: 'studio_id,local_id' })
-    if (error) return { ok: false, error: error.message }
-    return { ok: true, count: rows.length }
+    return {
+      ok: false,
+      skipped: true,
+      code: 'server_authority_required',
+      error: 'همگام‌سازی مستقیم قرارداد از مرورگر بازنشسته شده است'
+    }
   },
 
   async pushEntities() {
@@ -804,22 +777,17 @@ const Cloud = {
 
   async pushAll() {
     SyncEngine._entityPending = true
-    const entities = await SyncEngine.pushAll(this)
-    this._pushPending = true
-    const snapshot = await this.pushSnapshot()
-    return { ok: entities.ok && snapshot.ok, entities, snapshot }
+    return SyncEngine.pushAll(this)
   },
 
   async pullAll({ force = false } = {}) {
-    const entities = await SyncEngine.pullAll(this, { force })
-    if (entities.ok && entities.applied > 0) return entities
-    return this.pullSnapshot({ force })
+    return SyncEngine.pullAll(this, { force })
   },
 
   syncModeLabel() {
     if (!this.isEnabled()) return 'خاموش'
     const live = RealtimeSync.status?.() === 'live' ? ' · realtime' : ''
-    return `entity + snapshot${live}`
+    return `authoritative delta${live}`
   },
 
   async updateAuthPassword(newPassword) {
@@ -855,11 +823,8 @@ const Cloud = {
       Utils.toast?.(`${entityPull.conflictCount} تعارض sync — تنظیمات → ابر`, 'warning')
     }
 
-    const pull = await this.pullSnapshot()
-    if (pull.ok && !pull.skipped) {
-      Utils.toast?.('داده از ابر بازیابی شد', 'success')
-    } else if (!pull.ok && !pull.skipped && !entityPull.skipped) {
-      this._notifyCloudError(pull.error || entityPull.error || 'دریافت از ابر ناموفق')
+    if (!entityPull.ok && !entityPull.skipped) {
+      this._notifyCloudError(entityPull.error || 'دریافت از ابر ناموفق')
     }
     if (this.isEnabled()) await RealtimeSync.start(this)
     try {
@@ -867,7 +832,7 @@ const Cloud = {
         await FinanceOutbox.flush()
       }
     } catch { /* */ }
-    return pull.ok ? pull : entityPull
+    return entityPull
   }
 }
 

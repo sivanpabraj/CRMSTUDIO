@@ -55,7 +55,7 @@ export function createCloudBackupHandler(deps: BackupDeps) {
   const serviceKey = deps.env('SUPABASE_SERVICE_ROLE_KEY')
   const keyVersion = 1
   const encryptionKey = deps.env(`BACKUP_ENCRYPTION_KEY_V${keyVersion}`)
-  if (!url || !anonKey || !serviceKey || !encryptionKey) {
+  if (!url || !anonKey || !serviceKey) {
     return response({ ok: false, error: 'server_not_configured' }, 503, origin)
   }
 
@@ -77,6 +77,7 @@ export function createCloudBackupHandler(deps: BackupDeps) {
     })
 
     if (action === 'create') {
+      if (!encryptionKey) return response({ ok: false, error: 'server_not_configured' }, 503, origin)
       if (!body.payload || typeof body.payload !== 'object' || Array.isArray(body.payload)) {
         return response({ ok: false, error: 'invalid_backup_payload' }, 400, origin)
       }
@@ -110,6 +111,20 @@ export function createCloudBackupHandler(deps: BackupDeps) {
       })
       if (error) return response({ ok: false, error: 'backup_store_failed' }, /permission|42501/i.test(error.message) ? 403 : 500, origin)
       return response({ ok: true, backupId, manifest }, 201, origin)
+    }
+
+    if (action === 'list') {
+      const requestedLimit = Number(body?.limit ?? 20)
+      if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
+        return response({ ok: false, error: 'invalid_backup_limit' }, 400, origin)
+      }
+      const { data: backups, error } = await service.rpc('list_encrypted_studio_backups', {
+        p_studio_id: studioId,
+        p_actor_id: user.id,
+        p_limit: Math.min(requestedLimit, 100),
+      })
+      if (error) return response({ ok: false, error: 'backup_list_failed' }, /permission|42501/i.test(error.message) ? 403 : 500, origin)
+      return response({ ok: true, backups: Array.isArray(backups) ? backups : [] }, 200, origin)
     }
 
     if (action === 'restore') {

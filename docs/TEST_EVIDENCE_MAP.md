@@ -14,5 +14,6 @@
 | `tests/legacy-access-hardening.test.js` | manager/accountant/photographer/customer/expired membership روی جدول‌های واقعی | `supabase/tests/rls_role_resource_matrix.sql` |
 | `tests/personnel-assignment-concurrency.test.js` | دو session هم‌زمان PostgreSQL و الزام commit شدن دقیقاً یک assignment | `scripts/test-assignment-concurrency.sh` |
 | `customer-portal-security`، `erp-finance-reporting`، `erp-tenant-trigger-runtime`، `secure-invitations`، `security-blocker-closure` | verified phone و append-only portal؛ report view با RLS؛ trigger fail-closed؛ invitation create→request→approval؛ journal/storage/privilege؛ رد عضویت منقضی/لغوشده در `register_studio` | `supabase/tests/security_boundary_v2_pgtap.sql` با plan(54) و migrationهای اصلاحی 041 تا 043 |
+| `backup-plaintext-retirement`، `contract-tenant-immutability`، `generic-sync-authority` | الزام صفر archive plaintext، حذف RPC قدیمی، دسترسی backup فقط از RPC نقش service، جلوگیری از انتقال contract بین دو tenant، محدودیت finance fields و رد finance/contract در generic sync | `supabase/tests/server_authority_v3_pgtap.sql` با plan(30) و migration 044 |
 
-سه شاهد PostgreSQL فوق در job `database` از CI و job `verify-database` از release اجرا می‌شوند. تا وقتی اجرای واقعی آن jobها سبز نشده، این نگاشت فقط طراحی gate است و به معنی PASS نیست.
+چهار شاهد PostgreSQL فوق در job `database` از CI و job `verify-database` از release اجرا می‌شوند. تا وقتی اجرای واقعی آن jobها سبز نشده، این نگاشت فقط طراحی gate است و به معنی PASS نیست.

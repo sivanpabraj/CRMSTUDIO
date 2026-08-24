@@ -160,10 +160,10 @@ const Portal = {
     return `
       ${showHint}
       <div class="auth-method-tabs">
-        <button type="button" class="auth-method-tab${!isPw ? ' auth-method-tab--active' : ''}" onclick="Portal.setLoginMethod('sms')">
+        <button type="button" class="auth-method-tab${!isPw ? ' auth-method-tab--active' : ''}" data-csp-action="Portal.setLoginMethod" data-csp-arg="sms">
           <i class="fas fa-sms"></i> پیامک
         </button>
-        <button type="button" class="auth-method-tab${isPw ? ' auth-method-tab--active' : ''}" onclick="Portal.setLoginMethod('password')">
+        <button type="button" class="auth-method-tab${isPw ? ' auth-method-tab--active' : ''}" data-csp-action="Portal.setLoginMethod" data-csp-arg="password">
           <i class="fas fa-lock"></i> رمز عبور
         </button>
       </div>
@@ -184,14 +184,14 @@ const Portal = {
           </div>
         </div>` : ''}
         <div class="auth-error" id="login-error"></div>
-        <button type="button" class="auth-btn auth-btn-primary" id="login-btn" onclick="Portal.${isPw ? 'loginPassword' : 'sendOtp'}()">
+        <button type="button" class="auth-btn auth-btn-primary" id="login-btn" data-csp-action="Portal.${isPw ? 'loginPassword' : 'sendOtp'}">
           <i class="fas fa-${isPw ? 'sign-in-alt' : 'paper-plane'}"></i> ${isPw ? 'ورود' : 'ارسال کد'}
         </button>
         ${typeof Cloud !== 'undefined' && Cloud.isConfigured?.() ? `
         <div class="auth-social-divider"><span>یا ورود امن تیم با</span></div>
         <div class="auth-social-grid">
-          <button type="button" class="auth-btn auth-btn-social" onclick="Portal.oauthLogin('google')"><i class="fab fa-google"></i> Google</button>
-          <button type="button" class="auth-btn auth-btn-social" onclick="Portal.oauthLogin('apple')"><i class="fab fa-apple"></i> Apple</button>
+          <button type="button" class="auth-btn auth-btn-social" data-csp-action="Portal.oauthLogin" data-csp-arg="google"><i class="fab fa-google"></i> Google</button>
+          <button type="button" class="auth-btn auth-btn-social" data-csp-action="Portal.oauthLogin" data-csp-arg="apple"><i class="fab fa-apple"></i> Apple</button>
         </div>` : ''}
         <p class="auth-hint">سیستم بر اساس شماره شما را شناسایی و به پنل مربوط هدایت می‌کند.</p>
       </div>`
@@ -210,8 +210,8 @@ const Portal = {
           </div>
         </div>
         <div class="auth-error" id="login-error"></div>
-        <button type="button" class="auth-btn auth-btn-primary" id="login-btn" onclick="Portal.verifyPortalInvite()"><i class="fas fa-check"></i> تأیید دعوت و ورود</button>
-        <button type="button" class="auth-btn auth-btn-ghost" onclick="Portal.backToLogin()"><i class="fas fa-arrow-right"></i> بازگشت</button>
+        <button type="button" class="auth-btn auth-btn-primary" id="login-btn" data-csp-action="Portal.verifyPortalInvite"><i class="fas fa-check"></i> تأیید دعوت و ورود</button>
+        <button type="button" class="auth-btn auth-btn-ghost" data-csp-action="Portal.backToLogin"><i class="fas fa-arrow-right"></i> بازگشت</button>
       </div>`
   },
 
@@ -229,8 +229,8 @@ const Portal = {
           </div>
         </div>
         <div class="auth-error" id="login-error"></div>
-        <button type="button" class="auth-btn auth-btn-primary" id="login-btn" onclick="Portal.verifyOtp()"><i class="fas fa-check"></i> تأیید و ورود</button>
-        <button type="button" class="auth-btn auth-btn-ghost" onclick="Portal.backToLogin()"><i class="fas fa-arrow-right"></i> بازگشت</button>
+        <button type="button" class="auth-btn auth-btn-primary" id="login-btn" data-csp-action="Portal.verifyOtp"><i class="fas fa-check"></i> تأیید و ورود</button>
+        <button type="button" class="auth-btn auth-btn-ghost" data-csp-action="Portal.backToLogin"><i class="fas fa-arrow-right"></i> بازگشت</button>
       </div>`
   },
 
@@ -249,8 +249,8 @@ const Portal = {
           <div class="auth-input-wrap"><i class="fas fa-comment"></i><input type="text" id="cons-notes" placeholder="نوع مراسم..."/></div>
         </div>
         <div class="auth-error" id="login-error"></div>
-        <button type="button" class="auth-btn auth-btn-primary" onclick="Portal.saveConsultation()"><i class="fas fa-calendar-check"></i> ثبت درخواست</button>
-        <button type="button" class="auth-btn auth-btn-ghost" onclick="Portal.backToLogin()">انصراف</button>
+        <button type="button" class="auth-btn auth-btn-primary" data-csp-action="Portal.saveConsultation"><i class="fas fa-calendar-check"></i> ثبت درخواست</button>
+        <button type="button" class="auth-btn auth-btn-ghost" data-csp-action="Portal.backToLogin">انصراف</button>
       </div>`
   },
 
@@ -260,7 +260,7 @@ const Portal = {
         <div class="auth-success-icon"><i class="fas fa-check-circle"></i></div>
         <h2 class="auth-success-title">ثبت شد</h2>
         <p class="auth-success-text">درخواست مشاوره به مدیریت ارسال شد.</p>
-        <button type="button" class="auth-btn auth-btn-primary" onclick="Portal.backToLogin()">بازگشت</button>
+        <button type="button" class="auth-btn auth-btn-primary" data-csp-action="Portal.backToLogin">بازگشت</button>
       </div>`
   },
 
