@@ -91,6 +91,9 @@ const Bootstrap = {
 
   _waitCloud() {
     if (typeof Cloud !== 'undefined') return Promise.resolve()
+    const hasCloudScript = typeof document !== 'undefined' &&
+      !!document.querySelector('script[src*="cloud.js"]')
+    if (!hasCloudScript) return Promise.resolve()
     return new Promise(resolve => {
       const done = () => resolve()
       if (typeof Cloud !== 'undefined') return done()

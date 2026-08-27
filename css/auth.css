@@ -42,13 +42,14 @@ body.auth-screen .auth-otp-meta {
 .auth-page {
   min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: safe center;
   justify-content: center;
   padding: 24px 20px;
   box-sizing: border-box;
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .auth-ambient,
@@ -78,8 +79,13 @@ body.auth-screen .auth-otp-meta {
   align-items: center;
 }
 
+.auth-layout--single {
+  max-width: 480px;
+  margin-inline: auto;
+}
+
 @media (min-width: 768px) {
-  .auth-layout {
+  .auth-layout:has(.auth-brand) {
     grid-template-columns: 1fr 400px;
     gap: 40px;
   }

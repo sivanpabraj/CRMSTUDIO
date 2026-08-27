@@ -23,7 +23,7 @@ const StartPortal = {
     const app = document.getElementById('start-app')
     app.innerHTML = `
       <div class="auth-page">
-        <div class="auth-layout" style="max-width:480px;margin:0 auto">
+        <div class="auth-layout auth-layout--single" style="max-width:480px;margin:0 auto">
           <div class="auth-card glass-panel">
             <div class="auth-logo">
               <div class="auth-logo-ring"><i class="fas fa-crown"></i></div>
@@ -51,7 +51,7 @@ const StartPortal = {
               ${PasswordSecurity.meterHtml('start')}
               <div class="auth-error" id="st-error"></div>
               <button type="button" class="auth-btn auth-btn-primary" onclick="StartPortal.submit()"><i class="fas fa-rocket"></i> ساخت استودیو</button>
-              <p class="pw-hint"><a href="site.html">← بازگشت به صفحه اصلی</a></p>
+              <p class="pw-hint"><a href="index.html">قبلاً استودیو ساخته‌اید؟ ورود</a></p>
             </div>
           </div>
         </div>
@@ -63,7 +63,7 @@ const StartPortal = {
     const app = document.getElementById('start-app')
     app.innerHTML = `
       <div class="auth-page">
-        <div class="auth-layout" style="max-width:520px;margin:0 auto">
+        <div class="auth-layout auth-layout--single" style="max-width:520px;margin:0 auto">
           <div class="auth-card glass-panel" style="text-align:center">
             <div style="font-size:3rem;margin:16px 0">✅</div>
             <h1 class="auth-title">${Utils.escapeHtml(studioName)}</h1>
@@ -112,8 +112,7 @@ const StartPortal = {
       joinCode,
       slug: studioName.replace(/\s+/g, '-').slice(0, 24),
       address: '', social: '', logo: '',
-      setupCompleted: true,
-      smsProxyUrl: 'https://gfzfmecglamyxevvttji.supabase.co/functions/v1/send-sms'
+      setupCompleted: true
     })
 
     if (!DB.get('banks').length) {
