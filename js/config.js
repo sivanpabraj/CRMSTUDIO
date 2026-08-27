@@ -7,7 +7,7 @@ const AppConfig = {
   DEFAULT_STUDIO_NAME: 'Studio M',
   APP_VERSION: '6.0.0',
   BUILD_DATE: '2026-07-04',
-  SW_CACHE: 'studio-m-v23',
+  SW_CACHE: 'studio-m-v24',
 
   DB_KEY: 'studio_db_v5',
   DB_VERSION: 20,

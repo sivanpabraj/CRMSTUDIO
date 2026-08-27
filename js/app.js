@@ -209,8 +209,12 @@ const Portal = {
   _otpStep(phone) {
     const mask = phone ? `${phone.slice(0, 4)}•••${phone.slice(-4)}` : ''
     const pending = UnifiedLogin?.getPending?.()
+    const demoHint = (Utils.isDemoOtpMode?.() && pending?.code)
+      ? `<p class="auth-first-hint">کد تست (localhost): <strong dir="ltr">${Utils.escapeHtml(pending.code)}</strong></p>`
+      : ''
     return `
       <div class="auth-form">
+        ${demoHint}
         <p class="auth-otp-meta">کد به <strong dir="ltr">${Utils.escapeHtml(mask)}</strong>${pending?.label ? ` · ${Utils.escapeHtml(pending.label)}` : ''}</p>
         <div class="auth-field">
           <label class="auth-label" for="login-otp">کد ۶ رقمی</label>
@@ -323,10 +327,17 @@ const Portal = {
     }
 
     this._setBtn(true, '')
-    const result = await UnifiedLogin.loginWithPassword(phone, password)
+    let result
+    try {
+      result = await UnifiedLogin.loginWithPassword(phone, password)
+    } catch (e) {
+      this._setBtn(false, '<i class="fas fa-sign-in-alt"></i> ورود')
+      this._err(e?.message || 'خطا در ورود')
+      return
+    }
     this._setBtn(false, '<i class="fas fa-sign-in-alt"></i> ورود')
 
-    if (!result.ok) { this._err(result.error || 'خطا'); return }
+    if (!result?.ok) { this._err(result?.error || 'خطا'); return }
 
     const finish = () => {
       const safe = Utils.safeAppRedirect?.(result.url)
@@ -345,10 +356,20 @@ const Portal = {
     if (!Utils.isValidPhone(phone)) { this._err('شماره موبایل نامعتبر است'); return }
 
     this._setBtn(true, '')
-    const result = await UnifiedLogin.sendOtp(phone)
+    let result
+    try {
+      result = await UnifiedLogin.sendOtp(phone)
+    } catch (e) {
+      this._setBtn(false, '<i class="fas fa-paper-plane"></i> ارسال کد')
+      this._err(e?.message || 'خطا در ارسال کد')
+      return
+    }
     this._setBtn(false, '<i class="fas fa-paper-plane"></i> ارسال کد')
 
-    if (!result.ok) { this._err(result.error || 'خطا'); return }
+    if (!result?.ok) {
+      this._err(result?.error || 'خطا در ارسال کد')
+      return
+    }
     if (result.demoCode) Utils.toast(`کد تست: ${result.demoCode}`, 'info', 10000)
 
     this.state.step = 'otp'

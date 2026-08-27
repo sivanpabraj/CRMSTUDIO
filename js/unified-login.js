@@ -196,15 +196,16 @@ const UnifiedLogin = {
     let demoCode = ''
     if (typeof SmsProvider !== 'undefined' && SmsProvider.isConfigured()) {
       const res = await SmsProvider.sendStudio(phone, text)
-      if (!res?.ok) {
+      if (!res?.ok && !Utils.isDemoOtpMode?.()) {
         this.clearPending()
         return { ok: false, error: res?.error || 'خطا در ارسال پیامک' }
       }
+      if (!res?.ok) demoCode = code
     } else if (Utils.isDemoOtpMode?.()) {
       demoCode = code
     } else {
       this.clearPending()
-      return { ok: false, error: 'سرویس پیامک تنظیم نشده. با مدیر تماس بگیرید.' }
+      return { ok: false, error: 'سرویس پیامک تنظیم نشده. برای ورود از تب «رمز عبور» استفاده کنید.' }
     }
 
     if (typeof MessagingShared !== 'undefined') {

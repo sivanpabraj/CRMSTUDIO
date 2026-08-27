@@ -51,7 +51,7 @@ const StartPortal = {
               ${PasswordSecurity.meterHtml('start')}
               <div class="auth-error" id="st-error"></div>
               <button type="button" class="auth-btn auth-btn-primary" onclick="StartPortal.submit()"><i class="fas fa-rocket"></i> ساخت استودیو</button>
-              <p class="pw-hint"><a href="site.html">← بازگشت به صفحه اصلی</a></p>
+              <p class="pw-hint"><a href="index.html">قبلاً استودیو ساخته‌اید؟ ورود</a></p>
             </div>
           </div>
         </div>
@@ -112,8 +112,7 @@ const StartPortal = {
       joinCode,
       slug: studioName.replace(/\s+/g, '-').slice(0, 24),
       address: '', social: '', logo: '',
-      setupCompleted: true,
-      smsProxyUrl: 'https://gfzfmecglamyxevvttji.supabase.co/functions/v1/send-sms'
+      setupCompleted: true
     })
 
     if (!DB.get('banks').length) {
