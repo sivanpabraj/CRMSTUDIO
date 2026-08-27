@@ -374,7 +374,7 @@ const MessagingShared = {
     const today = Utils.todayJalali()
     const d = new Date()
     const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-    DB.insert('commLogs', {
+    const row = {
       channel: channel || 'sms',
       to: to || '',
       message: message || '',
@@ -391,7 +391,13 @@ const MessagingShared = {
       sendDate: today,
       sendTime: time,
       createdAt: d.toISOString()
-    })
+    }
+    try {
+      if (typeof SecureDB !== 'undefined' && SecureDB.systemInsert) SecureDB.systemInsert('commLogs', row)
+      else DB.insert('commLogs', row)
+    } catch (e) {
+      console.warn('[Messaging] logOutbound', e)
+    }
   },
 
   async sendQueueItem(item) {

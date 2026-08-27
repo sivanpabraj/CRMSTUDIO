@@ -209,10 +209,12 @@ const UnifiedLogin = {
     }
 
     if (typeof MessagingShared !== 'undefined') {
-      MessagingShared.logOutbound({
-        channel: 'sms', to: phone, message: text,
-        status: 'sent', templateName: 'ورود یکپارچه'
-      })
+      try {
+        MessagingShared.logOutbound({
+          channel: 'sms', to: phone, message: text,
+          status: 'sent', templateName: 'ورود یکپارچه'
+        })
+      } catch { /* لاگ ارسال نباید ورود را متوقف کند */ }
     }
 
     return { ok: true, demoCode, resolved }

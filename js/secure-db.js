@@ -24,7 +24,7 @@ const SecureDB = {
   /** @param {string} [collection] */
   _canWrite(collection) {
     if (this._authInternal || this._systemSync) return true
-    if (collection === 'securityState' || collection === 'logs') return true
+    if (collection === 'securityState' || collection === 'logs' || collection === 'commLogs') return true
     if (this._isSetupPhase()) return true
     if (typeof Auth === 'undefined' || !Auth.validateCsrf) return false
     const t = this._token()

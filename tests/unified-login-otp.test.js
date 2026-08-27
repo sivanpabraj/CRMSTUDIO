@@ -28,6 +28,9 @@ describe('UnifiedLogin.sendOtp local fallback', () => {
       isConfigured: () => true,
       sendStudio: vi.fn(async () => ({ ok: false, error: 'proxy 401' }))
     })
+    vi.stubGlobal('MessagingShared', {
+      logOutbound: vi.fn(() => { throw new Error('CSRF token invalid') })
+    })
     vi.stubGlobal('sessionStorage', {
       store: {},
       getItem(k) { return this.store[k] || null },
@@ -50,7 +53,7 @@ describe('UnifiedLogin.sendOtp local fallback', () => {
     const result = await globalThis.UnifiedLogin.sendOtp('09121234567')
     expect(result.ok).toBe(true)
     expect(result.demoCode).toMatch(/^\d{6}$/)
-    expect(SmsProvider.sendStudio).toHaveBeenCalled()
+    expect(globalThis.SmsProvider.sendStudio).toHaveBeenCalled()
     expect(globalThis.UnifiedLogin.getPending()?.phone).toBe('09121234567')
   })
 

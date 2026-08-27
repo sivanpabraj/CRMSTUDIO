@@ -30,6 +30,27 @@ test.describe('Studio M smoke (no SMS)', () => {
     expect(page.url()).toMatch(/index\.html/)
   })
 
+  test('SMS login opens the OTP step after sending code', async ({ page }) => {
+    await page.goto('/start.html')
+    await page.locator('#st-studio-name').waitFor({ state: 'visible', timeout: 15_000 })
+    await page.locator('#st-studio-name').fill('آتلیه تست')
+    await page.locator('#st-manager-name').fill('مدیر تست')
+    await page.locator('#st-phone').fill('09121234567')
+    await page.locator('#st-pw').fill('Test1234!')
+    await page.getByRole('button', { name: /ساخت استودیو/ }).click()
+    await expect(page.getByRole('button', { name: /ورود به پنل مدیر/ })).toBeVisible({ timeout: 15_000 })
+
+    await page.getByRole('button', { name: /ورود به پنل مدیر/ }).click()
+    await page.waitForURL(/studio-m/, { timeout: 15_000 })
+
+    await page.goto('/index.html?logout=1')
+    await expect(page.locator('#login-phone')).toBeVisible({ timeout: 15_000 })
+    await page.locator('#login-phone').fill('09121234567')
+    await page.getByRole('button', { name: /ارسال کد/ }).click()
+    await expect(page.locator('#login-otp')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('.auth-first-hint')).toContainText('کد تست')
+  })
+
   test('password login reaches studio-m on localhost', async ({ page }) => {
     test.skip(!process.env.E2E_LOGIN_PHONE, 'Set E2E_LOGIN_PHONE and E2E_LOGIN_PASSWORD for login test')
 
