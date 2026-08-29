@@ -35,7 +35,7 @@
 
 ## Migration
 
-Migrationها به‌ترتیب `001` تا `044` اجرا می‌شوند و فایل قدیمی هرگز ویرایش نمی‌شود. Migration 044 آخرین مرز امنیتی نسخه 1.0.1 است: backup plaintext را بازنشسته، tenant قرارداد را immutable و generic sync را از aggregateهای server-authoritative جدا می‌کند.
+Migrationهای شماره‌دار به‌ترتیب `001` تا `044` و سپس migrationهای timestamped ERP اجرا می‌شوند و فایل قدیمی هرگز ویرایش نمی‌شود. Migration 044 مرز امنیتی backup را تثبیت می‌کند و migrationهای نسخهٔ 1.1.0 قرارداد، دفترکل، حقوق، چک و پورتال پرسنل را به commandهای server-authoritative منتقل می‌کنند.
 
 ## انتشار
 

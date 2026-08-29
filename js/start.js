@@ -14,6 +14,10 @@ const StartPortal = {
   },
 
   init() {
+    if (!AppConfig.allowsLocalIdentity?.()) {
+      window.location.replace('index.html?signup=1')
+      return
+    }
     if (this._hasActiveManager()) {
       window.location.replace('index.html')
       return

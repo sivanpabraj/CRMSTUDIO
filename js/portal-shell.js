@@ -39,9 +39,12 @@ Object.assign(Portal, {
     const unreadMsgs = typeof PortalMessages !== 'undefined'
       ? PortalMessages.unreadCount(user)
       : 0
-    const pendingInvites = personnel
-      ? DB.filter('persProjects', p => p.personnelId === personnel.id && p.accepted === null).length
-      : 0
+    const typedAssignments = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().assignments.filter(a => a.userId === user.id)
+      : window.ErpRuntime?.requiresAuthority?.() ? [] : null
+    const pendingInvites = typedAssignments
+      ? typedAssignments.filter(a => a.status === 'offered').length
+      : personnel ? DB.filter('persProjects', p => p.personnelId === personnel.id && p.accepted === null).length : 0
 
     document.getElementById('portal-app').innerHTML = `
       <div class="portal-shell">
@@ -86,9 +89,12 @@ Object.assign(Portal, {
     const user = this.state.currentUser
     if (!user) return
     const personnel = DB.findPersonnelByUserId(user.id) || DB.findPersonnelByPhone(user.phone)
-    const pendingInvites = personnel
-      ? DB.filter('persProjects', p => p.personnelId === personnel.id && p.accepted === null).length
-      : 0
+    const typedAssignments = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().assignments.filter(a => a.userId === user.id)
+      : window.ErpRuntime?.requiresAuthority?.() ? [] : null
+    const pendingInvites = typedAssignments
+      ? typedAssignments.filter(a => a.status === 'offered').length
+      : personnel ? DB.filter('persProjects', p => p.personnelId === personnel.id && p.accepted === null).length : 0
     const unreadMsgs = typeof PortalMessages !== 'undefined'
       ? PortalMessages.unreadCount(user)
       : 0
@@ -149,119 +155,105 @@ Object.assign(Portal, {
   },
 
   async acceptInvitation(projectId) {
-    if (!Auth.ownsPersonnelProject(projectId)) {
-      Utils.toast('دسترسی به این پروژه ندارید', 'error')
-      return
+    const assignment = window.ErpRuntime?.state?.().assignments?.find(a => a.id === projectId)
+    if (!assignment || assignment.userId !== this.state.currentUser?.id || assignment.status !== 'offered') {
+      return Utils.toast('آفیش معتبر سرور یافت نشد', 'error')
     }
-    await SecureDB.update('persProjects', projectId, { accepted: true, status: 'active', acceptedAt: Utils.todayJalali() })
-    DB.log('project_accept', projectId)
-    Utils.toast('آفیش پذیرفته شد', 'success')
-    this.refreshNavBadges()
-    this.showSection('overview', true)
+    try {
+      await window.DomainApi.respondAssignment(projectId, assignment.version, true)
+      await window.ErpRuntime.refresh({ force: true })
+      Utils.toast('آفیش پذیرفته شد', 'success')
+      this.refreshNavBadges()
+      this.showSection('overview', true)
+    } catch (error) { Utils.toast(error.message || 'پذیرش آفیش ناموفق بود', 'error') }
   },
 
   async rejectInvitation(projectId) {
-    if (!Auth.ownsPersonnelProject(projectId)) {
-      Utils.toast('دسترسی به این پروژه ندارید', 'error')
-      return
+    const assignment = window.ErpRuntime?.state?.().assignments?.find(a => a.id === projectId)
+    if (!assignment || assignment.userId !== this.state.currentUser?.id || assignment.status !== 'offered') {
+      return Utils.toast('آفیش معتبر سرور یافت نشد', 'error')
     }
-    await SecureDB.update('persProjects', projectId, { accepted: false, status: 'rejected', rejectedAt: Utils.todayJalali() })
-    DB.log('project_reject', projectId)
-    Utils.toast('آفیش رد شد', 'info')
-    this.refreshNavBadges()
-    this.showSection('overview', true)
+    try {
+      await window.DomainApi.respondAssignment(projectId, assignment.version, false)
+      await window.ErpRuntime.refresh({ force: true })
+      Utils.toast('آفیش رد شد', 'info')
+      this.refreshNavBadges()
+      this.showSection('overview', true)
+    } catch (error) { Utils.toast(error.message || 'رد آفیش ناموفق بود', 'error') }
   },
 
   async updateProjectStatus(projectId, status) {
-    if (!Auth.ownsPersonnelProject(projectId)) {
-      Utils.toast('دسترسی به این پروژه ندارید', 'error')
-      return
+    const assignment = window.ErpRuntime?.state?.().assignments?.find(a => a.id === projectId)
+    if (!assignment || assignment.userId !== this.state.currentUser?.id) return Utils.toast('دسترسی ندارید', 'error')
+    if (!['finished', 'delivered', 'completed'].includes(status)) {
+      return Utils.toast('مرحلهٔ سفارش فقط توسط مدیر عملیات تغییر می‌کند', 'warning')
     }
-    await SecureDB.update('persProjects', projectId, { status, updatedAt: Utils.todayJalali() })
-    Utils.toast('وضعیت ذخیره شد', 'success')
-    this.showSection('overview')
+    try {
+      await window.DomainApi.completeAssignment(projectId, assignment.version)
+      await window.ErpRuntime.refresh({ force: true })
+      Utils.toast('انجام آفیش ثبت شد', 'success')
+      this.showSection('overview', true)
+    } catch (error) { Utils.toast(error.message || 'ثبت وضعیت ناموفق بود', 'error') }
+  },
+
+  async requestEmploymentContractOtp(contractId) {
+    try {
+      const result = await window.DomainApi.requestPersonnelContractOtp(contractId)
+      this.state.personnelContractChallenges ||= {}
+      this.state.personnelContractChallenges[contractId] = result.challengeId
+      Utils.toast('کد تأیید ارسال شد', 'success')
+    } catch (error) { Utils.toast(error.message || 'ارسال کد ناموفق بود', 'error') }
   },
 
   async verifyEmploymentContract(contractId) {
     const user = this.state.currentUser
-    const personnel = DB.findPersonnelByUserId(user?.id) || DB.findPersonnelByPhone(user?.phone)
-    const c = DB.find('persContracts', x => x.id === contractId)
-    if (!c || c.personnelId !== personnel?.id) {
+    const c = window.ErpRuntime?.state?.().personnelContracts?.find(x => x.id === contractId)
+    if (!c || c.personnel_user_id !== user?.id || c.status !== 'offered') {
       Utils.toast('دسترسی ندارید', 'error')
       return
     }
     const input = document.getElementById(`emp-contract-code-${contractId}`)
     const code = (input?.value || '').replace(/\D/g, '')
-    const expected = c.verification?.code || ''
-    if (!code || code !== expected) {
-      Utils.toast('کد تأیید نادرست است', 'error')
-      return
-    }
-    await SecureDB.update('persContracts', contractId, {
-      status: 'verified',
-      verification: { ...c.verification, verified: true, verifiedAt: Utils.todayJalali() }
-    })
-    DB.log('employment_contract_verified', contractId)
-    Utils.toast('قرارداد همکاری تأیید شد', 'success')
-    this.showSection('overview')
+    const challengeId = this.state.personnelContractChallenges?.[contractId]
+    if (!challengeId) return Utils.toast('ابتدا کد تأیید را درخواست کنید', 'warning')
+    try {
+      await window.DomainApi.acceptPersonnelContract(contractId, c.version, challengeId, code)
+      delete this.state.personnelContractChallenges[contractId]
+      await window.ErpRuntime.refresh({ force: true })
+      Utils.toast('قرارداد همکاری تأیید شد', 'success')
+      this.showSection('overview', true)
+    } catch (error) { Utils.toast(error.message || 'کد تأیید نادرست است', 'error') }
   },
 
   async rejectEmploymentContract(contractId) {
-    const user = this.state.currentUser
-    const personnel = DB.findPersonnelByUserId(user?.id) || DB.findPersonnelByPhone(user?.phone)
-    const c = DB.find('persContracts', x => x.id === contractId)
-    if (!c || c.personnelId !== personnel?.id) return
-    await SecureDB.update('persContracts', contractId, { status: 'rejected', rejectedAt: Utils.todayJalali() })
-    Utils.toast('قرارداد رد شد', 'info')
-    this.showSection('overview')
+    const c = window.ErpRuntime?.state?.().personnelContracts?.find(x => x.id === contractId)
+    if (!c || c.personnel_user_id !== this.state.currentUser?.id) return Utils.toast('دسترسی ندارید', 'error')
+    try {
+      await window.DomainApi.respondPersonnelContract(contractId, c.version, false)
+      await window.ErpRuntime.refresh({ force: true })
+      Utils.toast('قرارداد رد شد', 'info')
+      this.showSection('overview', true)
+    } catch (error) { Utils.toast(error.message || 'رد قرارداد ناموفق بود', 'error') }
   },
 
   async attendanceCheckIn() {
-    const user = this.state.currentUser
-    const personnel = DB.findPersonnelByUserId(user?.id) || DB.findPersonnelByPhone(user?.phone)
-    if (!personnel) return Utils.toast('پروفایل پرسنل یافت نشد', 'error')
-    const now = new Date()
-    const today = Utils.todayJalali()
-    const recorded = Utils.formatJalaliDateTime(now)
-    const time = recorded.split(' — ساعت ')[1] || `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    const open = (DB.get('attendance') || []).find(r =>
-      r.personnelId === personnel.id && Utils.normJalali(r.date) === today && !r.checkOut && r.status !== 'absent'
-    )
-    if (open) return Utils.toast('ورود امروز قبلاً ثبت شده', 'info')
-    await SecureDB.insert('attendance', {
-      personnelId: personnel.id,
-      personnelName: personnel.name,
-      date: today,
-      checkIn: time,
-      checkInAt: now.toISOString(),
-      checkInRecorded: recorded,
-      status: 'present',
-      source: 'portal',
-      notes: ''
-    })
-    Utils.toast('ورود ثبت شد', 'success')
-    this.showSection('overview')
+    try {
+      await window.DomainApi.recordAttendance('check_in')
+      await window.ErpRuntime.refresh({ force: true })
+      Utils.toast('ورود با زمان سرور ثبت شد', 'success')
+      this.showSection('overview', true)
+    } catch (error) { Utils.toast(error.message || 'ثبت ورود ناموفق بود', 'error') }
   },
 
   async attendanceCheckOut() {
-    const user = this.state.currentUser
-    const personnel = DB.findPersonnelByUserId(user?.id) || DB.findPersonnelByPhone(user?.phone)
-    if (!personnel) return
-    const today = Utils.todayJalali()
-    const open = (DB.get('attendance') || []).find(r =>
-      r.personnelId === personnel.id && Utils.normJalali(r.date) === today && !r.checkOut && r.status !== 'absent'
-    )
-    if (!open) return Utils.toast('ورود امروز ثبت نشده', 'error')
-    const now = new Date()
-    const recorded = Utils.formatJalaliDateTime(now)
-    const time = recorded.split(' — ساعت ')[1] || `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    await SecureDB.update('attendance', open.id, {
-      checkOut: time,
-      checkOutAt: now.toISOString(),
-      checkOutRecorded: recorded,
-      status: 'completed'
-    })
-    Utils.toast('خروج ثبت شد', 'success')
-    this.showSection('overview')
+    const open = window.ErpRuntime?.state?.().attendanceEntries?.find(r =>
+      r.personnelUserId === this.state.currentUser?.id && !r.checkOutAt)
+    if (!open) return Utils.toast('ورود باز در سرور یافت نشد', 'error')
+    try {
+      await window.DomainApi.recordAttendance('check_out', open.version)
+      await window.ErpRuntime.refresh({ force: true })
+      Utils.toast('خروج با زمان سرور ثبت شد', 'success')
+      this.showSection('overview', true)
+    } catch (error) { Utils.toast(error.message || 'ثبت خروج ناموفق بود', 'error') }
   }
 })

@@ -419,9 +419,32 @@ const SMCalendar = {
       reminder: ['calendarReminders', 'date']
     }
     const [collection, field] = map[src] || []
-    if (!collection || !target || !DB.find(collection, row => String(row.id) === String(id))) {
+    const typedContract = src === 'contract' && window.ErpRuntime?.requiresAuthority?.()
+      ? window.ErpRuntime.state().contracts.find(row => String(row.id) === String(id)) : null
+    if (!collection || !target || (!typedContract && !DB.find(collection, row => String(row.id) === String(id)))) {
       SM.toast('رویداد قابل انتقال نیست', 'error')
       return false
+    }
+    if (src === 'contract' && window.ErpRuntime?.requiresAuthority?.()) {
+      const contract = typedContract
+      const parsed = Utils.parseJalali(target)
+      const oldStart = new Date(contract?.eventStartsAt || '')
+      const oldEnd = new Date(contract?.eventEndsAt || '')
+      if (!contract || !parsed || Number.isNaN(oldStart.getTime()) || Number.isNaN(oldEnd.getTime())) {
+        SM.toast('بازهٔ زمانی معتبر قرارداد از سرور دریافت نشده است', 'error')
+        return false
+      }
+      const [gy, gm, gd] = Utils._jalaliToGregorian(parsed.jy, parsed.jm, parsed.jd)
+      const start = new Date(Date.UTC(gy, gm - 1, gd, oldStart.getUTCHours(), oldStart.getUTCMinutes()))
+      const end = new Date(start.getTime() + (oldEnd.getTime() - oldStart.getTime()))
+      await window.DomainApi.rescheduleContract({ contractId: contract.id,
+        expectedVersion: contract.lifecycleVersion, eventDate: target,
+        startsAt: start.toISOString(), endsAt: end.toISOString(), reason: 'جابجایی در تقویم مدیریت' })
+      await window.ErpRuntime.refresh({ force: true })
+      this._selectedDate = target
+      this.refresh()
+      SM.toast(`رویداد به ${target} منتقل شد`, 'success')
+      return true
     }
     await SecureDB.update(collection, id, { [field]: target, updatedAtIso: new Date().toISOString() })
     this._selectedDate = target

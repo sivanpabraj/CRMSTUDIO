@@ -28,8 +28,8 @@ async function fixture({ unsafeStudioScript = false } = {}) {
     }
     response.writeHead(200, { ...headers, 'Content-Type': request.url === '/health.json' ? 'application/json' : 'text/html' })
     response.end(request.url === '/health.json'
-      ? JSON.stringify({ status: 'ok', version: '1.0.1' })
-      : request.url === '/offline-assets.json' ? JSON.stringify({ version: '1.0.1', assets: [] })
+      ? JSON.stringify({ status: 'ok', version: '1.1.0' })
+      : request.url === '/offline-assets.json' ? JSON.stringify({ version: '1.1.0', assets: [] })
       : '<!doctype html><html lang="fa"><title>fixture</title></html>')
   })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))

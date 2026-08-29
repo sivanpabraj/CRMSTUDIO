@@ -5,10 +5,11 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
-import { injectStaticPublicEnv, renderStaticBuildFlags } from './lib/static-public-env.mjs'
+import { assertProductionSupabaseConfig, injectStaticPublicEnv, renderStaticBuildFlags } from './lib/static-public-env.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dist = join(root, 'dist')
+assertProductionSupabaseConfig(process.env)
 
 function copy(src, dest) {
   const from = join(root, src)
@@ -96,5 +97,5 @@ const offlineAssets = walk(dist)
   .filter(file => /\.(?:html?|css|js|svg|png|webp|ico|woff2?)$/i.test(file))
   .filter(file => !/(?:^|\/)sw\.js$/i.test(file))
   .sort()
-writeFileSync(join(dist, 'offline-assets.json'), `${JSON.stringify({ version: '1.0.1', assets: offlineAssets })}\n`)
+writeFileSync(join(dist, 'offline-assets.json'), `${JSON.stringify({ version: '1.1.0', assets: offlineAssets })}\n`)
 console.log(`copy-static: offline manifest ok (${offlineAssets.length} assets)`)

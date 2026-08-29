@@ -96,26 +96,36 @@ const SMEmployees = {
   },
 
   _latestContract(personnelId) {
+    if (window.ErpRuntime?.hasTypedData?.()) {
+      const person = DB.find('personnel', x => x.id === personnelId)
+      return window.ErpRuntime.state().personnelContracts
+        .filter(c => c.personnel_user_id === person?.userId)
+        .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0]
+    }
+    if (window.ErpRuntime?.requiresAuthority?.()) return null
     return (DB.active('persContracts') || [])
       .filter(c => c.personnelId === personnelId && c.type === 'employment')
       .sort((a, b) => String(b.sentAt || b.createdAt || '').localeCompare(String(a.sentAt || a.createdAt || '')))[0]
   },
 
   _approvalsHtml() {
-    const contracts = (DB.active('persContracts') || []).filter(c => c.type === 'employment')
+    const contracts = (window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().personnelContracts
+      : window.ErpRuntime?.requiresAuthority?.() ? []
+      : (DB.active('persContracts') || []).filter(c => c.type === 'employment'))
       .sort((a, b) => String(b.sentAt || '').localeCompare(String(a.sentAt || '')))
     if (!contracts.length) {
       return SMUI.empty('fa-file-signature', 'قرارداد همکاری ارسال نشده', 'از صفحه پرسنل → «ارسال قرارداد به پنل» استفاده کنید')
     }
     return `<div class="sm-emp-contract-list">${contracts.map(c => {
-      const p = DB.find('personnel', x => x.id === c.personnelId)
-      const st = { pending: 'در انتظار', sms_sent: 'کد ارسال شد', verified: 'تأیید شده', rejected: 'رد شده' }[c.status] || c.status
-      const stType = c.status === 'verified' ? 'success' : c.status === 'rejected' ? 'danger' : 'warning'
+      const p = DB.find('personnel', x => x.id === c.personnelId || x.userId === c.personnel_user_id)
+      const st = { pending: 'در انتظار', offered: 'در انتظار تأیید', sms_sent: 'کد ارسال شد', accepted: 'تأیید شده', verified: 'تأیید شده', rejected: 'رد شده' }[c.status] || c.status
+      const stType = ['accepted', 'verified'].includes(c.status) ? 'success' : c.status === 'rejected' ? 'danger' : 'warning'
       return `<div class="sm-emp-contract-row">
         <div>
           <strong>${SM.esc(p?.name || c.personnelName || '—')}</strong>
-          <div class="sm-emp-meta">${SM.esc(c.paySummary || '—')}</div>
-          <div class="sm-emp-meta">ارسال: ${SM.esc(c.sentAt || '—')}${c.verification?.verifiedAt ? ` · تأیید: ${SM.esc(c.verification.verifiedAt)}` : ''}</div>
+          <div class="sm-emp-meta">${SM.esc(c.terms?.paySummary || c.paySummary || '—')}</div>
+          <div class="sm-emp-meta">ارسال: ${SM.esc(c.created_at || c.sentAt || '—')}${c.accepted_at || c.verification?.verifiedAt ? ` · تأیید: ${SM.esc(c.accepted_at || c.verification.verifiedAt)}` : ''}</div>
         </div>
         <div>${SMUI.badge(st, stType)}</div>
       </div>`
@@ -137,7 +147,9 @@ const SMEmployees = {
       { label: 'کل پرسنل', value: SM.fmt(personnel.length), color: 'var(--sm-accent)' },
       { label: 'فعال', value: SM.fmt(active.length), color: 'var(--sm-success)' },
       { label: 'حقوق ماهانه', value: SM.fmt(monthlyTotal), color: 'var(--sm-warning)' },
-      { label: 'قرارداد تأییدشده', value: SM.fmt((DB.active('persContracts') || []).filter(c => c.type === 'employment' && c.status === 'verified').length), color: 'var(--sm-info)' }
+      { label: 'قرارداد تأییدشده', value: SM.fmt(window.ErpRuntime?.hasTypedData?.()
+        ? window.ErpRuntime.state().personnelContracts.filter(c => c.status === 'accepted').length
+        : (DB.active('persContracts') || []).filter(c => c.type === 'employment' && c.status === 'verified').length), color: 'var(--sm-info)' }
     ])}
     <div class="sm-card" style="margin-top:16px"><div class="sm-card-head"><div class="sm-card-title">توزیع نقش‌ها</div></div>
       <div class="sm-card-body">${Object.keys(byRole).length ? Object.entries(byRole).map(([role, count]) =>
@@ -328,51 +340,32 @@ const SMEmployees = {
 
   async sendContract(personnelId) {
     const p = DB.find('personnel', x => x.id === personnelId)
-    if (!p?.phone) return SM.toast('موبایل پرسنل الزامی است', 'error')
+    if (!p?.userId) return SM.toast('حساب ابری پرسنل باید ابتدا فعال شود', 'error')
 
     const studio = SM.studio().name || 'استودیو'
     const paySummary = this._paySummary(p)
     const roleList = normalizeRoles(p.roles || []).map(r => typeof getRoleTitle === 'function' ? getRoleTitle(r) : r).join('، ')
-    const code = Utils.generateOtp6()
-    const today = Utils.todayJalali()
-
-    const contractBody = `قرارداد همکاری بین ${studio} و ${p.name} — نقش: ${roleList} — ${paySummary}`
-
-    const contract = DB.insert('persContracts', {
-      type: 'employment',
-      personnelId: p.id,
-      personnelName: p.name,
-      studioName: studio,
-      roles: p.roles,
-      paySummary,
-      body: contractBody,
-      salaryMonthly: p.salaryMonthly || p.salary || 0,
-      payMonthly: p.payMonthly,
-      payPerProject: p.payPerProject,
-      roleAmounts: p.roleAmounts || {},
-      monthlyProjectPercent: p.monthlyProjectPercent,
-      status: 'sms_sent',
-      sentAt: today,
-      verification: { code, sentAt: today, verified: false, phone: p.phone }
-    })
-
-    const smsText = `${studio}: قرارداد همکاری شما ثبت شد. کد تأیید: ${code}`
-    if (typeof SmsProvider !== 'undefined' && SmsProvider.isConfigured()) {
-      const res = await SmsProvider.sendStudio(p.phone, smsText)
-      if (!res.ok) {
-        SM.toast(res.error || 'خطا در SMS', 'error')
-        return
-      }
-    } else {
-      SM.toast(`SMS تنظیم نشده — کد تست: ${code}`, 'info')
-    }
-
-    DB.update('persContracts', contract.id, { status: 'sms_sent' })
-    SM.toast('قرارداد به پنل پرسنل ارسال شد', 'success')
-    if (SM.state.viewStack.length) {
-      SM.state.viewStack.pop()
-      this.view(personnelId)
-    } else SM.navigate('employees')
+    try {
+      await window.DomainApi.createPersonnelContract({
+        personnelUserId: p.userId,
+        startsOn: new Date().toISOString().slice(0, 10),
+        endsOn: '',
+        compensation: {
+          salaryMonthly: p.salaryMonthly || p.salary || 0,
+          payMonthly: p.payMonthly,
+          payPerProject: p.payPerProject,
+          roleAmounts: p.roleAmounts || {},
+          monthlyProjectPercent: p.monthlyProjectPercent
+        },
+        terms: { studioName: studio, personnelName: p.name, roles: p.roles, roleList, paySummary }
+      })
+      await window.ErpRuntime?.refresh?.({ force: true })
+      SM.toast('قرارداد همکاری به پنل معتبر پرسنل ارسال شد', 'success')
+      if (SM.state.viewStack.length) {
+        SM.state.viewStack.pop()
+        this.view(personnelId)
+      } else SM.navigate('employees')
+    } catch (error) { SM.toast(error.message || 'ثبت قرارداد همکاری ناموفق بود', 'error') }
   }
 }
 

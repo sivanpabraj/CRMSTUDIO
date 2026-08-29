@@ -88,7 +88,7 @@ describe('FinanceSync update/delete integration', () => {
     g = createMemoryDb()
     g.SMObservability = { captureError() {} }
     g.window = g
-    for (const k of ['DB', 'SecureDB', 'Utils', 'SMObservability', 'StudioMutateClient', 'FinanceSync', 'FinanceOutbox', 'PlanLimits', 'document', 'location', 'window']) {
+    for (const k of ['DB', 'SecureDB', 'Utils', 'SMObservability', 'StudioMutateClient', 'FinanceSync', 'FinanceOutbox', 'PlanLimits', 'document', 'location', 'window', 'ErpRuntime']) {
       prev[k] = globalThis[k]
     }
     Object.assign(globalThis, {
@@ -267,6 +267,8 @@ describe('FinanceSync update/delete integration', () => {
     expect(FinanceSync.mapInvoiceType({ type: 'withdrawal', purposeCategory: 'utility' })).toBe('utility_electric')
     expect(FinanceSync.mapInvoiceType({ type: 'withdrawal', purposeCategory: 'cancellation_refund' })).toBe('transfer')
     expect(FinanceSync.mapInvoiceType({ type: 'withdrawal', purposeCategory: 'equipment' })).toBe('expense')
+    expect(FinanceSync.mapInvoiceType({ type: 'withdrawal', purposeCategory: 'print' })).toBe('expense')
+    expect(FinanceSync.mapInvoiceType({ type: 'withdrawal', purposeCategory: 'unknown' })).toBe('expense')
   })
 
   it('creates and updates an invoice projection from a transaction', async () => {
@@ -351,6 +353,97 @@ describe('FinanceSync update/delete integration', () => {
     expect(FinanceSync.contractInvoices(contract.id)).toHaveLength(2)
     expect(FinanceSync.hasSyncedDeposit(contract.id)).toBe(true)
     expect(FinanceSync.recordContractPayment({ contractId: 'missing', bankId: bank.id, amount: 1 })).toMatchObject({ ok: false })
+  })
+
+  it('uses typed server projections for contract and bank reads', () => {
+    const state = {
+      contracts: [{ id: 'server-contract', bride: 'Server', groom: 'Couple' }],
+      financeTransactions: [
+        { id: 'server-deposit', contractId: 'server-contract', type: 'deposit', state: 'posted', purposeCategory: 'contract_deposit' },
+        { id: 'ignored', contractId: 'server-contract', type: 'withdrawal', state: 'posted', purposeCategory: 'contract_deposit' }
+      ],
+      bankAccounts: [{ id: 'server-bank', name: 'Server Bank', balance: 900 }]
+    }
+    globalThis.ErpRuntime = { hasTypedData: () => true, state: () => state }
+
+    expect(FinanceSync.recordContractPayment({ contractId: 'missing', amount: 1 })).toMatchObject({ ok: false })
+    expect(FinanceSync.contractPayments('server-contract')).toEqual([state.financeTransactions[0]])
+    expect(FinanceSync.contractInvoices('server-contract')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'server-deposit', transactionId: 'server-deposit', status: 'paid', direction: 'in' })
+    ]))
+    expect(FinanceSync.hasSyncedDeposit('server-contract')).toBe(true)
+    expect(FinanceSync.bankInfo('server-bank')).toMatchObject({ id: 'server-bank', name: 'Server Bank' })
+    expect(FinanceSync.bankInfo('missing')).toMatchObject({ id: '', name: '—' })
+    expect(FinanceSync._findActiveTx('server-deposit')).toEqual(state.financeTransactions[0])
+    expect(FinanceSync.couple({ couple: 'Canonical Couple' })).toBe('Canonical Couple')
+    expect(FinanceSync.couple({ bride: 'Only Bride' })).toBe('Only Bride')
+    expect(FinanceSync.couple({ groom: 'Only Groom' })).toBe('Only Groom')
+  })
+
+  it('handles empty typed projections without falling back to local finance state', () => {
+    globalThis.ErpRuntime = {
+      hasTypedData: () => true,
+      state: () => ({ contracts: [], financeTransactions: [], bankAccounts: [] })
+    }
+    g.DB.insert('transactions', {
+      contractId: 'local-contract', type: 'deposit', state: 'posted', purposeCategory: 'contract_deposit'
+    })
+
+    expect(FinanceSync.contractPayments('local-contract')).toEqual([])
+    expect(FinanceSync.hasSyncedDeposit('local-contract')).toBe(false)
+    expect(FinanceSync._findActiveTx('missing')).toBeUndefined()
+  })
+
+  it('fails closed while production authority projections are not ready', () => {
+    globalThis.ErpRuntime = {
+      hasTypedData: () => false,
+      requiresAuthority: () => true,
+      state: () => ({ contracts: [], financeTransactions: [], bankAccounts: [] })
+    }
+    const bank = g.DB.insert('banks', { name: 'Forged Local', balance: 999 })
+    const contract = g.DB.insert('contracts', { bride: 'Forged', groom: 'Local' })
+    g.DB.insert('transactions', { contractId: contract.id, type: 'deposit', purposeCategory: 'contract_deposit' })
+
+    expect(FinanceSync._requiresTypedAuthority()).toBe(true)
+    expect(FinanceSync.bankInfo(bank.id)).toMatchObject({ id: '', name: '—' })
+    expect(FinanceSync._findActiveTx('anything')).toBeUndefined()
+    expect(FinanceSync.recordContractPayment({ contractId: contract.id, amount: 1 })).toMatchObject({ ok: false })
+    expect(FinanceSync.contractPayments(contract.id)).toEqual([])
+    expect(FinanceSync.contractInvoices(contract.id)).toEqual([])
+    expect(FinanceSync.hasSyncedDeposit(contract.id)).toBe(false)
+    const select = { innerHTML: '' }
+    globalThis.document = { getElementById: () => select }
+    FinanceSync.populateBankSelect('banks')
+    expect(select.innerHTML).toContain('ابتدا')
+  })
+
+  it('derives authority mode from production host and explicit demo flags', () => {
+    delete globalThis.ErpRuntime
+    globalThis.location = { hostname: 'erp.example.ir' }
+    expect(FinanceSync._requiresTypedAuthority()).toBe(true)
+    globalThis.location = { hostname: 'localhost' }
+    globalThis.__SM_BUILD_FLAGS__ = { localDemo: true }
+    expect(FinanceSync._requiresTypedAuthority()).toBe(false)
+    delete globalThis.__SM_BUILD_FLAGS__
+    expect(FinanceSync._requiresTypedAuthority()).toBe(true)
+  })
+
+  it('evaluates the plan gate safely when optional local projections are absent', async () => {
+    const savedDb = globalThis.DB
+    const savedUtils = globalThis.Utils
+    globalThis.PlanLimits = {
+      assertMoneyOpAllowed: vi.fn(() => ({ ok: true }))
+    }
+    delete globalThis.DB
+    delete globalThis.Utils
+    try {
+      await expect(FinanceSync._beforeMoneyCommit('record_deposit', {}, 'quota-test'))
+        .resolves.toMatchObject({ ok: true, developmentLocalOnly: true })
+      expect(globalThis.PlanLimits.assertMoneyOpAllowed).toHaveBeenCalledWith({}, [], '')
+    } finally {
+      globalThis.DB = savedDb
+      globalThis.Utils = savedUtils
+    }
   })
 
   it('reconciles only valid authoritative bank balances', async () => {

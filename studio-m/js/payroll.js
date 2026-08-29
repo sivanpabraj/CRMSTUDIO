@@ -55,7 +55,7 @@ const SMPayroll = {
   },
 
   _bankOptions(selected) {
-    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
+    const banks = window.ErpRuntime?.state?.().bankAccounts || []
     return [{ value: '', label: '— انتخاب حساب بانکی —' }, ...banks.map(b => ({
       value: b.id,
       label: `${b.name || b.bank || 'بانک'} — ${b.account || this._maskCard(b.card) || ''}`,
@@ -64,9 +64,7 @@ const SMPayroll = {
   },
 
   _bankInfoHtml(bankId) {
-    const b = (typeof DB.findActive === 'function'
-      ? DB.findActive('banks', x => x.id === bankId)
-      : DB.find('banks', x => x.id === bankId && !x._deleted))
+    const b = (window.ErpRuntime?.state?.().bankAccounts || []).find(x => x.id === bankId)
     if (!b) return ''
     return `<div class="sm-pay-bank-info">
       <div><span>بانک</span><strong>${SM.esc(b.bank || b.name || '—')}</strong></div>
@@ -77,7 +75,9 @@ const SMPayroll = {
   },
 
   render(el) {
-    const payments = (typeof DB.active === 'function' ? DB.active('salaryPayments') : (DB.get('salaryPayments') || []).filter(p => !p._deleted)).slice().reverse()
+    const payments = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().payrollPayments
+      : []
     const personnel = (typeof DB.active === 'function' ? DB.active('personnel') : DB.get('personnel')).filter(p => p.status === 'active' && !p._deleted)
     const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0)
     const thisMonth = Utils.todayJalali().slice(0, 7)
@@ -116,7 +116,7 @@ const SMPayroll = {
   },
 
   view(id) {
-    const p = (typeof DB.active === 'function' ? DB.active('salaryPayments') : (DB.get('salaryPayments') || []).filter(x => !x._deleted)).find(x => x.id === id)
+    const p = (window.ErpRuntime?.state?.().payrollPayments || []).find(x => x.id === id)
     if (!p) return
     const b = p.breakdown || {}
     SM.pushSubView(`حقوق ${p.personName}`, () => `
@@ -176,6 +176,7 @@ const SMPayroll = {
   },
 
   async _savePayment(existingId) {
+    if (existingId) return SM.toast('سند حقوق ثبت‌شده قابل ویرایش نیست؛ سند معکوس لازم است', 'error')
     const d = SMUI.readForm(['pay-person', 'pay-month', 'pay-amount', 'pay-bank', 'pay-method', 'pay-ref', 'pay-date', 'pay-notes'])
     const person = DB.find('personnel', p => p.id === d['pay-person'])
     if (!person) return SM.toast('پرسنل را انتخاب کنید', 'error')
@@ -189,7 +190,15 @@ const SMPayroll = {
       return SM.toast('برای این پرسنل در این ماه قبلاً پرداخت ثبت شده', 'error')
     }
 
-    const bank = DB.find('banks', b => b.id === d['pay-bank'])
+    const bank = (window.ErpRuntime?.state?.().bankAccounts || []).find(b => b.id === d['pay-bank'])
+    const personUserId = person.userId || person.user_id || ''
+    if (!/^[0-9a-f-]{36}$/i.test(personUserId)) {
+      return SM.toast('پرسنل هنوز به حساب کاربری معتبر سرور متصل نشده است', 'error')
+    }
+    const parsedMonth = Utils.parseJalali(`${d['pay-month']}/01`)
+    if (!parsedMonth) return SM.toast('ماه حقوق نامعتبر است', 'error')
+    const [gy, gm] = Utils._jalaliToGregorian(parsedMonth.jy, parsedMonth.jm, 1)
+    const periodMonth = `${gy}-${String(gm).padStart(2, '0')}-01`
     const payload = {
       personId: person.id,
       personName: person.name,
@@ -214,45 +223,20 @@ const SMPayroll = {
       status: 'paid'
     }
 
-    if (existingId) {
-      await SecureDB.update('salaryPayments', existingId, payload)
-    } else {
-      const row = await SecureDB.insert('salaryPayments', payload)
-      const paymentId = row.id
-      let txId
-      try {
-        if (typeof FinanceSync === 'undefined') {
-          throw new Error('ماژول مالی در دسترس نیست')
-        }
-        const res = await FinanceSync.recordWithdrawal({
-          amount: payload.amount,
-          bankId: payload.bankId,
-          date: payload.date,
-          periodMonth: payload.month,
-          personnelId: payload.personId,
-          client: payload.personName,
-          purposeCategory: 'personnel',
-          purpose: `حقوق ${payload.personName} — ${payload.monthLabel || payload.month}`,
-          paymentMethod: payload.paymentMethod || 'transfer',
-          transactionRef: payload.ref || '',
-          accountOrCard: payload.accountOrCard || '',
-          notes: payload.notes || '',
-          desc: `حقوق پرسنل — ${payload.personName}`,
-          salaryPaymentId: paymentId,
-          syncInvoice: true
-        })
-        if (!res.ok) throw new Error(res.error || 'خطا در ثبت دفترکل')
-        txId = res.transactionId
-        await this._markProjectsPaid(calc, d['pay-month'])
-        if (txId) await SecureDB.update('salaryPayments', paymentId, { transactionId: txId })
-      } catch (e) {
-        try { await SecureDB.delete('salaryPayments', paymentId) } catch (re) {
-          if (typeof SMObservability !== 'undefined') {
-            SMObservability.captureError('finance_rollback:payrollPay', re, { rollback: true })
-          }
-        }
-        return SM.toast(e.message || 'خطا در پرداخت حقوق', 'error')
-      }
+    try {
+      await DomainApi.recordPayroll({
+        personnelUserId: personUserId,
+        periodMonth,
+        grossIrr: Math.round(payload.amount * 10),
+        deductionsIrr: 0,
+        bankId: payload.bankId,
+        paymentMethod: payload.paymentMethod,
+        transactionRef: payload.ref,
+        notes: payload.notes
+      })
+      await window.ErpRuntime?.refresh?.({ force: true })
+    } catch (e) {
+      return SM.toast(e.message || 'خطا در پرداخت اتمیک حقوق', 'error')
     }
 
     SMUI.closeModal()
@@ -264,15 +248,7 @@ const SMPayroll = {
     } else SM.navigate('payroll')
   },
 
-  async _markProjectsPaid(calc, month) {
-    for (const p of (calc?.projects || [])) {
-      await SecureDB.update('persProjects', p.id, {
-        paid: p.amount,
-        payrollMonth: month,
-        paidAt: Utils.todayJalali()
-      })
-    }
-  }
+  async _markProjectsPaid() { throw new Error('server_authoritative_rpc_required') }
 }
 
 SMModules.payroll = {

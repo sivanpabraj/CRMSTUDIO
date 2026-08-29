@@ -6,6 +6,9 @@ const SM_CONTRACT_PALETTE = ['#0071E3', '#009688', '#E68619', '#34C759', '#5856D
 SMModules.contracts = {
   _cadres: SM_CONTRACT_PALETTE,
   _selectedId: null,
+  _all() {
+    return window.ErpRuntime?.hasTypedData?.() ? window.ErpRuntime.state().contracts : []
+  },
   _statusMap: {
     active: { label: 'فعال', badge: 'success' },
     draft: { label: 'پیش‌نویس', badge: 'muted' },
@@ -89,9 +92,9 @@ SMModules.contracts = {
   },
 
   addPayment(contractId) {
-    const c = DB.find('contracts', x => x.id === contractId)
+    const c = this._all().find(x => x.id === contractId)
     if (!c) return
-    const banks = DB.active('banks') || []
+    const banks = window.ErpRuntime?.state?.().bankAccounts || []
     const bankOpts = [{ value: '', label: '— انتخاب حساب —' }, ...banks.map(b => ({
       value: b.id, label: typeof FinanceSync !== 'undefined' ? FinanceSync.bankLabel(b.id) : (b.name || b.bank)
     }))]
@@ -166,7 +169,7 @@ SMModules.contracts = {
 
   render(el) {
     const q = SM.getModuleSearch('contracts')
-    let contracts = DB.active('contracts')
+    let contracts = this._all()
     if (q) {
       contracts = contracts.filter(c =>
         [c.couple, c.groom, c.bride, c.contractNum, c.eventDate, c.date].join(' ').toLowerCase().includes(q)
@@ -228,19 +231,19 @@ SMModules.contracts = {
   },
 
   quickCancel(id) {
-    const c = DB.find('contracts', x => x.id === id)
+    const c = this._all().find(x => x.id === id)
     if (!c) return
     if (!confirm(`قرارداد «${this._couple(c)}» لغو شود؟`)) return
     this.edit(id, true)
   },
 
   view(id) {
-    const c = DB.find('contracts', x => x.id === id)
+    const c = this._all().find(x => x.id === id)
     if (!c) return
     const paid = (c.deposit || 0) + (c.paid || 0)
     const remain = Math.max(0, (c.total || 0) - paid)
     const st = this._statusOf(c)
-    const idx = this._sort(DB.active('contracts')).findIndex(x => x.id === id)
+    const idx = this._sort(this._all()).findIndex(x => x.id === id)
     const color = this._color(Math.max(0, idx))
 
     SM.pushSubView(this._couple(c), () => `
@@ -307,11 +310,17 @@ SMModules.contracts = {
   },
 
   edit(id, focusCancel = false) {
-    const c = DB.find('contracts', x => x.id === id)
+    const c = this._all().find(x => x.id === id)
     if (!c) return
-    const idx = this._sort(DB.active('contracts')).findIndex(x => x.id === id)
+    const idx = this._sort(this._all()).findIndex(x => x.id === id)
     const color = this._color(Math.max(0, idx))
-    const cr = c.cancelRecord || {}
+    if (!window.DomainApi || !window.ErpRuntime?.hasTypedData?.()) {
+      return SM.toast('دادهٔ معتبر قرارداد هنوز از سرور دریافت نشده است', 'warning')
+    }
+    const banks = window.ErpRuntime.state().bankAccounts || []
+    const bankOpts = [{ value: '', label: '— انتخاب حساب —' }, ...banks.map(b => ({
+      value: b.id, label: `${b.title || b.bankName || 'حساب'} ${b.cardLast4 ? `••${b.cardLast4}` : ''}`
+    }))]
 
     SMUI.modal('ویرایش قرارداد', `
       <div class="sm-contract-modal-banner" style="--ct-color:${color}">
@@ -322,46 +331,37 @@ SMModules.contracts = {
       </div>
       ${SMUI.formField('وضعیت قرارداد', 'ct-status', { type: 'select', value: focusCancel ? 'cancelled' : (c.status || 'active'), options: [
         { value: 'active', label: 'فعال' },
-        { value: 'draft', label: 'پیش‌نویس' },
         { value: 'done', label: 'اتمام یافته' },
         { value: 'cancelled', label: 'لغو شده' }
       ]})}
       <div id="ct-cancel-fields" class="sm-cancel-fields"${c.status !== 'cancelled' && !focusCancel ? ' hidden' : ''}>
         <div class="sm-cancel-fields-title">ثبت عملیات لغو — مالی</div>
-        ${SMUI.formField('مبلغ پرداخت‌شده تا زمان لغو (تومان)', 'ct-paid', { value: cr.paidAmount != null ? cr.paidAmount : ((c.deposit || 0) + (c.paid || 0)), dir: 'ltr' })}
-        ${SMUI.formField('شماره حساب / کارت', 'ct-bank', { value: cr.bankAccount || '', dir: 'ltr', placeholder: 'مثلاً IR...' })}
-        ${SMUI.formField('واریز به / دریافت‌کننده', 'ct-paid-to', { value: cr.paidTo || '' })}
-        ${SMUI.formField('نحوه برگشت وجه', 'ct-refund', { type: 'select', value: cr.refundMethod || '', options: [
-          { value: '', label: '— انتخاب —' },
-          { value: 'cash', label: 'نقدی' },
-          { value: 'card', label: 'کارت به کارت' },
-          { value: 'cheque', label: 'چک' },
-          { value: 'partial', label: 'برگشت جزئی' },
-          { value: 'none', label: 'بدون برگشت (جریمه)' }
-        ]})}
-        ${SMUI.formField('توضیحات عملیاتی', 'ct-notes', { type: 'textarea', value: cr.refundNotes || '' })}
+        ${SMUI.formField('مبلغ استرداد (تومان)', 'ct-refund-amount', { type: 'number', value: 0, dir: 'ltr' })}
+        ${SMUI.formField('مبلغ جریمه (تومان)', 'ct-penalty', { type: 'number', value: 0, dir: 'ltr' })}
+        ${SMUI.formField('حساب پرداخت استرداد', 'ct-bank', { type: 'select', options: bankOpts })}
+        ${SMUI.formField('علت و توضیحات لغو', 'ct-notes', { type: 'textarea' })}
       </div>
-      ${SMUI.formField('یادداشت مدیر', 'ct-note', { type: 'textarea', value: c.managerNote || '' })}`, {
+      ${SMUI.formField('یادداشت تغییر وضعیت', 'ct-note', { type: 'textarea', value: '' })}`, {
       width: 520,
       onSave: async () => {
-        const d = SMUI.readForm(['ct-status', 'ct-paid', 'ct-bank', 'ct-paid-to', 'ct-refund', 'ct-notes', 'ct-note'])
+        const d = SMUI.readForm(['ct-status', 'ct-refund-amount', 'ct-penalty', 'ct-bank', 'ct-notes', 'ct-note'])
         const status = d['ct-status']
-        const patch = { status, managerNote: d['ct-note'] }
+        if (status === c.status) { SMUI.closeModal(); return }
         if (status === 'cancelled') {
-          patch.cancelRecord = {
-            paidAmount: +d['ct-paid'] || 0,
-            bankAccount: d['ct-bank'],
-            paidTo: d['ct-paid-to'],
-            refundMethod: d['ct-refund'],
-            refundNotes: d['ct-notes'],
-            recordedAt: typeof Utils !== 'undefined' ? Utils.todayJalali() : new Date().toISOString(),
-            recordedBy: SM.user()?.name || 'مدیر'
+          const refundToman = +d['ct-refund-amount'] || 0
+          const penaltyToman = +d['ct-penalty'] || 0
+          if (!d['ct-notes'] || (refundToman > 0 && !d['ct-bank'])) {
+            return SM.toast('علت لغو و برای استرداد، حساب بانکی الزامی است', 'error')
           }
-          patch.cancelledAt = patch.cancelRecord.recordedAt
-          if (typeof DB.log === 'function') DB.log('contract_cancel', `${this._couple(c)} — ${SM.fmt(patch.cancelRecord.paidAmount)}`)
+          await window.DomainApi.cancelContract({ contractId: c.id, expectedVersion: c.lifecycleVersion,
+            refundIrr: refundToman * 10, penaltyIrr: penaltyToman * 10,
+            bankId: d['ct-bank'], reason: d['ct-notes'] })
+        } else {
+          await window.DomainApi.transitionContract({ contractId: c.id, expectedVersion: c.lifecycleVersion,
+            status, note: d['ct-note'] || '' })
         }
-        await SecureDB.update('contracts', id, patch)
-        SM.log('contract_update', this._couple(c))
+        await window.ErpRuntime.refresh({ force: true })
+        SMUI.closeModal()
         SMH.refresh('contracts')
       }
     })
@@ -371,5 +371,3 @@ SMModules.contracts = {
     }, 40)
   }
 }
-
-

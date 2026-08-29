@@ -12,6 +12,13 @@ const FinanceSync = {
     refund_received: 'بازگشت وجه دریافتی'
   },
 
+  _requiresTypedAuthority() {
+    if (window.ErpRuntime?.requiresAuthority) return window.ErpRuntime.requiresAuthority()
+    if (typeof location === 'undefined') return false
+    const local = ['localhost', '127.0.0.1'].includes(String(location.hostname || ''))
+    return !local || globalThis.__SM_BUILD_FLAGS__?.localDemo !== true
+  },
+
   couple(c) {
     if (!c) return '—'
     return c.couple || (c.bride && c.groom ? `${c.bride} و ${c.groom}` : c.bride || c.groom || '—')
@@ -34,7 +41,9 @@ const FinanceSync = {
   },
 
   bankInfo(bankId) {
-    const raw = DB.find('banks', x => x.id === bankId)
+    const raw = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().bankAccounts.find(x => x.id === bankId)
+      : this._requiresTypedAuthority() ? undefined : DB.find('banks', x => x.id === bankId)
     const b = this.normalizeBankFields(raw)
     if (!b) return { id: '', name: '—', bank: '', account: '', card: '', iban: '', holder: '' }
     return {
@@ -276,6 +285,10 @@ const FinanceSync = {
   },
 
   _findActiveTx(txId) {
+    if (window.ErpRuntime?.hasTypedData?.()) {
+      return window.ErpRuntime.state().financeTransactions.find(t => t.id === txId || t.logicalId === txId)
+    }
+    if (this._requiresTypedAuthority()) return undefined
     return typeof DB.findActive === 'function'
       ? DB.findActive('transactions', t => t.id === txId)
       : DB.find('transactions', t => t.id === txId && !t._deleted)
@@ -368,6 +381,12 @@ const FinanceSync = {
       mutationId
     }, idempotencyKey)
     if (!gate.ok) return { ok: false, error: gate.error }
+    if (gate.authorized) {
+      await window.ErpRuntime?.refresh?.({ force: true })
+      return { ok: true, authoritative: true,
+        transactionId: gate.server?.result?.transactionId || '',
+        ledgerVersion: gate.server?.result?.ledgerVersion }
+    }
 
     const run = async () => {
       let txUpdated = false
@@ -488,6 +507,12 @@ const FinanceSync = {
       bankId: old.bankId
     }, idempotencyKey)
     if (!gate.ok) return { ok: false, error: gate.error }
+    if (gate.authorized) {
+      await window.ErpRuntime?.refresh?.({ force: true })
+      return { ok: true, authoritative: true,
+        transactionId: gate.server?.result?.transactionId || '',
+        ledgerVersion: gate.server?.result?.ledgerVersion }
+    }
 
     const run = async () => {
       let txDeleted = false
@@ -578,6 +603,12 @@ const FinanceSync = {
       outTransactionId: outId, inTransactionId: inId
     }, idempotencyKey)
     if (!gate.ok) return { ok: false, error: gate.error }
+    if (gate.authorized) {
+      await window.ErpRuntime?.refresh?.({ force: true })
+      return { ok: true, authoritative: true, pairId,
+        transactionId: gate.server?.result?.transactionId || '',
+        ledgerVersion: gate.server?.result?.ledgerVersion }
+    }
 
     const run = async () => {
       const from = (typeof DB.findActive === 'function'
@@ -754,8 +785,16 @@ const FinanceSync = {
       contractId: opts.contractId || ''
     }, idempotencyKey)
     if (!gate.ok) return { ok: false, error: gate.error }
+    if (gate.authorized) {
+      await window.ErpRuntime?.refresh?.({ force: true })
+      return { ok: true, authoritative: true,
+        transactionId: gate.server?.result?.transactionId || '',
+        ledgerVersion: gate.server?.result?.ledgerVersion }
+    }
 
-    const bank = DB.find('banks', b => b.id === opts.bankId && !b._deleted)
+    const bank = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().bankAccounts.find(b => b.id === opts.bankId)
+      : this._requiresTypedAuthority() ? undefined : DB.find('banks', b => b.id === opts.bankId && !b._deleted)
     const balBefore = bank?.balance || 0
     let row = null
     let invoiceId = null
@@ -826,7 +865,9 @@ const FinanceSync = {
     if (!Number.isSafeInteger(amount) || amount <= 0) return { ok: false, error: 'مبلغ نامعتبر' }
     if (!opts.bankId) return { ok: false, error: 'انتخاب حساب بانکی الزامی است' }
 
-    const bank = DB.find('banks', b => b.id === opts.bankId && !b._deleted)
+    const bank = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().bankAccounts.find(b => b.id === opts.bankId)
+      : this._requiresTypedAuthority() ? undefined : DB.find('banks', b => b.id === opts.bankId && !b._deleted)
     if (!bank) return { ok: false, error: 'حساب بانکی یافت نشد' }
     if ((bank.balance || 0) < amount && opts.allowOverdraft !== true) {
       return { ok: false, error: 'موجودی حساب کافی نیست' }
@@ -863,6 +904,12 @@ const FinanceSync = {
       purposeCategory: data.purposeCategory
     }, idempotencyKey)
     if (!gate.ok) return { ok: false, error: gate.error }
+    if (gate.authorized) {
+      await window.ErpRuntime?.refresh?.({ force: true })
+      return { ok: true, authoritative: true,
+        transactionId: gate.server?.result?.transactionId || '',
+        ledgerVersion: gate.server?.result?.ledgerVersion }
+    }
 
     const balBefore = bank.balance || 0
     let row = null
@@ -927,7 +974,9 @@ const FinanceSync = {
 
   /** واریز بعدی مشتری (غیر از بیعانه اول) */
   recordContractPayment(opts) {
-    const c = DB.find('contracts', x => x.id === opts.contractId)
+    const c = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().contracts.find(x => x.id === opts.contractId)
+      : this._requiresTypedAuthority() ? undefined : DB.find('contracts', x => x.id === opts.contractId)
     if (!c) return { ok: false, error: 'قرارداد یافت نشد' }
     return this.recordDeposit({
       ...opts,
@@ -938,6 +987,11 @@ const FinanceSync = {
   },
 
   contractPayments(contractId) {
+    if (window.ErpRuntime?.hasTypedData?.()) {
+      return window.ErpRuntime.state().financeTransactions
+        .filter(t => t.contractId === contractId && t.type === 'deposit' && t.state === 'posted')
+    }
+    if (this._requiresTypedAuthority()) return []
     return (typeof DB.active === 'function' ? DB.active('transactions') : DB.get('transactions') || [])
       .filter(t => t.contractId === contractId && t.type === 'deposit')
       .slice()
@@ -945,11 +999,22 @@ const FinanceSync = {
   },
 
   contractInvoices(contractId) {
+    if (window.ErpRuntime?.hasTypedData?.()) {
+      return window.ErpRuntime.state().financeTransactions
+        .filter(t => t.contractId === contractId && t.state === 'posted')
+        .map(t => ({ ...t, transactionId: t.id, status: 'paid', direction: t.type === 'deposit' ? 'in' : 'out' }))
+    }
+    if (this._requiresTypedAuthority()) return []
     return (typeof DB.active === 'function' ? DB.active('invoices') : (DB.get('invoices') || []).filter(i => !i._deleted))
       .filter(i => i.contractId === contractId).slice().reverse()
   },
 
   hasSyncedDeposit(contractId) {
+    if (window.ErpRuntime?.hasTypedData?.()) {
+      return window.ErpRuntime.state().financeTransactions
+        .some(t => t.contractId === contractId && t.purposeCategory === 'contract_deposit' && t.state === 'posted')
+    }
+    if (this._requiresTypedAuthority()) return false
     return (typeof DB.active === 'function' ? DB.active('transactions') : (DB.get('transactions') || []).filter(t => !t._deleted))
       .some(t => t.contractId === contractId && t.purposeCategory === 'contract_deposit')
   },
@@ -957,7 +1022,10 @@ const FinanceSync = {
   populateBankSelect(selectId, selectedId) {
     const el = document.getElementById(selectId)
     if (!el) return
-    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
+    const banks = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().bankAccounts
+      : this._requiresTypedAuthority() ? []
+        : (typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted))
     el.innerHTML = banks.length
       ? `<option value="">— انتخاب حساب بانکی —</option>${banks.map(b =>
         `<option value="${b.id}"${b.id === selectedId ? ' selected' : ''}>${Utils.escapeHtml(this.bankLabel(b.id))}</option>`

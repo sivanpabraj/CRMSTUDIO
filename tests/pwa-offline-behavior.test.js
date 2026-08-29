@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 
-function workerHarness({ cacheControl = '', manifestVersion = '1.0.1' } = {}) {
+function workerHarness({ cacheControl = '', manifestVersion = '1.1.0' } = {}) {
   const listeners = {}
   const cache = { addAll: vi.fn(async () => undefined), put: vi.fn(async () => undefined) }
   const response = {

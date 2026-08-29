@@ -166,7 +166,7 @@ const UnifiedLogin = {
       if (typeof Cloud === 'undefined' || !Cloud.isConfigured?.()) {
         return { ok: false, code: 'cloud_required', error: 'ورود سرور در این استقرار پیکربندی نشده است' }
       }
-      const cloudOtp = await Cloud.sendPhoneOtp(phone)
+      const cloudOtp = await Cloud.sendPhoneOtp(phone, { shouldCreateUser: false })
       if (!cloudOtp.ok) return { ok: false, error: 'ارسال کد ورود ممکن نشد؛ کمی بعد دوباره تلاش کنید' }
       this._setPending({
         phone,
@@ -190,7 +190,7 @@ const UnifiedLogin = {
     // generated and verified server-side, never stored in browser storage.
     if (typeof Cloud !== 'undefined' && Cloud.isConfigured?.() &&
         ['customer', 'guest'].includes(resolved.kind)) {
-      const cloudOtp = await Cloud.sendPhoneOtp(phone)
+      const cloudOtp = await Cloud.sendPhoneOtp(phone, { shouldCreateUser: false })
       if (!cloudOtp.ok) return cloudOtp
       this._setPending({
         phone,

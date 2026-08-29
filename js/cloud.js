@@ -248,13 +248,12 @@ const Cloud = {
     const c = await this.client()
     if (!c) return { ok: false, error: 'Supabase پیکربندی نشده' }
 
-    const mail = email?.trim() || this.phoneToEmail(phone)
+    const normalizedPhone = Utils.normalizePhone(phone)
     const { data, error } = await c.auth.signUp({
-      email: mail,
+      phone: this.toE164Phone(normalizedPhone),
       password,
       options: {
-        data: { phone: Utils.normalizePhone(phone), name, studio_name: studioName },
-        emailRedirectTo: this.authRedirectUrl()
+        data: { phone: normalizedPhone, email: email?.trim() || '', name, studio_name: studioName }
       }
     })
     if (error) return { ok: false, error: this.formatAuthError(error.message) }
@@ -271,7 +270,7 @@ const Cloud = {
       await RealtimeSync.start(this)
     }
 
-    return { ok: true, session: data.session, user: data.user, identity, needsEmailConfirm: !data.session }
+    return { ok: true, session: data.session, user: data.user, identity, needsPhoneConfirm: !data.session }
   },
 
   async signIn({ email, password, phone }) {
@@ -435,8 +434,8 @@ const Cloud = {
         || sess.user.user_metadata?.name
         || sess.user.email
         || 'مدیر'
-      const phone = localUser?.phone || info.phone || ''
-      const studioName = info.name || AppConfig.DEFAULT_STUDIO_NAME
+      const phone = localUser?.phone || sess.user.user_metadata?.phone || info.phone || ''
+      const studioName = sess.user.user_metadata?.studio_name || info.name || AppConfig.DEFAULT_STUDIO_NAME
       const reg = await this._registerStudio(studioName, phone, display, null)
       if (!reg.ok) return reg
       studioId = reg.studioId

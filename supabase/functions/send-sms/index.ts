@@ -66,16 +66,105 @@ export function createSendSmsHandler(deps: EdgeDeps) {
 
   try {
     const body = await readBoundedJson(req)
-    const validated = validateSmsPayload(body)
-    if (!validated.ok) return json({ ok: false, error: validated.error }, 400, origin)
-    const { studioId, purpose, idempotencyKey, phones, text } = validated
-
     const supabase = deps.createClient(url, anonKey, {
       global: { headers: { Authorization: authorization } },
       auth: { persistSession: false, autoRefreshToken: false },
     })
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) return json({ ok: false, error: 'unauthorized' }, 401, origin)
+    const service = deps.createClient(url, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+
+    // Personnel contract OTP is issued only for the authenticated contract
+    // owner. The service resolves the destination from auth.users; the browser
+    // supplies neither the phone nor the secret.
+    if (body?.action === 'personnel_contract_otp') {
+      const contractId = String(body?.contractId || '')
+      if (!/^[0-9a-f-]{36}$/i.test(contractId)) {
+        return json({ ok: false, error: 'invalid_personnel_contract_otp_request' }, 400, origin)
+      }
+      const { data: challenge, error: challengeError } = await service.rpc('issue_personnel_contract_otp_service', {
+        p_contract_id: contractId,
+        p_actor_id: user.id,
+      })
+      if (challengeError || !challenge?.challengeId || !/^09\d{9}$/.test(String(challenge?.phone || ''))
+        || !/^\d{6}$/.test(String(challenge?.code || ''))) {
+        const status = /rate_limit|cooldown/i.test(String(challengeError?.message || '')) ? 429 : 403
+        return json({ ok: false, error: status === 429 ? 'personnel_contract_otp_rate_limit' : 'personnel_contract_otp_denied' }, status, origin)
+      }
+      const provider = deps.env('SMS_PROVIDER') || 'kavenegar'
+      const config = {
+        apiKey: deps.env('SMS_API_KEY') || '',
+        lineNumber: deps.env('SMS_LINE_NUMBER') || '',
+        username: deps.env('SMS_USERNAME') || '',
+      }
+      const result = await sendSms(provider, config, [challenge.phone],
+        `کد تأیید قرارداد همکاری: ${challenge.code}\nاعتبار: ۱۰ دقیقه`, deps.fetch)
+      if (!result.ok) return json({ ok: false, error: result.error || 'sms_provider_failed' }, 502, origin)
+      return json({ ok: true, challengeId: challenge.challengeId, expiresAt: challenge.expiresAt }, 200, origin)
+    }
+
+    // Contract OTP is a dedicated server flow. The browser supplies neither
+    // code nor message text and never receives the generated code.
+    if (body?.action === 'contract_otp') {
+      const studioId = String(body?.studioId || '')
+      const role = String(body?.role || '')
+      const phone = String(body?.phone || '').replace(/\D/g, '')
+      const idempotencyKey = String(body?.idempotencyKey || '')
+      if (!/^[0-9a-f-]{36}$/i.test(studioId) || !['groom', 'bride'].includes(role)
+        || !/^09\d{9}$/.test(phone) || idempotencyKey.length < 8 || idempotencyKey.length > 128) {
+        return json({ ok: false, error: 'invalid_contract_otp_request' }, 400, origin)
+      }
+      const { data: reservation, error: reserveError } = await supabase.rpc('reserve_sms_dispatch', {
+        p_studio_id: studioId,
+        p_purpose: 'contract_verify',
+        p_recipient_count: 1,
+        p_idempotency_key: idempotencyKey,
+      })
+      if (reserveError) {
+        const status = /rate_limit|daily_quota/i.test(String(reserveError.message || '')) ? 429 : 403
+        return json({ ok: false, error: status === 429 ? 'rate_limit_exceeded' : 'sms_permission_denied' }, status, origin)
+      }
+      if (reservation?.deduped) {
+        return json({ ok: false, error: `duplicate_${reservation.status}` }, 409, origin)
+      }
+      const { data: challenge, error: challengeError } = await service.rpc('issue_contract_otp_service', {
+        p_studio_id: studioId,
+        p_actor_id: user.id,
+        p_party_role: role,
+        p_phone: phone,
+      })
+      if (challengeError || !challenge?.challengeId || !/^\d{6}$/.test(String(challenge?.code || ''))) {
+        await service.rpc('complete_sms_dispatch', {
+          p_dispatch_id: reservation.dispatchId, p_success: false, p_failure_code: 'challenge_failed',
+        })
+        const status = /rate_limit|cooldown/i.test(String(challengeError?.message || '')) ? 429 : 500
+        return json({ ok: false, error: status === 429 ? 'contract_otp_rate_limit' : 'contract_otp_issue_failed' }, status, origin)
+      }
+      const provider = deps.env('SMS_PROVIDER') || 'kavenegar'
+      const config = {
+        apiKey: deps.env('SMS_API_KEY') || '',
+        lineNumber: deps.env('SMS_LINE_NUMBER') || '',
+        username: deps.env('SMS_USERNAME') || '',
+      }
+      const label = role === 'groom' ? 'داماد' : 'عروس'
+      const result = await sendSms(provider, config, [phone],
+        `کد تأیید شماره ${label} برای قرارداد: ${challenge.code}\nاعتبار: ۱۰ دقیقه`, deps.fetch)
+      const { data: completed, error: completionError } = await service.rpc('complete_sms_dispatch', {
+        p_dispatch_id: reservation.dispatchId,
+        p_success: result.ok,
+        p_failure_code: result.ok ? null : String(result.error || 'provider_failed').slice(0, 120),
+      })
+      if (completionError || completed !== true || !result.ok) {
+        return json({ ok: false, error: result.error || 'sms_completion_failed' }, result.ok ? 500 : 502, origin)
+      }
+      return json({ ok: true, challengeId: challenge.challengeId, expiresAt: challenge.expiresAt }, 200, origin)
+    }
+
+    const validated = validateSmsPayload(body)
+    if (!validated.ok) return json({ ok: false, error: validated.error }, 400, origin)
+    const { studioId, purpose, idempotencyKey, phones, text } = validated
 
     const { data: reservation, error: reserveError } = await supabase.rpc('reserve_sms_dispatch', {
       p_studio_id: studioId,
@@ -107,9 +196,6 @@ export function createSendSmsHandler(deps: EdgeDeps) {
       username: deps.env('SMS_USERNAME') || '',
     }
     const result = await sendSms(provider, config, phones, text, deps.fetch)
-    const service = deps.createClient(url, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
     const { data: completed, error: completionError } = await service.rpc('complete_sms_dispatch', {
       p_dispatch_id: reservation.dispatchId,
       p_success: result.ok,

@@ -19,6 +19,9 @@ jobs:
     name: Quality, unit tests and build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -119,6 +122,8 @@ jobs:
         env:
           E2E_LOGIN_PHONE: ${{ secrets.E2E_LOGIN_PHONE }}
           E2E_LOGIN_PASSWORD: ${{ secrets.E2E_LOGIN_PASSWORD }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
       - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -142,7 +147,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - run: docker build --pull --tag studio-m:${{ github.sha }} .
+      - run: >-
+          docker build --pull
+          --build-arg VITE_SUPABASE_URL="${{ vars.VITE_SUPABASE_URL }}"
+          --build-arg VITE_SUPABASE_ANON_KEY="${{ vars.VITE_SUPABASE_ANON_KEY }}"
+          --tag studio-m:${{ github.sha }} .
       - name: Validate nginx and probe runtime headers
         run: |
           docker run --detach --name studio-m-ci -p 127.0.0.1:8080:80 studio-m:${{ github.sha }}

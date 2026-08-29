@@ -117,7 +117,7 @@ describe('password reset and unified login behavior', () => {
     AppConfig.allowsLocalIdentity = () => false
     expect((await PasswordReset.sendOtp('09121234567')).cloudOtp).toBe(true)
     Cloud.sendPhoneOtp.mockResolvedValueOnce({ ok: false })
-    expect((await PasswordReset.sendOtp('09121234567')).ok).toBe(false)
+    expect((await PasswordReset.sendOtp('09121234567')).ok).toBe(true)
     vi.stubGlobal('Cloud', undefined)
     expect((await PasswordReset.sendOtp('09121234567')).code).toBe('cloud_required')
   })

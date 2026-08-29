@@ -128,6 +128,8 @@
             <button type="button" class="date-picker-btn" title="تقویم شمسی"><i class="fas fa-calendar-days"></i></button>
           </div>
         </div>
+        <div class="fg flex-1"><label>ساعت شروع <span class="req">*</span></label><input id="event-start-time" class="fi ltr" type="time" dir="ltr" value="16:00"/></div>
+        <div class="fg flex-1"><label>ساعت پایان <span class="req">*</span></label><input id="event-end-time" class="fi ltr" type="time" dir="ltr" value="23:59"/></div>
       </div>
 
       <div class="step-foot">
@@ -465,6 +467,9 @@
 <script src="js/roles.js" defer></script>
 <script src="js/db.js" defer></script>
 <script src="js/secure-db.js" defer></script>
+<script type="module" src="js/cloud.js"></script>
+<script type="module" src="js/lib/studio-mutate-client.js"></script>
+<script type="module" src="js/domain-api.js"></script>
 <script src="js/finance-sync.js" type="module"></script>
 <script src="js/sms.js" defer></script>
 <script src="js/package-catalog.js" defer></script>

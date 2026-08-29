@@ -5,9 +5,37 @@
 const PortalDashboard = {
   state: { tab: 'all', selectedProjectId: null },
 
-  render(personnel, _user) {
+  _typedProjects(user) {
+    if (!window.ErpRuntime?.hasTypedData?.() || !user?.id) {
+      return window.ErpRuntime?.requiresAuthority?.() ? [] : null
+    }
+    const state = window.ErpRuntime.state()
+    return state.assignments.filter(a => a.userId === user.id).map(a => {
+      const work = state.workOrders.find(w => w.id === a.workOrderId) || {}
+      const contract = state.contracts.find(c => c.id === work.contractId) || {}
+      const status = a.status === 'completed' ? 'finished' : a.status
+      return {
+        id: a.id, workOrderId: a.workOrderId, contractId: work.contractId || '',
+        version: a.version, accepted: a.status === 'offered' ? null : a.status === 'rejected' ? false : true,
+        status, role: a.role || 'همکار', roleId: a.role || '', amount: 0, paid: 0,
+        couple: contract.couple || [contract.bride, contract.groom].filter(Boolean).join(' و ') || work.title || 'پروژه',
+        eventDate: contract.eventDate || '', deadline: a.endsAt || work.dueAt || ''
+      }
+    })
+  },
+
+  _tehranParts(value) {
+    if (!value) return { day: '', time: '—' }
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return { day: '', time: '—' }
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+    const time = new Intl.DateTimeFormat('fa-IR', { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+    return { day, time }
+  },
+
+  render(personnel, user) {
     const issues = DB.get('issues') || []
-    const allProjects = DB.filter('persProjects', p => p.personnelId === personnel.id)
+    const allProjects = this._typedProjects(user) || DB.filter('persProjects', p => p.personnelId === personnel.id)
     const tabProjects = PortalShared.filterProjectsByTab(allProjects, this.state.tab, personnel)
     const invitations = tabProjects.filter(p => p.accepted === null)
     const activeProjects = tabProjects.filter(p => p.accepted === true && !['done', 'delivered', 'rejected'].includes(p.status))
@@ -63,9 +91,9 @@ const PortalDashboard = {
         ${invitations.map(p => this._renderInvite(p)).join('')}
       </div>` : ''}
 
-      ${this._renderEmploymentContracts(personnel)}
+      ${this._renderEmploymentContracts(personnel, user)}
 
-      ${this._renderAttendancePanel(personnel)}
+      ${this._renderAttendancePanel(personnel, user)}
 
       ${problemProjects.length ? `
       <div class="portal-section">
@@ -88,7 +116,7 @@ const PortalDashboard = {
 
       <div class="portal-section">
         <h2>💰 درآمد و حقوق</h2>
-        ${this._renderPayrollSummary(personnel)}
+        ${this._renderPayrollSummary(personnel, user)}
         <table class="earnings-table">
           <thead><tr><th>پروژه</th><th>نقش</th><th>مبلغ</th><th>پرداخت</th></tr></thead>
           <tbody>${allProjects.filter(p => p.accepted === true).map(p => `
@@ -107,8 +135,16 @@ const PortalDashboard = {
       </div>`
   },
 
-  _renderPayrollSummary(personnel) {
+  _renderPayrollSummary(personnel, user) {
     const month = Utils.todayJalali().slice(0, 7)
+    if (window.ErpRuntime?.hasTypedData?.()) {
+      const payments = window.ErpRuntime.state().payrollPayments
+        .filter(p => p.personId === user?.id).slice(0, 3)
+      return payments.length
+        ? `<div class="portal-pay-status paid">✓ آخرین پرداخت معتبر: ${Utils.fmtNum(payments[0].amount)} تومان</div>
+          <div style="margin-bottom:12px;font-size:12px;color:rgba(255,255,255,0.45)">${payments.map(p => `${Utils.escapeHtml(p.month || '')} (${Utils.fmtNum(p.amount)})`).join(' · ')}</div>`
+        : '<div class="portal-pay-status pending">پرداخت ثبت‌شده‌ای در دفترکل سرور وجود ندارد</div>'
+    }
     const calc = typeof PortalShared !== 'undefined' ? PortalShared.calculatePayroll(personnel, month) : null
     const payments = typeof PortalShared !== 'undefined'
       ? PortalShared.getPayrollPayments(personnel.id).slice(0, 3)
@@ -134,13 +170,13 @@ const PortalDashboard = {
         `${Utils.escapeHtml(p.monthLabel || p.month || '')} (${Utils.fmtNum(p.amount)})`).join(' · ')}</div>` : ''}`
   },
 
-  _renderEmploymentContracts(personnel) {
-    const pending = (DB.get('persContracts') || []).filter(c =>
-      c.personnelId === personnel.id && c.type === 'employment' && c.status !== 'verified' && c.status !== 'rejected'
-    )
-    const verified = (DB.get('persContracts') || []).filter(c =>
-      c.personnelId === personnel.id && c.type === 'employment' && c.status === 'verified'
-    ).slice(-1)
+  _renderEmploymentContracts(personnel, user) {
+    const typed = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().personnelContracts.filter(c => c.personnel_user_id === user?.id)
+      : window.ErpRuntime?.requiresAuthority?.() ? [] : null
+    const source = typed || (DB.get('persContracts') || []).filter(c => c.personnelId === personnel.id && c.type === 'employment')
+    const pending = source.filter(c => c.status === 'offered' || c.status === 'sms_sent')
+    const verified = source.filter(c => c.status === 'accepted' || c.status === 'verified').slice(-1)
 
     if (!pending.length && !verified.length) return ''
 
@@ -149,16 +185,17 @@ const PortalDashboard = {
       html += `<div class="portal-section"><h2>📄 قرارداد همکاری با استودیو</h2>`
       html += pending.map(c => `
         <div class="invite-card employment-contract-card">
-          <div class="project-card-title">${Utils.escapeHtml(c.studioName || 'استودیو')} — قرارداد همکاری</div>
+          <div class="project-card-title">${Utils.escapeHtml(c.terms?.studioName || c.studioName || 'استودیو')} — قرارداد همکاری</div>
           <div class="project-card-meta" style="margin:8px 0">
-            <span>📅 ${Utils.escapeHtml(c.sentAt || '—')}</span>
+            <span>📅 ${Utils.escapeHtml(c.starts_on || c.sentAt || '—')}</span>
           </div>
-          <p style="font-size:13px;line-height:1.6;margin:0 0 10px">${Utils.escapeHtml(c.paySummary || '')}</p>
+          <p style="font-size:13px;line-height:1.6;margin:0 0 10px">${Utils.escapeHtml(c.terms?.paySummary || c.paySummary || '')}</p>
           <p style="font-size:12px;color:rgba(255,255,255,0.55);margin:0 0 12px">با تأیید پیامکی، همکاری شما با استودیو رسمی می‌شود.</p>
           <div class="profile-form" style="margin-bottom:10px">
             <input class="profile-input ltr" id="emp-contract-code-${c.id}" placeholder="کد ۶ رقمی SMS" inputmode="numeric" maxlength="6"/>
           </div>
           <div class="actions">
+            <button class="accept" data-csp-action="Portal.requestEmploymentContractOtp" data-csp-arg="${Utils.escapeHtml(c.id)}">ارسال کد SMS</button>
             <button class="accept" data-csp-action="Portal.verifyEmploymentContract" data-csp-arg="${Utils.escapeHtml(c.id)}">✓ تأیید با کد SMS</button>
             <button class="reject" data-csp-action="Portal.rejectEmploymentContract" data-csp-arg="${Utils.escapeHtml(c.id)}">✕ رد</button>
           </div>
@@ -169,13 +206,23 @@ const PortalDashboard = {
       const c = verified[0]
       html += `<div class="portal-section"><div class="portal-hero" style="margin-bottom:0">
         <h2>✓ قرارداد همکاری تأیید شد</h2>
-        <p>${Utils.escapeHtml(c.studioName || '')} — ${Utils.escapeHtml(c.verification?.verifiedAt || c.sentAt || '')}</p>
+        <p>${Utils.escapeHtml(c.terms?.studioName || c.studioName || '')} — ${Utils.escapeHtml(c.accepted_at || c.verification?.verifiedAt || c.sentAt || '')}</p>
       </div></div>`
     }
     return html
   },
 
-  _renderAttendancePanel(personnel) {
+  _renderAttendancePanel(personnel, user) {
+    if (window.ErpRuntime?.hasTypedData?.() || window.ErpRuntime?.requiresAuthority?.()) {
+      const records = window.ErpRuntime.state().attendanceEntries
+        .filter(r => r.personnelUserId === user?.id)
+        .map(r => {
+          const checkIn = this._tehranParts(r.checkInAt)
+          const checkOut = this._tehranParts(r.checkOutAt)
+          return { ...r, date: checkIn.day, checkIn: checkIn.time, checkOut: r.checkOutAt ? checkOut.time : '' }
+        })
+      return this._renderTypedAttendance(records)
+    }
     const att = typeof SMAttendance !== 'undefined' ? SMAttendance : null
     const today = Utils.todayJalali()
     const todayRecs = att
@@ -234,6 +281,19 @@ const PortalDashboard = {
           </tbody>
         </table>` : '<p style="font-size:13px;color:rgba(255,255,255,0.45)">هنوز سابقه حضور ثبت نشده</p>'}
     </div>`
+  },
+
+  _renderTypedAttendance(records) {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+    const todayRecords = records.filter(r => r.date === today)
+    const open = todayRecords.find(r => !r.checkOutAt)
+    const done = todayRecords.find(r => r.checkOutAt)
+    const recent = records.slice(0, 7)
+    return `<div class="portal-section"><h2>🕐 حضور و غیاب</h2>
+      <div class="portal-att-today">${open ? `<div class="portal-att-status in"><span>ورود: <strong dir="ltr">${Utils.escapeHtml(open.checkIn)}</strong></span><button type="button" class="accept" data-csp-action="Portal.attendanceCheckOut">ثبت خروج</button></div>`
+        : done ? `<div class="portal-att-status done"><span>امروز: ورود <strong dir="ltr">${Utils.escapeHtml(done.checkIn)}</strong> — خروج <strong dir="ltr">${Utils.escapeHtml(done.checkOut)}</strong></span></div>`
+          : '<div class="portal-att-status"><span>امروز هنوز ورود ثبت نشده</span><button type="button" class="accept" data-csp-action="Portal.attendanceCheckIn">ثبت ورود</button></div>'}</div>
+      ${recent.length ? `<table class="earnings-table portal-att-table"><thead><tr><th>تاریخ</th><th>ورود</th><th>خروج</th><th>وضعیت</th></tr></thead><tbody>${recent.map(r => `<tr><td>${Utils.escapeHtml(r.date)}</td><td dir="ltr">${Utils.escapeHtml(r.checkIn)}</td><td dir="ltr">${Utils.escapeHtml(r.checkOut || '—')}</td><td>${r.checkOutAt ? 'خروج ثبت شد' : 'حاضر'}</td></tr>`).join('')}</tbody></table>` : ''}</div>`
   },
 
   _renderInvite(p) {
@@ -317,11 +377,8 @@ const PortalDashboard = {
 
   openProject(projectId) {
     if (document.getElementById('portal-project-modal')) return
-    if (!Auth.ownsPersonnelProject(projectId)) {
-      Utils.toast('دسترسی به این پروژه ندارید', 'error')
-      return
-    }
-    const p = DB.find('persProjects', x => x.id === projectId)
+    const typed = this._typedProjects(Portal.state.currentUser)
+    const p = typed ? typed.find(x => x.id === projectId) : DB.find('persProjects', x => x.id === projectId)
     if (!p) { Utils.toast('پروژه یافت نشد', 'error'); return }
     const issues = PortalShared.getProjectIssues(p, DB.get('issues'))
     const statuses = [

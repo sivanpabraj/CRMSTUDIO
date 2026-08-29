@@ -21,6 +21,17 @@ export function assertPublishableSupabaseKey(key) {
   }
 }
 
+export function assertProductionSupabaseConfig(env = process.env) {
+  if (String(env.E2E_LOCAL_DEMO_BUILD || '').trim() === '1') return
+  const url = String(env.VITE_SUPABASE_URL || '').trim()
+  const key = String(env.VITE_SUPABASE_ANON_KEY || '').trim()
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(url)) {
+    throw new Error('production build requires a valid VITE_SUPABASE_URL')
+  }
+  if (!key) throw new Error('production build requires VITE_SUPABASE_ANON_KEY')
+  assertPublishableSupabaseKey(key)
+}
+
 export function injectStaticPublicEnv(source, env = process.env) {
   assertPublishableSupabaseKey(env.VITE_SUPABASE_ANON_KEY)
   let output = String(source)

@@ -21,6 +21,12 @@ const buildFlags = readFileSync('dist/js/build-flags.js', 'utf8')
 if (!/Object\.freeze\(\{"localDemo":false\}\)/.test(buildFlags)) {
   throw new Error('release artifact enables local demo identity')
 }
+const builtCloud = readFileSync('dist/js/cloud.js', 'utf8')
+if (/import\.meta\.env\?\.VITE_SUPABASE_/.test(builtCloud)
+  || /const url = this\.normalizeUrl\("" \|\| ''\)/.test(builtCloud)
+  || /const anonKey = String\("" \|\| ''\)/.test(builtCloud)) {
+  throw new Error('release artifact lacks immutable Supabase public configuration')
+}
 
 const files = []
 const walk = dir => {

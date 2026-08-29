@@ -82,7 +82,7 @@ describe('FinanceSync mutateRequiredWhenOnline', () => {
     g.SMObservability = { captureError() {}, captureEvent() {} }
     g.StudioMutateClient = StudioMutateClient
     g.window = g
-    for (const k of ['DB', 'SecureDB', 'Utils', 'SMObservability', 'StudioMutateClient', 'FinanceSync', 'Cloud', 'fetch', 'window']) {
+    for (const k of ['DB', 'SecureDB', 'Utils', 'SMObservability', 'StudioMutateClient', 'FinanceSync', 'Cloud', 'fetch', 'window', 'ErpRuntime']) {
       prev[k] = globalThis[k]
     }
     Object.assign(globalThis, {
@@ -134,10 +134,10 @@ describe('FinanceSync mutateRequiredWhenOnline', () => {
     expect(g.data.banks[0].balance).toBe(beforeBal)
   })
 
-  it('commits local deposit after mutate accepts', async () => {
+  it('returns the server receipt without committing a second local ledger', async () => {
     globalThis.fetch = vi.fn(async () => ({
       ok: true,
-      json: async () => ({ ok: true, result: { status: 'accepted', ledgerId: 'L1' } })
+      json: async () => ({ ok: true, result: { status: 'accepted', transactionId: 'server-tx', ledgerVersion: 2 } })
     }))
     const res = await FinanceSync.recordDeposit({
       amount: 50000,
@@ -147,13 +147,14 @@ describe('FinanceSync mutateRequiredWhenOnline', () => {
       transactionId: 'tx_fixed_1'
     })
     expect(res.ok).toBe(true)
-    expect(res.transactionId).toBe('tx_fixed_1')
-    expect(g.data.banks[0].balance).toBe(1_050_000)
+    expect(res).toMatchObject({ authoritative: true, transactionId: 'server-tx', ledgerVersion: 2 })
+    expect(g.data.banks[0].balance).toBe(1_000_000)
+    expect(g.data.transactions).toHaveLength(0)
     const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body)
     expect(body.idempotencyKey).toBe('record_deposit:tx_fixed_1')
   })
 
-  it('reports server acceptance and retains reconciliation when local persist fails', async () => {
+  it('does not touch local persistence after server acceptance', async () => {
     const accepted = {
       status: 'accepted', ledgerVersion: 7, transactionId: 'server-tx',
       balances: [{ account_ref: 'asset:bank:b1', balance_irr: 10_500_000 }]
@@ -175,14 +176,31 @@ describe('FinanceSync mutateRequiredWhenOnline', () => {
       syncInvoice: false,
       transactionId: 'stable-local-id'
     })
-    expect(res).toMatchObject({
-      ok: false,
-      serverAccepted: true,
-      needsReconciliation: true,
-      idempotencyKey: 'record_deposit:stable-local-id'
-    })
+    expect(res).toMatchObject({ ok: true, authoritative: true, transactionId: 'server-tx', ledgerVersion: 7 })
+    expect(g.SecureDB.insert).not.toHaveBeenCalled()
     expect(receipts).toHaveLength(1)
     expect(g.data.banks[0].balance).toBe(1_000_000)
+  })
+
+  it('skips every local finance writer after authoritative update/delete/withdrawal/transfer receipts', async () => {
+    globalThis.ErpRuntime = { refresh: vi.fn(async () => ({})) }
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true, result: { status: 'accepted', transactionId: 'server-tx', ledgerVersion: 3 } })
+    }))
+    g.data.transactions.push({ id: 'local-tx', type: 'deposit', amount: 10, bankId: 'b1', _deleted: false })
+    g.data.banks.push({ id: 'b2', name: 'Second', balance: 500, _deleted: false })
+    const before = JSON.stringify(g.data)
+    expect(await FinanceSync.recordWithdrawal({ amount: 10, bankId: 'b1', syncInvoice: false }))
+      .toMatchObject({ ok: true, authoritative: true })
+    expect(await FinanceSync.transferBetweenBanks({ amount: 10, fromBankId: 'b1', toBankId: 'b2' }))
+      .toMatchObject({ ok: true, authoritative: true })
+    expect(await FinanceSync.updateTransaction('local-tx', { amount: 20 }))
+      .toMatchObject({ ok: true, authoritative: true })
+    expect(await FinanceSync.deleteTransaction('local-tx'))
+      .toMatchObject({ ok: true, authoritative: true })
+    expect(JSON.stringify(g.data)).toBe(before)
+    expect(globalThis.ErpRuntime.refresh).toHaveBeenCalledTimes(4)
   })
 
   it('blocks local financial commits without an authenticated cloud session', async () => {

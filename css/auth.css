@@ -443,6 +443,31 @@ body.auth-screen .auth-otp-meta {
 }
 .auth-forgot a:hover { text-decoration: underline; }
 
+.auth-view-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.auth-notice {
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, #34c759 35%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, #34c759 10%, transparent);
+  color: var(--auth-text, #1d1d1f);
+  font-size: .86rem;
+  line-height: 1.7;
+}
+
+.auth-field-help {
+  margin: 6px 2px 0;
+  color: var(--auth-muted, #555b66);
+  font-size: .78rem;
+  line-height: 1.65;
+}
+
 .pw-hint {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.45);

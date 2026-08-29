@@ -1,5 +1,5 @@
 /* Studio M — Service Worker (offline shell + asset cache) */
-const CACHE = 'studio-m-v1.0.1'
+const CACHE = 'studio-m-v1.1.0'
 
 const ASSETS = [
   './site.html',
@@ -19,7 +19,7 @@ async function precacheAssets(cache) {
   const response = await fetch(manifestUrl, { cache: 'no-store' })
   if (!response.ok) throw new Error(`offline manifest unavailable (${response.status})`)
   const manifest = await response.json()
-  if (manifest.version !== '1.0.1' || !Array.isArray(manifest.assets)) {
+  if (manifest.version !== '1.1.0' || !Array.isArray(manifest.assets)) {
     throw new Error('offline manifest version mismatch')
   }
   const urls = manifest.assets.map(asset => new URL(asset, self.registration?.scope || self.location.href).href)

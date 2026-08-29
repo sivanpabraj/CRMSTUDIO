@@ -113,6 +113,90 @@ describe('send-sms edge handler', () => {
     expect(res.status).toBe(200)
     expect(c.service.rpc).toHaveBeenCalledWith('complete_sms_dispatch', expect.objectContaining({ p_success: true, p_failure_code: null }))
   })
+
+  it('issues contract OTP only on the server and returns challenge metadata', async () => {
+    const userClient = {
+      auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } }, error: null })) },
+      rpc: vi.fn(async () => ({ data: { dispatchId: 'd1' }, error: null }))
+    }
+    const service = {
+      rpc: vi.fn(async name => name === 'issue_contract_otp_service'
+        ? { data: { challengeId: '22000000-0000-4000-8000-000000000001', code: '123456', expiresAt: 'later' }, error: null }
+        : { data: true, error: null })
+    }
+    const createClient = vi.fn((_url, key) => key === 'service-secret' ? service : userClient)
+    const providerFetch = vi.fn(async () => ({ ok: true, json: async () => ({ return: { status: 200 } }) }))
+    const handler = createSendSmsHandler({ createClient, env: env({ SMS_PROVIDER: 'kavenegar' }), fetch: providerFetch })
+    const response = await handler(request({
+      action: 'contract_otp', studioId, role: 'groom', phone: '09121111111', idempotencyKey: 'contract-otp-1'
+    }))
+    expect(response.status).toBe(200)
+    const body = await payload(response)
+    expect(body).toMatchObject({ ok: true, challengeId: '22000000-0000-4000-8000-000000000001' })
+    expect(body).not.toHaveProperty('code')
+    expect(service.rpc).toHaveBeenCalledWith('issue_contract_otp_service', expect.objectContaining({ p_actor_id: 'u1' }))
+    expect(providerFetch.mock.calls[0][1].body.toString()).toContain('123456')
+  })
+
+  it('fails closed for invalid, duplicate, throttled and provider-failed contract OTP', async () => {
+    const make = ({ reservation = { dispatchId: 'd1' }, reserveError = null, challenge = { challengeId: '22000000-0000-4000-8000-000000000001', code: '123456' }, challengeError = null, completed = true } = {}) => {
+      const userClient = {
+        auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } }, error: null })) },
+        rpc: vi.fn(async () => ({ data: reservation, error: reserveError }))
+      }
+      const service = { rpc: vi.fn(async name => name === 'issue_contract_otp_service'
+        ? { data: challenge, error: challengeError }
+        : { data: completed, error: null }) }
+      return vi.fn((_url, key) => key === 'service-secret' ? service : userClient)
+    }
+    const call = (createClient, body, fetch = vi.fn()) => createSendSmsHandler({ createClient, env: env(), fetch })(request(body))
+    const valid = { action: 'contract_otp', studioId, role: 'bride', phone: '09121111111', idempotencyKey: 'contract-otp-2' }
+    expect((await call(make(), { ...valid, role: 'x' })).status).toBe(400)
+    expect((await call(make({ reservation: { deduped: true, status: 'sent' } }), valid)).status).toBe(409)
+    expect((await call(make({ reserveError: { message: 'rate_limit' } }), valid)).status).toBe(429)
+    expect((await call(make({ reserveError: { message: 'permission' } }), valid)).status).toBe(403)
+    expect((await call(make({ challengeError: { message: 'cooldown' } }), valid)).status).toBe(429)
+    expect((await call(make({ challenge: null }), valid)).status).toBe(500)
+    expect((await call(make(), valid, vi.fn(async () => ({ ok: false, json: async () => ({}) })))).status).toBe(502)
+    expect((await call(make({ completed: false }), valid, vi.fn(async () => ({ ok: true, json: async () => ({ return: { status: 200 } }) })))).status).toBe(502)
+  })
+
+  it('issues personnel contract OTP to the server-resolved phone and never returns the secret', async () => {
+    const service = { rpc: vi.fn(async () => ({ data: {
+      challengeId: '22000000-0000-4000-8000-000000000001', code: '654321',
+      phone: '09121111111', expiresAt: 'later'
+    }, error: null })) }
+    const userClient = { auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } }, error: null })) } }
+    const createClient = vi.fn((_url, key) => key === 'service-secret' ? service : userClient)
+    const providerFetch = vi.fn(async () => ({ ok: true, json: async () => ({ return: { status: 200 } }) }))
+    const response = await createSendSmsHandler({ createClient, env: env({ SMS_PROVIDER: 'kavenegar' }), fetch: providerFetch })(request({
+      action: 'personnel_contract_otp', contractId: '22000000-0000-4000-8000-000000000002'
+    }))
+    expect(response.status).toBe(200)
+    expect(await payload(response)).toEqual({ ok: true, challengeId: '22000000-0000-4000-8000-000000000001', expiresAt: 'later' })
+    expect(service.rpc).toHaveBeenCalledWith('issue_personnel_contract_otp_service', {
+      p_contract_id: '22000000-0000-4000-8000-000000000002', p_actor_id: 'u1'
+    })
+    expect(providerFetch.mock.calls[0][1].body.toString()).toContain('654321')
+  })
+
+  it('fails closed for malformed, throttled, unauthorized and provider-failed personnel OTP', async () => {
+    const make = ({ data = null, error = null, providerOk = true } = {}) => {
+      const service = { rpc: vi.fn(async () => ({ data, error })) }
+      const userClient = { auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } }, error: null })) } }
+      const createClient = vi.fn((_url, key) => key === 'service-secret' ? service : userClient)
+      const fetch = vi.fn(async () => ({ ok: providerOk, json: async () => ({ return: { status: providerOk ? 200 : 500 } }) }))
+      return createSendSmsHandler({ createClient, env: env({ SMS_PROVIDER: 'kavenegar' }), fetch })
+    }
+    const valid = { action: 'personnel_contract_otp', contractId: '22000000-0000-4000-8000-000000000002' }
+    expect((await make()(request({ ...valid, contractId: 'bad' }))).status).toBe(400)
+    expect((await make({ error: { message: 'cooldown' } })(request(valid))).status).toBe(429)
+    expect((await make({ error: { message: 'not found' } })(request(valid))).status).toBe(403)
+    expect((await make({ data: { challengeId: 'bad', code: '1', phone: 'x' } })(request(valid))).status).toBe(403)
+    expect((await make({ data: { challengeId: '22000000-0000-4000-8000-000000000001', code: '123456', phone: 'x' } })(request(valid))).status).toBe(403)
+    expect((await make({ data: { challengeId: '22000000-0000-4000-8000-000000000001', code: 'x', phone: '09121111111' } })(request(valid))).status).toBe(403)
+    expect((await make({ data: { challengeId: '22000000-0000-4000-8000-000000000001', code: '123456', phone: '09121111111' }, providerOk: false })(request(valid))).status).toBe(502)
+  })
 })
 
 describe('SMS provider adapter', () => {
@@ -162,6 +246,7 @@ describe('studio-mutate edge handler', () => {
     expect((await handler(request(valid, { auth: false }))).status).toBe(401)
     expect((await createStudioMutateHandler({ createClient: c.createClient, env: env({ SUPABASE_ANON_KEY: '' }) })(request(valid))).status).toBe(503)
     expect((await handler(request({ ...valid, op: 'hack' }))).status).toBe(400)
+    expect((await handler(request({}))).status).toBe(400)
     expect((await handler(request({ ...valid, studioId: 'bad' }))).status).toBe(400)
     expect((await handler(request({ ...valid, idempotencyKey: 'x' }))).status).toBe(400)
     expect((await handler(request({ ...valid, expectedVersion: undefined }))).status).toBe(400)
@@ -195,7 +280,7 @@ describe('studio-mutate edge handler', () => {
 })
 
 describe('cloud-backup edge handler', () => {
-  const valid = { studioId, action: 'create', schemaVersion: 24, appVersion: '1.0.1', payload: { contracts: [{ id: 1 }] } }
+  const valid = { studioId, action: 'create', schemaVersion: 24, appVersion: '1.1.0', payload: { contracts: [{ id: 1 }] } }
   function setup({ user = { id: 'u1' }, rpc = vi.fn(async () => ({ data: 'backup-default', error: null })), encrypt, decrypt, policy = vi.fn() } = {}) {
     const userClient = { auth: { getUser: vi.fn(async () => ({ data: { user }, error: user ? null : {} })) } }
     const service = { rpc }

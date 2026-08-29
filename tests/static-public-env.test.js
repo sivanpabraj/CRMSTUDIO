@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Buffer } from 'node:buffer'
-import { assertPublishableSupabaseKey, injectStaticPublicEnv, renderStaticBuildFlags } from '../scripts/lib/static-public-env.mjs'
+import { assertProductionSupabaseConfig, assertPublishableSupabaseKey, injectStaticPublicEnv, renderStaticBuildFlags } from '../scripts/lib/static-public-env.mjs'
 
 describe('static production environment injection', () => {
   const source = `const url = import.meta.env?.VITE_SUPABASE_URL || ''
@@ -59,5 +59,16 @@ const key = import.meta.env?.VITE_SUPABASE_ANON_KEY || ''`
     expect(renderStaticBuildFlags({})).toContain('{"localDemo":false}')
     expect(renderStaticBuildFlags({ E2E_LOCAL_DEMO_BUILD: 'true' })).toContain('{"localDemo":false}')
     expect(renderStaticBuildFlags({ E2E_LOCAL_DEMO_BUILD: '1' })).toContain('{"localDemo":true}')
+  })
+
+  it('rejects production artifacts without an immutable Supabase identity', () => {
+    expect(() => assertProductionSupabaseConfig({})).toThrow(/VITE_SUPABASE_URL/)
+    expect(() => assertProductionSupabaseConfig({
+      VITE_SUPABASE_URL: 'https://trusted.supabase.co', VITE_SUPABASE_ANON_KEY: ''
+    })).toThrow(/VITE_SUPABASE_ANON_KEY/)
+    expect(() => assertProductionSupabaseConfig({
+      VITE_SUPABASE_URL: 'https://trusted.supabase.co', VITE_SUPABASE_ANON_KEY: 'sb_publishable_test_key'
+    })).not.toThrow()
+    expect(() => assertProductionSupabaseConfig({ E2E_LOCAL_DEMO_BUILD: '1' })).not.toThrow()
   })
 })

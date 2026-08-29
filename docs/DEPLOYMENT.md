@@ -20,8 +20,8 @@ npm run validate:build
 ## Docker (nginx)
 
 ```bash
-docker build -t studio-m:1.0.1 .
-docker run --rm -p 127.0.0.1:8080:80 studio-m:1.0.1
+docker build -t studio-m:1.1.0 .
+docker run --rm -p 127.0.0.1:8080:80 studio-m:1.1.0
 # Health: http://localhost:8080/health.json
 ```
 
@@ -56,7 +56,7 @@ Required headers (see `docker/nginx.conf`):
 ## Supabase
 
 1. Create project
-2. همهٔ migrationهای شماره‌دار `supabase/migrations/` را بدون حذف یا انتخاب گزینشی اعمال کنید. manifest نسخهٔ 1.0.1 دقیقاً با `044_server_authority_and_backup_retirement.sql` پایان می‌یابد و validator هر اختلافی را رد می‌کند. Migration 044 اگر حتی یک backup plaintext پیدا کند عمداً fail می‌شود؛ ابتدا archive را خارج از browser رمزنگاری و با گزارش تطبیق پاک‌سازی کنید، سپس migration را دوباره اجرا کنید. create، restore و فهرست metadata backup فقط از Edge Function احرازشده عبور می‌کنند؛ `SELECT` مستقیم مرورگر عمداً revoke شده است.
+2. همهٔ migrationهای شماره‌دار و timestamped در `supabase/migrations/` را بدون حذف یا انتخاب گزینشی اعمال کنید. manifest نسخهٔ 1.1.0 زنجیرهٔ شماره‌دار را تا `044_server_authority_and_backup_retirement.sql` و migrationهای ERP timestamped را نیز اعتبارسنجی می‌کند. Migration 044 اگر حتی یک backup plaintext پیدا کند عمداً fail می‌شود؛ ابتدا archive را خارج از browser رمزنگاری و با گزارش تطبیق پاک‌سازی کنید، سپس migration را دوباره اجرا کنید. create، restore و فهرست metadata backup فقط از Edge Function احرازشده عبور می‌کنند؛ `SELECT` مستقیم مرورگر عمداً revoke شده است.
 3. Set Auth Site URL → `https://your-domain/studio-m/auth-callback.html` and add the exact staging/production callback URLs to Redirect URLs
 4. Under Authentication, enable Phone plus the configured SMS provider. Enable Google/Apple only after registering their production client IDs and secrets in Supabase; never place provider secrets in the frontend.
 5. Enable Attack Protection → Leaked Password Protection.
@@ -81,9 +81,9 @@ GitHub Actions روی push/PR به main، lint، تست واحد، build، smoke
 - [ ] Apply migration 005 (manager-only snapshot read)
 - [ ] تمام migrationهای شماره‌دار repo اعمال شده و RLS advisor بررسی شده است
 - [ ] `supabase db reset --local && supabase test db` بدون skip یا failure سبز است
-- [ ] tag دقیقاً `v1.0.1` و نسخهٔ health/manifest/package همگی `1.0.1` هستند
+- [ ] tag دقیقاً `v1.1.0` و نسخهٔ health/manifest/package همگی `1.1.0` هستند
 - [ ] E2E واقعی با `E2E_LOGIN_PHONE` و `E2E_LOGIN_PASSWORD` روی staging اجرا شده است
-- [ ] image نهایی Docker boot شده و `/health.json` نسخهٔ `1.0.1` برمی‌گرداند
+- [ ] image نهایی Docker boot شده و `/health.json` نسخهٔ `1.1.0` برمی‌گرداند
 - [ ] Set repository secrets `SUPABASE_DB_URL`, `DEPLOYMENT_HEALTH_URL`, and `DEPLOYMENT_APP_URL`
 - [ ] Confirm Google/Apple callback URLs and SMS delivery on staging
 - [ ] Confirm Leaked Password Protection is enabled

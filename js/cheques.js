@@ -48,9 +48,9 @@ const ChequeManager = {
   },
 
   list() {
-    const rows = typeof DB.active === 'function'
-      ? DB.active('cheques')
-      : (DB.get('cheques') || []).filter(c => !c._deleted)
+    const rows = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().cheques
+      : []
     return rows.map(c => this.normalizeFields(c))
   },
 
@@ -59,7 +59,7 @@ const ChequeManager = {
   },
 
   find(id) {
-    const raw = DB.find('cheques', c => c.id === id)
+    const raw = this.list().find(c => c.id === id)
     return raw ? this.normalizeFields(raw) : null
   },
 
@@ -109,7 +109,7 @@ const ChequeManager = {
       const refKey = `cheque_${ch.id}`
       const existing = notifs.find(n => n.refKey === refKey)
       const dir = this.DIRECTION[this.typeOf(ch)]?.short || 'چک'
-      const bank = DB.find('banks', b => b.id === ch.bankId)
+      const bank = (window.ErpRuntime?.state?.().bankAccounts || []).find(b => b.id === ch.bankId)
       const bankName = bank?.name || bank?.bank || '—'
       const party = this.partyOf(ch)
       let title, text, type
@@ -137,7 +137,7 @@ const ChequeManager = {
 
     for (const n of notifs.filter(x => x.refKey?.startsWith('cheque_'))) {
       const id = n.refKey.replace('cheque_', '')
-      const ch = DB.find('cheques', c => c.id === id)
+      const ch = this.find(id)
       if (!ch || ch.status !== 'pending') await SecureDB.update('notifications', n.id, { read: true })
     }
   },
@@ -148,73 +148,18 @@ const ChequeManager = {
     if (ch.status !== 'pending') return { ok: false, msg: 'این چک قبلاً پاس یا باطل شده' }
     if (!ch.bankId) return { ok: false, msg: 'حساب بانکی مرتبط یافت نشد' }
 
-    const bank = DB.find('banks', b => b.id === ch.bankId)
-    if (!bank) return { ok: false, msg: 'حساب بانکی مرتبط یافت نشد' }
-
     const amount = ch.amount || 0
     if (amount <= 0) return { ok: false, msg: 'مبلغ چک نامعتبر است' }
 
-    const dir = this.typeOf(ch)
-    if (dir === 'outgoing' && (bank.balance || 0) < amount) {
-      return { ok: false, msg: 'موجودی حساب برای پاس این چک کافی نیست' }
+    try {
+      const res = await DomainApi.transitionCheque({
+        chequeId: id, expectedVersion: ch.version, status: 'cleared'
+      })
+      await window.ErpRuntime?.refresh?.({ force: true })
+      return { ok: true, transactionId: res.receipt?.transactionId }
+    } catch (error) {
+      return { ok: false, msg: error.message || 'خطا در وصول اتمیک چک' }
     }
-
-    const purpose = dir === 'incoming' ? 'دریافت چک' : (ch.purpose || ch.category || 'پرداخت چک')
-
-    // FinanceSync is mandatory for cheque ledger writes
-    if (typeof FinanceSync !== 'undefined') {
-      const ledgerOpts = {
-        amount,
-        bankId: ch.bankId,
-        date: Utils.todayJalali(),
-        contractId: ch.contractId || '',
-        client: this.partyOf(ch),
-        purposeCategory: dir === 'incoming'
-          ? (ch.contractId ? 'contract_payment' : 'other_income')
-          : 'other',
-        purpose,
-        paymentMethod: 'cheque',
-        transactionRef: this.numberOf(ch),
-        notes: ch.notes || '',
-        desc: `پاس چک ${this.numberOf(ch)}${ch.purpose ? ' — ' + ch.purpose : ''}`,
-        syncInvoice: true,
-        allowOverdraft: dir !== 'outgoing'
-      }
-      const res = dir === 'incoming'
-        ? await FinanceSync.recordDeposit(ledgerOpts)
-        : await FinanceSync.recordWithdrawal(ledgerOpts)
-      if (!res.ok) return { ok: false, msg: res.error || 'خطا در پاس چک' }
-
-      try {
-        await SecureDB.update('transactions', res.transactionId, { chequeId: ch.id })
-        await SecureDB.update('cheques', id, {
-          status: 'passed',
-          passDate: Utils.todayJalali(),
-          transactionId: res.transactionId,
-          type: dir,
-          direction: dir,
-          number: this.numberOf(ch),
-          chequeNumber: this.numberOf(ch),
-          client: this.partyOf(ch),
-          party: this.partyOf(ch)
-        })
-      } catch (e) {
-        try {
-          await FinanceSync.deleteTransaction(res.transactionId)
-        } catch (re) {
-          if (typeof SMObservability !== 'undefined') {
-            SMObservability.captureError('finance_rollback:chequePassCompensate', re, { rollback: true })
-          }
-        }
-        return { ok: false, msg: e.message || 'خطا در پاس چک — تغییرات برگشت داده شد' }
-      }
-
-      DB.log('cheque_pass', { id, amount, direction: dir, bankId: ch.bankId })
-      await this.syncNotifications()
-      return { ok: true, transactionId: res.transactionId }
-    }
-
-    return { ok: false, msg: 'ماژول مالی در دسترس نیست — از Studio M استفاده کنید' }
   },
 
   async bounceCheque(id, reason = '') {
@@ -222,15 +167,10 @@ const ChequeManager = {
     if (!ch) return { ok: false, msg: 'چک یافت نشد' }
     if (ch.status !== 'pending') return { ok: false, msg: 'فقط چک در انتظار قابل برگشت است' }
 
-    await SecureDB.update('cheques', id, {
-      status: 'bounced',
-      bounceDate: Utils.todayJalali(),
-      bounceReason: reason || '',
-      type: this.typeOf(ch),
-      direction: this.typeOf(ch),
-      number: this.numberOf(ch),
-      chequeNumber: this.numberOf(ch)
-    })
+    try {
+      await DomainApi.transitionCheque({ chequeId: id, expectedVersion: ch.version, status: 'bounced' })
+      await window.ErpRuntime?.refresh?.({ force: true })
+    } catch (error) { return { ok: false, msg: error.message } }
     DB.log('cheque_bounce', { id, reason })
     await this.syncNotifications()
     return { ok: true }
@@ -242,7 +182,10 @@ const ChequeManager = {
     if (ch.status === 'passed') return { ok: false, msg: 'ابتدا پاس چک را لغو کنید' }
     if (ch.status === 'cancelled') return { ok: false, msg: 'قبلاً ابطال شده' }
 
-    await SecureDB.update('cheques', id, { status: 'cancelled' })
+    try {
+      await DomainApi.transitionCheque({ chequeId: id, expectedVersion: ch.version, status: 'cancelled' })
+      await window.ErpRuntime?.refresh?.({ force: true })
+    } catch (error) { return { ok: false, msg: error.message } }
     DB.log('cheque_cancel', { id })
     await this.syncNotifications()
     return { ok: true }
@@ -252,18 +195,10 @@ const ChequeManager = {
     const ch = this.find(id)
     if (!ch || ch.status !== 'passed') return { ok: false, msg: 'چک پاس‌شده یافت نشد' }
 
-    if (ch.transactionId) {
-      if (typeof FinanceSync === 'undefined') {
-        return { ok: false, msg: 'ماژول مالی در دسترس نیست' }
-      }
-      const t = DB.find('transactions', x => x.id === ch.transactionId)
-      if (t && !t._deleted) {
-        const res = await FinanceSync.deleteTransaction(ch.transactionId)
-        if (!res.ok) return { ok: false, msg: res.error || 'خطا در برگشت تراکنش چک' }
-      }
-    }
-
-    await SecureDB.update('cheques', id, { status: 'pending', passDate: '', transactionId: '' })
+    try {
+      await DomainApi.transitionCheque({ chequeId: id, expectedVersion: ch.version, status: 'pending' })
+      await window.ErpRuntime?.refresh?.({ force: true })
+    } catch (error) { return { ok: false, msg: error.message } }
     DB.log('cheque_revert_pass', { id })
     await this.syncNotifications()
     return { ok: true }

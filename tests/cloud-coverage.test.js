@@ -86,7 +86,7 @@ describe('Cloud behavior coverage', () => {
     vi.stubGlobal('Event', class Event { constructor(type) { this.type = type } })
     vi.stubGlobal('sessionStorage', storage())
     vi.stubGlobal('AppConfig', {
-      DEFAULT_STUDIO_NAME: 'Studio M', DB_VERSION: 42, APP_VERSION: '1.0.1', MIN_PASSWORD_LENGTH: 8,
+      DEFAULT_STUDIO_NAME: 'Studio M', DB_VERSION: 42, APP_VERSION: '1.1.0', MIN_PASSWORD_LENGTH: 8,
       allowsLocalIdentity: () => true
     })
     vi.stubGlobal('Utils', {
@@ -191,7 +191,11 @@ describe('Cloud behavior coverage', () => {
   })
 
   it('covers signup, signin and password update server outcomes', async () => {
-    expect((await Cloud.signUp({ phone: '0912', password: 'password', name: 'N', studioName: 'S' })).needsEmailConfirm).toBe(true)
+    expect((await Cloud.signUp({ phone: '09121234567', password: 'password', name: 'N', studioName: 'S' })).needsPhoneConfirm).toBe(true)
+    expect(client.auth.signUp).toHaveBeenLastCalledWith(expect.objectContaining({
+      phone: '+989121234567', password: 'password',
+      options: { data: expect.objectContaining({ phone: '09121234567', studio_name: 'S' }) }
+    }))
     client.auth.signUp.mockResolvedValueOnce({ data: {}, error: { message: 'email_address_invalid' } })
     expect((await Cloud.signUp({ email: 'x' })).ok).toBe(false)
 

@@ -184,11 +184,6 @@ const PortalProfile = {
         phone: f.phone,
         profile: { ...(personnel.profile || {}), ...profileData }
       })
-      DB.filter('persProjects', p => p.personnelId === personnel.id).forEach(p => {
-        if (p.personnelName !== f.name || p.personnelPhone !== f.phone) {
-          SecureDB.update('persProjects', p.id, { personnelName: f.name, personnelPhone: f.phone })
-        }
-      })
     } else {
       personnel = DB.syncPersonnelFromUser(DB.find('users', u => u.id === user.id))
       if (personnel) {

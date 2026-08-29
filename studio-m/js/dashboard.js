@@ -86,13 +86,18 @@ const SMDashboard = {
     const rows = (name) => (typeof DB.active === 'function'
       ? DB.active(name)
       : (DB.get(name) || []).filter(i => i && !i._deleted))
-    const contracts = rows('contracts')
-    const tx = rows('transactions')
+    const typedReady = window.ErpRuntime?.hasTypedData?.()
+    const authorityRequired = window.ErpRuntime?.requiresAuthority?.()
+    const typedState = typedReady ? window.ErpRuntime.state() : null
+    const contracts = typedReady ? typedState.contracts : authorityRequired ? [] : rows('contracts')
+    const tx = typedReady ? typedState.financeTransactions : authorityRequired ? [] : rows('transactions')
     const personnel = rows('personnel').filter(p => p.status === 'active')
     const bookings = rows('bookings')
-    const cheques = rows('cheques')
-    const persProjects = rows('persProjects')
-    const expenses = rows('expenses')
+    const cheques = typedReady ? typedState.cheques : authorityRequired ? [] : rows('cheques')
+    const persProjects = typedReady ? typedState.assignments : authorityRequired ? [] : rows('persProjects')
+    const expenses = typedReady
+      ? tx.filter(t => t.type === 'withdrawal' && t.state === 'posted')
+      : authorityRequired ? [] : rows('expenses')
     const requests = rows('customerRequests')
 
     const income = tx.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0)
@@ -434,7 +439,9 @@ const SMDashboard = {
     const previousIncome = typedPrevious?.actual ?? this._monthAmount(ctx.tx, 'deposit', -1)
     const monthExpense = typedCurrent?.expense ?? this._monthAmount(ctx.tx, 'withdrawal', 0)
     const previousExpense = typedPrevious?.expense ?? this._monthAmount(ctx.tx, 'withdrawal', -1)
-    const bankBalance = this._sum(DB.get('banks') || [], 'balance')
+    const bankBalance = window.ErpRuntime?.hasTypedData?.()
+      ? this._sum(window.ErpRuntime.state().bankAccounts, 'balance')
+      : window.ErpRuntime?.requiresAuthority?.() ? 0 : this._sum(DB.get('banks') || [], 'balance')
     const net = monthIncome - monthExpense
     const billableContracts = ctx.contracts.filter(contract => contract.status !== 'cancelled')
     const collectionRate = billableContracts.length
@@ -466,6 +473,7 @@ const SMDashboard = {
       const typed = window.ErpRuntime.state().financeSeries
       if (typed.length) return typed.map(item => ({ label: item.label, actual: item.actual, expected: item.expected }))
     }
+    if (window.ErpRuntime?.requiresAuthority?.()) return []
     return [-5, -4, -3, -2, -1, 0].map(offset => {
       const ref = this._monthRef(offset)
       const actual = this._monthAmount(ctx.tx, 'deposit', offset)
@@ -531,6 +539,7 @@ const SMDashboard = {
         count: typed.filter(item => statusGroups[stage.id]?.includes(item.status)).length
       }))
     }
+    if (window.ErpRuntime?.requiresAuthority?.()) return stages.map(stage => ({ ...stage, count: 0 }))
     const workflows = DB.get('workflows') || []
     return stages.map(stage => ({
       ...stage,

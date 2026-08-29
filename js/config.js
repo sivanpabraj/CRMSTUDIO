@@ -5,7 +5,7 @@
 const AppConfig = {
   APP_NAME: 'Studio M',
   DEFAULT_STUDIO_NAME: 'Studio M',
-  APP_VERSION: '1.0.1',
+  APP_VERSION: '1.1.0',
   BUILD_DATE: '2026-07-04',
   SW_CACHE: 'studio-m-v23',
   // Must be injected by a dedicated local-demo entry before config.js loads.
@@ -28,7 +28,7 @@ const AppConfig = {
   LEGACY_DB_KEYS: ['studio_db_v4', 'talar_db_v3'],
   BACKUP_PREFIX: 'studio_bu_',
 
-  MIN_PASSWORD_LENGTH: 8,
+  MIN_PASSWORD_LENGTH: 12,
   /** هیچ credential ثابتی در کد نگهداری نمی‌شود. */
   generateBootstrapPhone() {
     const bytes = crypto.getRandomValues(new Uint8Array(9))

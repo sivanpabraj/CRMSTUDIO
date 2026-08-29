@@ -20,7 +20,7 @@ describe('Cloud authoritative identity restoration', () => {
     vi.stubGlobal('AppConfig', {
       DEFAULT_STUDIO_NAME: 'Studio M',
       DB_VERSION: 24,
-      APP_VERSION: '1.0.1',
+      APP_VERSION: '1.1.0',
       allowsLocalIdentity: () => false
     })
     vi.stubGlobal('Utils', { normalizePhone: String, toast: vi.fn() })

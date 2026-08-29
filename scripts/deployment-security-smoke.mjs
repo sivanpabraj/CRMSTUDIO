@@ -47,7 +47,7 @@ const health = await fetch(`${base}/health.json`, { cache: 'no-store', signal: A
 if (!health.ok) throw new Error(`health endpoint returned HTTP ${health.status}`)
 if (!/no-store/i.test(health.headers.get('cache-control') || '')) throw new Error('health endpoint is cacheable')
 const healthBody = await health.json()
-if (healthBody.status !== 'ok' || healthBody.version !== '1.0.1') throw new Error('health metadata mismatch')
+if (healthBody.status !== 'ok' || healthBody.version !== '1.1.0') throw new Error('health metadata mismatch')
 
 const manifest = await fetch(`${base}/offline-assets.json`, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
 if (!manifest.ok || !/no-store/i.test(manifest.headers.get('cache-control') || '')) {

@@ -19,14 +19,18 @@
   </div>
   <script type="module">
     import { createClient } from '@supabase/supabase-js'
+    import { safeStudioReturn } from '../js/safe-oauth-return.js'
 
     async function main() {
       const msg = document.getElementById('msg')
       const errEl = document.getElementById('err')
       const hintEl = document.getElementById('hint')
-      let appUrl = '/studio-m/index.html#settings'
+      const defaultAppUrl = '/studio-m/index.html#settings'
+      let appUrl = defaultAppUrl
       try {
-        appUrl = sessionStorage.getItem('sm_oauth_return') || appUrl
+        const rawReturn = sessionStorage.getItem('sm_oauth_return') || ''
+        appUrl = safeStudioReturn(rawReturn, location.origin)
+        sessionStorage.removeItem('sm_oauth_return')
       } catch { /* */ }
 
       function fail(text, hint) {
@@ -60,7 +64,7 @@
 
       // Implicit flow: pass hash to app so supabase-js can detectSessionInUrl
       if (hash.includes('access_token')) {
-        window.location.replace('/studio-m/index.html#settings')
+        window.location.replace(defaultAppUrl)
         return
       }
 

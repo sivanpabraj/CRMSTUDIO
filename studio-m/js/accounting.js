@@ -9,6 +9,10 @@ const SMAccounting = {
   _ledgerPage: 0,
   _ledgerPageSize: 40,
 
+  _banks() { return window.ErpRuntime?.hasTypedData?.() ? window.ErpRuntime.state().bankAccounts : [] },
+  _transactions() { return window.ErpRuntime?.hasTypedData?.() ? window.ErpRuntime.state().financeTransactions : [] },
+  _cheques() { return window.ErpRuntime?.hasTypedData?.() ? window.ErpRuntime.state().cheques : [] },
+
   MONTHS: ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'],
 
   BANK_THEMES: [
@@ -93,7 +97,7 @@ const SMAccounting = {
   },
 
   _bankName(id) {
-    const b = DB.find('banks', x => x.id === id)
+    const b = this._banks().find(x => x.id === id)
     return b ? (b.name || b.bank || 'حساب') : '—'
   },
 
@@ -143,10 +147,10 @@ const SMAccounting = {
 
   render(el) {
     const q = SM.getModuleSearch('accounting')
-    const allTx = (typeof DB.active === 'function' ? DB.active('transactions') : (DB.get('transactions') || []).filter(t => !t._deleted))
+    const allTx = this._transactions()
     const income = allTx.filter(t => t.type === 'deposit' && t.purposeCategory !== 'transfer').reduce((s, t) => s + (t.amount || 0), 0)
     const expense = allTx.filter(t => t.type === 'withdrawal' && t.purposeCategory !== 'transfer').reduce((s, t) => s + (t.amount || 0), 0)
-    const cheques = (typeof DB.active === 'function' ? DB.active('cheques') : (DB.get('cheques') || []).filter(c => !c._deleted))
+    const cheques = this._cheques()
 
     el.innerHTML = `
       ${SMUI.sectionHead('حسابداری', 'بانک · رفت‌وبرگشت · چک', this._headActions())}
@@ -206,7 +210,7 @@ const SMAccounting = {
   },
 
   _banksView(q) {
-    let banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
+    let banks = this._banks()
     if (q) {
       banks = banks.filter(b =>
         [b.name, b.bank, b.account, b.accountNumber, b.card, b.iban, b.shaba, b.holder, b.balance].join(' ').toLowerCase().includes(q)
@@ -272,13 +276,13 @@ const SMAccounting = {
   },
 
   _ledgerView(q) {
-    let tx = (typeof DB.active === 'function' ? DB.active('transactions') : (DB.get('transactions') || []).filter(t => !t._deleted)).slice().reverse()
+    let tx = this._transactions().slice()
     if (this._flowFilter === 'deposit') tx = tx.filter(t => t.type === 'deposit')
     if (this._flowFilter === 'withdrawal') tx = tx.filter(t => t.type === 'withdrawal')
     if (this._flowFilter === 'transfer') tx = tx.filter(t => t.purposeCategory === 'transfer')
     if (q) {
       tx = tx.filter(t => {
-        const c = t.contractId ? DB.find('contracts', x => x.id === t.contractId) : null
+        const c = t.contractId ? (window.ErpRuntime?.state?.().contracts || []).find(x => x.id === t.contractId) : null
         return [t.date, t.type, t.desc, t.amount, t.client, t.purpose, t.periodMonth, t.transactionRef,
           this._bankName(t.bankId), this._personName(t.personnelId), c && this._couple(c)].join(' ').toLowerCase().includes(q)
       })
@@ -318,7 +322,7 @@ const SMAccounting = {
 
   _txRow(t) {
     const isIn = t.type === 'deposit'
-    const contract = t.contractId ? DB.find('contracts', x => x.id === t.contractId) : null
+    const contract = t.contractId ? (window.ErpRuntime?.state?.().contracts || []).find(x => x.id === t.contractId) : null
     const cats = isIn ? this.DEPOSIT_CATS : this.WITHDRAWAL_CATS
     const catLabel = cats[t.purposeCategory] || (isIn ? 'واریز' : 'برداشت')
     const srcLabel = this.SOURCE_TYPES[t.sourceType]
@@ -362,7 +366,7 @@ const SMAccounting = {
   },
 
   _chequesView(q) {
-    const all = typeof DB.active === 'function' ? DB.active('cheques') : (DB.get('cheques') || []).filter(c => !c._deleted)
+    const all = this._cheques()
     let cheques = all.slice().reverse()
     if (this._chequeFilter === 'incoming') cheques = cheques.filter(c => this._chequeType(c) === 'incoming')
     if (this._chequeFilter === 'outgoing') cheques = cheques.filter(c => this._chequeType(c) === 'outgoing')
@@ -465,11 +469,11 @@ const SMAccounting = {
 
   /* ── PDF رسید ── */
   printReceipt(txId) {
-    const t = DB.find('transactions', x => x.id === txId)
+    const t = this._transactions().find(x => x.id === txId)
     if (!t) return
     const studio = SM.studio()
-    const bank = t.bankId ? DB.find('banks', b => b.id === t.bankId) : null
-    const contract = t.contractId ? DB.find('contracts', c => c.id === t.contractId) : null
+    const bank = t.bankId ? this._banks().find(b => b.id === t.bankId) : null
+    const contract = t.contractId ? (window.ErpRuntime?.state?.().contracts || []).find(c => c.id === t.contractId) : null
     const isIn = t.type === 'deposit'
     const cats = isIn ? this.DEPOSIT_CATS : this.WITHDRAWAL_CATS
     const catLabel = cats[t.purposeCategory] || (isIn ? 'واریز' : 'برداشت')
@@ -546,7 +550,7 @@ const SMAccounting = {
 
   /* ── Bank ── */
   addBank() { this._bankForm(null) },
-  editBank(id) { this._bankForm(DB.find('banks', b => b.id === id)) },
+  editBank(id) { this._bankForm(this._banks().find(b => b.id === id)) },
 
   _bankForm(item) {
     SMUI.modal(item ? 'ویرایش حساب بانکی' : 'افزودن حساب بانکی', `
@@ -568,13 +572,20 @@ const SMAccounting = {
           card: d['ab-card'], account: d['ab-account'] || '', iban: d['ab-iban'] || '',
           balance: d['ab-balance']
         }
-        const plan = (typeof bankSavePlan === 'function')
-          ? bankSavePlan(item, fields)
-          : (item
-            ? { mode: 'update', id: item.id, patch: { name: fields.name, bank: fields.bank, holder: fields.holder, card: fields.card, account: fields.account, accountNumber: fields.account, iban: fields.iban, shaba: fields.iban } }
-            : { mode: 'insert', row: { name: fields.name, bank: fields.bank, holder: fields.holder, card: fields.card, account: fields.account, accountNumber: fields.account, iban: fields.iban, shaba: fields.iban, balance: +fields.balance || 0 } })
-        if (plan.mode === 'update') await SecureDB.update('banks', plan.id, plan.patch)
-        else await SecureDB.insert('banks', plan.row)
+        if (!item && (+fields.balance || 0) !== 0) {
+          return SM.toast('موجودی اولیه باید با سند افتتاحیهٔ دفترکل ثبت شود', 'error')
+        }
+        try {
+          await DomainApi.saveBankAccount({
+            title: fields.name || fields.bank,
+            bankName: fields.bank,
+            holderName: fields.holder,
+            card: fields.card,
+            accountNumber: fields.account,
+            iban: fields.iban
+          }, item?.id || null, item?.version || 0)
+          await window.ErpRuntime?.refresh?.({ force: true })
+        } catch (error) { return SM.toast(error.message || 'ثبت حساب بانکی ناموفق بود', 'error') }
         SMH.refresh('accounting')
       },
       onDelete: item ? () => SMH.remove('banks', item.id, 'accounting') : null,
@@ -584,7 +595,7 @@ const SMAccounting = {
 
   /* ── Transfer ── */
   addTransfer() {
-    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
+    const banks = this._banks()
     if (banks.length < 2) {
       return SM.toast('برای انتقال حداقل دو حساب بانکی نیاز است', 'error')
     }
@@ -631,7 +642,7 @@ const SMAccounting = {
   addDeposit() { this._txForm(null, 'deposit') },
   addWithdrawal() { this._txForm(null, 'withdrawal') },
   editTx(id) {
-    const t = DB.find('transactions', x => x.id === id)
+    const t = this._transactions().find(x => x.id === id)
     if (t) this._txForm(t, t.type)
   },
 
@@ -659,8 +670,8 @@ const SMAccounting = {
 
   _txForm(item, type) {
     const isIn = type === 'deposit'
-    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
-    const contracts = (typeof DB.active === 'function' ? DB.active('contracts') : DB.get('contracts')).filter(c => c.status !== 'cancelled' && !c._deleted)
+    const banks = this._banks()
+    const contracts = (window.ErpRuntime?.state?.().contracts || []).filter(c => c.status !== 'cancelled')
     const personnel = (typeof DB.active === 'function' ? DB.active('personnel') : DB.get('personnel')).filter(p => p.status !== 'inactive' && !p._deleted)
     const cats = isIn ? this.DEPOSIT_CATS : this.WITHDRAWAL_CATS
     const bankOpts = [{ value: '', label: '— انتخاب حساب بانکی —' }, ...banks.map(b => ({
@@ -809,7 +820,7 @@ const SMAccounting = {
   /* ── Cheques ── */
   addCheque() { this._chequeForm(null) },
   editCheque(id) {
-    const rows = typeof DB.active === 'function' ? DB.active('cheques') : (DB.get('cheques') || []).filter(c => !c._deleted)
+    const rows = this._cheques()
     this._chequeForm(rows.find(c => c.id === id))
   },
 
@@ -850,8 +861,8 @@ const SMAccounting = {
   },
 
   _chequeForm(item) {
-    const banks = typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || []).filter(b => !b._deleted)
-    const contracts = (typeof DB.active === 'function' ? DB.active('contracts') : DB.get('contracts')).filter(c => c.status !== 'cancelled' && !c._deleted)
+    const banks = this._banks()
+    const contracts = (window.ErpRuntime?.state?.().contracts || []).filter(c => c.status !== 'cancelled')
     const bankOpts = [{ value: '', label: '—' }, ...banks.map(b => ({ value: b.id, label: b.name || b.bank }))]
     const contractOpts = [{ value: '', label: '—' }, ...contracts.map(c => ({ value: c.id, label: this._couple(c) }))]
     const purposeOpts = Object.entries(this.CHEQUE_PURPOSES).map(([k, v]) => ({ value: k, label: v }))
@@ -911,9 +922,23 @@ const SMAccounting = {
           cardNumber: d['ch-card'],
           notes: d['ch-notes']
         }
-        if (!item) data.status = 'pending'
-        if (item) await SecureDB.update('cheques', item.id, data)
-        else await SecureDB.insert('cheques', data)
+        data.status = 'pending'
+        const parsedDue = Utils.parseJalali(data.dueDate)
+        if (!parsedDue) return SM.toast('تاریخ سررسید نامعتبر است', 'error')
+        const [dueYear, dueMonth, dueDay] = Utils._jalaliToGregorian(parsedDue.jy, parsedDue.jm, parsedDue.jd)
+        try {
+          await DomainApi.registerCheque({
+            chequeNumber: data.chequeNumber,
+            direction: data.direction,
+            party: data.party || data.client,
+            amountIrr: Math.round(data.amount * 10),
+            bankId: data.bankId,
+            dueDate: `${dueYear}-${String(dueMonth).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`
+          })
+          await window.ErpRuntime?.refresh?.({ force: true })
+        } catch (error) {
+          return SM.toast(error.message || 'ثبت چک در سرور ناموفق بود', 'error')
+        }
         if (typeof ChequeManager !== 'undefined') ChequeManager.syncNotifications().catch(() => {})
         SMH.refresh('accounting')
       },

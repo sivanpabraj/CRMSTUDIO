@@ -62,6 +62,21 @@ SMModules.invoices = {
   },
 
   _collectAll() {
+    if (window.ErpRuntime?.hasTypedData?.()) {
+      return window.ErpRuntime.state().financeTransactions
+        .filter(t => t.state === 'posted')
+        .map(t => ({
+          id: t.id,
+          number: `L-${t.revision}-${String(t.id).slice(0, 8)}`,
+          type: typeof FinanceSync !== 'undefined' ? FinanceSync.mapInvoiceType(t) : 'other',
+          direction: t.type === 'deposit' ? 'in' : 'out',
+          title: t.purpose || t.desc || t.purposeCategory || 'سند دفترکل',
+          client: t.client || '', contractId: t.contractId || '', amount: t.amount,
+          date: t.date || t.createdAt, purpose: t.purpose || t.purposeCategory || '',
+          status: 'paid', bankId: t.bankId, transactionId: t.id, _virtual: false
+        }))
+    }
+    if (window.ErpRuntime?.requiresAuthority?.()) return []
     const stored = DB.active('invoices').map(i => ({ ...i, _virtual: false }))
     const linked = new Set(stored.filter(i => i.contractId && i.type?.startsWith('customer')).map(i => `${i.contractId}-${i.type}`))
 
@@ -224,8 +239,16 @@ SMModules.invoices = {
       </div>`, { width: 480 })
   },
 
-  add() { this._form(null) },
-  edit(id) { this._form(DB.find('invoices', x => x.id === id)) },
+  add() {
+    if (window.ErpRuntime?.hasTypedData?.()) return SM.navigate('accounting')
+    if (window.ErpRuntime?.requiresAuthority?.()) return SM.toast('دفترکل سرور هنوز آماده نیست', 'warning')
+    this._form(null)
+  },
+  edit(id) {
+    if (window.ErpRuntime?.hasTypedData?.()) return this.view(id)
+    if (window.ErpRuntime?.requiresAuthority?.()) return SM.toast('دفترکل سرور هنوز آماده نیست', 'warning')
+    this._form(DB.find('invoices', x => x.id === id))
+  },
 
   registerVirtual(id) {
     const v = this._collectAll().find(i => i.id === id && i._virtual)
@@ -234,6 +257,10 @@ SMModules.invoices = {
   },
 
   _form(item, prefilled) {
+    if (window.ErpRuntime?.requiresAuthority?.()) {
+      SM.toast('ثبت فاکتور محلی در نسخهٔ تولید غیرفعال است', 'warning')
+      return
+    }
     const seed = prefilled || item
     const banks = DB.active('banks') || []
     const contracts = DB.active('contracts').filter(c => c.status !== 'cancelled')
@@ -391,5 +418,3 @@ SMModules.invoices = {
     })
   }
 }
-
-

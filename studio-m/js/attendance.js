@@ -55,7 +55,30 @@ const SMAttendance = {
   },
 
   _records() {
+    if (window.ErpRuntime?.hasTypedData?.()) {
+      return window.ErpRuntime.state().attendanceEntries.map(r => {
+        const person = DB.find('personnel', p => p.userId === r.personnelUserId)
+        const inDate = new Date(r.checkInAt)
+        const date = new Intl.DateTimeFormat('fa-IR-u-nu-latn', {
+          timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit'
+        }).format(inDate)
+        const time = value => value ? new Intl.DateTimeFormat('fa-IR-u-nu-latn', {
+          timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hour12: false
+        }).format(new Date(value)) : ''
+        return { ...r, personnelId: person?.id || '', personnelName: person?.name || '', date,
+          checkIn: time(r.checkInAt), checkOut: time(r.checkOutAt), notes: r.note || '' }
+      })
+    }
+    if (window.ErpRuntime?.requiresAuthority?.()) return []
     return DB.active('attendance') || []
+  },
+
+  _serverTimestamp(jalaliDate, time) {
+    const parsed = Utils.parseJalali(jalaliDate)
+    const match = String(time || '').match(/^(\d{1,2}):(\d{2})$/)
+    if (!parsed || !match) return null
+    const [gy, gm, gd] = Utils._jalaliToGregorian(parsed.jy, parsed.jm, parsed.jd)
+    return `${gy}-${String(gm).padStart(2, '0')}-${String(gd).padStart(2, '0')}T${String(+match[1]).padStart(2, '0')}:${match[2]}:00+03:30`
   },
 
   _forMonth(jy, jm, personId) {
@@ -314,15 +337,8 @@ const SMAttendance = {
     const today = Utils.todayJalali()
     const open = this._forDate(today, person.id).find(r => !r.checkOut && r.status !== 'absent')
     if (open) return SM.toast('ورود امروز قبلاً ثبت شده — خروج را بزنید', 'info')
-    await SecureDB.insert('attendance', {
-      personnelId: person.id,
-      personnelName: person.name,
-      date: today,
-      checkIn: this._nowTime(),
-      status: 'present',
-      source: 'admin',
-      notes: ''
-    })
+    await window.DomainApi.recordAttendance('check_in')
+    await window.ErpRuntime.refresh({ force: true })
     SM.log('attendance_checkin', person.name)
     SM.toast('ورود ثبت شد', 'success')
     this._selectedDate = today
@@ -330,9 +346,14 @@ const SMAttendance = {
   },
 
   async checkOut(id) {
-    const rec = DB.find('attendance', r => r.id === id)
+    const rec = this._records().find(r => r.id === id)
     if (!rec) return
-    await SecureDB.update('attendance', id, { checkOut: this._nowTime(), status: 'completed' })
+    await window.DomainApi.saveAttendance({
+      attendanceId: rec.id, personnelUserId: rec.personnelUserId,
+      checkInAt: rec.checkInAt, checkOutAt: new Date().toISOString(), note: rec.notes || '',
+      expectedVersion: rec.version
+    })
+    await window.ErpRuntime.refresh({ force: true })
     SM.toast('خروج ثبت شد', 'success')
     SM.navigate('attendance')
   },
@@ -353,23 +374,19 @@ const SMAttendance = {
       ${SMUI.formField('ساعت خروج', 'att-out', { dir: 'ltr', placeholder: '18:00' })}
       ${SMUI.formField('یادداشت', 'att-notes', { type: 'textarea', placeholder: 'توضیح مدیر...' })}`, {
       width: 480,
-      onSave: () => {
+      onSave: async () => {
         const d = SMUI.readForm(['att-person', 'att-date', 'att-in', 'att-out', 'att-status', 'att-notes'])
         if (!d['att-person']) return SM.toast('پرسنل را انتخاب کنید', 'error')
         const person = personnel.find(p => p.id === d['att-person'])
         const status = d['att-status'] || 'present'
+        if (['absent', 'leave'].includes(status)) return SM.toast('غیبت و مرخصی باید در ماژول سیاست حضور ثبت شود', 'warning')
         const dup = this._forDate(d['att-date'], d['att-person']).length
         if (dup) return SM.toast('برای این پرسنل در این روز قبلاً ثبت شده — ویرایش کنید', 'error')
-        SecureDB.insert('attendance', {
-          personnelId: d['att-person'],
-          personnelName: person?.name,
-          date: Utils.normJalali(d['att-date']) || d['att-date'],
-          checkIn: ['absent', 'leave'].includes(status) ? '' : (d['att-in'] || ''),
-          checkOut: d['att-out'] || '',
-          status: d['att-out'] && status === 'present' ? 'completed' : status,
-          notes: d['att-notes'] || '',
-          source: 'admin'
-        })
+        const checkInAt = this._serverTimestamp(d['att-date'], d['att-in'])
+        const checkOutAt = d['att-out'] ? this._serverTimestamp(d['att-date'], d['att-out']) : null
+        if (!person?.userId || !checkInAt) return SM.toast('حساب ابری پرسنل یا زمان ورود معتبر نیست', 'error')
+        await window.DomainApi.saveAttendance({ personnelUserId: person.userId, checkInAt, checkOutAt, note: d['att-notes'] || '' })
+        await window.ErpRuntime.refresh({ force: true })
         SMUI.closeModal()
         this._selectedDate = Utils.normJalali(d['att-date']) || d['att-date']
         SM.navigate('attendance')
@@ -379,7 +396,7 @@ const SMAttendance = {
   },
 
   edit(id) {
-    const r = DB.find('attendance', x => x.id === id)
+    const r = this._records().find(x => x.id === id)
     if (!r) return
     const personnel = DB.active('personnel')
     const statusOpts = Object.entries(this.STATUS).map(([k, v]) => ({ value: k, label: v.label }))
@@ -391,51 +408,43 @@ const SMAttendance = {
       ${SMUI.formField('ساعت خروج', 'att-out', { value: r.checkOut || '', dir: 'ltr' })}
       ${SMUI.formField('یادداشت', 'att-notes', { type: 'textarea', value: r.notes || '' })}`, {
       width: 480,
-      onSave: () => {
+      onSave: async () => {
         const d = SMUI.readForm(['att-person', 'att-date', 'att-in', 'att-out', 'att-status', 'att-notes'])
         const person = personnel.find(p => p.id === d['att-person'])
         const status = d['att-status'] || 'present'
-        SecureDB.update('attendance', id, {
-          personnelId: d['att-person'],
-          personnelName: person?.name || r.personnelName,
-          date: Utils.normJalali(d['att-date']) || d['att-date'],
-          checkIn: d['att-in'],
-          checkOut: d['att-out'],
-          status: d['att-out'] && status === 'present' ? 'completed' : status,
-          notes: d['att-notes'] || ''
-        })
+        if (['absent', 'leave'].includes(status)) return SM.toast('غیبت و مرخصی باید در ماژول سیاست حضور ثبت شود', 'warning')
+        const checkInAt = this._serverTimestamp(d['att-date'], d['att-in'])
+        const checkOutAt = d['att-out'] ? this._serverTimestamp(d['att-date'], d['att-out']) : null
+        if (!person?.userId || !checkInAt) return SM.toast('حساب ابری پرسنل یا زمان ورود معتبر نیست', 'error')
+        await window.DomainApi.saveAttendance({ attendanceId: id, personnelUserId: person.userId,
+          checkInAt, checkOutAt, note: d['att-notes'] || '', expectedVersion: r.version })
+        await window.ErpRuntime.refresh({ force: true })
         SMUI.closeModal()
         SM.navigate('attendance')
       },
-      onDelete: () => SMH.remove('attendance', id, 'attendance')
+      onDelete: null
     })
   },
 
   /** API for portal & reports */
-  async portalCheckIn(personnelId) {
-    const person = DB.find('personnel', p => p.id === personnelId)
-    if (!person) return { ok: false, error: 'پرسنل یافت نشد' }
-    const today = Utils.todayJalali()
-    const open = this._forDate(today, personnelId).find(r => !r.checkOut && r.status !== 'absent')
-    if (open) return { ok: false, error: 'ورود امروز ثبت شده', record: open }
-    const rec = await SecureDB.insert('attendance', {
-      personnelId,
-      personnelName: person.name,
-      date: today,
-      checkIn: this._nowTime(),
-      status: 'present',
-      source: 'portal',
-      notes: ''
-    })
-    return { ok: true, record: rec }
+  async portalCheckIn(_personnelId) {
+    if (!window.DomainApi || !window.ErpRuntime?.requiresAuthority?.()) {
+      return { ok: false, error: 'ثبت حضور فقط از مسیر سرور مجاز است' }
+    }
+    const result = await window.DomainApi.recordAttendance('check_in')
+    await window.ErpRuntime.refresh({ force: true })
+    return result
   },
 
-  async portalCheckOut(personnelId) {
-    const today = Utils.todayJalali()
-    const open = this._forDate(today, personnelId).find(r => !r.checkOut && r.status !== 'absent')
-    if (!open) return { ok: false, error: 'ورود امروز ثبت نشده' }
-    await SecureDB.update('attendance', open.id, { checkOut: this._nowTime(), status: 'completed' })
-    return { ok: true, record: DB.find('attendance', x => x.id === open.id) }
+  async portalCheckOut(_personnelId) {
+    if (!window.DomainApi || !window.ErpRuntime?.requiresAuthority?.()) {
+      return { ok: false, error: 'ثبت حضور فقط از مسیر سرور مجاز است' }
+    }
+    const open = window.ErpRuntime.state().attendanceEntries.find(row => !row.checkOutAt)
+    if (!open) return { ok: false, error: 'ورود باز یافت نشد' }
+    const result = await window.DomainApi.recordAttendance('check_out', open.version)
+    await window.ErpRuntime.refresh({ force: true })
+    return result
   },
 
   reportSummary(jy, jm) {

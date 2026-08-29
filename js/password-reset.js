@@ -91,12 +91,10 @@ const PasswordReset = {
       if (typeof Cloud === 'undefined' || !Cloud.isConfigured?.()) {
         return { ok: false, code: 'cloud_required', error: 'سرویس بازیابی رمز در دسترس نیست' }
       }
-      const result = await Cloud.sendPhoneOtp(phone, { shouldCreateUser: false })
-      // A uniform response prevents account enumeration. Supabase owns rate
-      // limiting, TTL and one-time consumption in production.
-      return result.ok
-        ? { ok: true, maskedPhone: this._maskPhone(phone), cloudOtp: true }
-        : { ok: false, error: 'ارسال کد بازیابی ممکن نشد؛ کمی بعد دوباره تلاش کنید' }
+      await Cloud.sendPhoneOtp(phone, { shouldCreateUser: false })
+      // A uniform accepted response prevents account enumeration. Verification
+      // still fails closed when no server-side challenge exists.
+      return { ok: true, maskedPhone: this._maskPhone(phone), cloudOtp: true }
     }
 
     const user = this.findManagerByPhone(phone)

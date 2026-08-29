@@ -21,6 +21,26 @@ test.describe('Studio M smoke (no SMS)', () => {
     await expect(setup.or(login)).toBeVisible({ timeout: 20_000 })
   })
 
+  test('auth shell exposes registration and password recovery with client validation', async ({ page }) => {
+    await page.goto('/index.html')
+    await expect(page.getByRole('button', { name: 'ثبت‌نام' })).toBeVisible({ timeout: 20_000 })
+    await page.getByRole('button', { name: 'ثبت‌نام' }).click()
+    await expect(page.locator('#signup-password-confirm')).toBeVisible()
+    await page.locator('#signup-name').fill('مدیر تست')
+    await page.locator('#signup-studio').fill('استودیو تست')
+    await page.locator('#signup-phone').fill('09121234567')
+    await page.locator('#signup-email').fill('owner@example.test')
+    await page.locator('#signup-password').fill('Strong!Password12')
+    await page.locator('#signup-password-confirm').fill('Mismatch!Password12')
+    await page.locator('#login-btn').click()
+    await expect(page.locator('#login-error')).toContainText('یکسان نیست')
+
+    await page.getByRole('button', { name: 'ورود' }).click()
+    await page.getByRole('button', { name: /رمز عبور/ }).click()
+    await page.getByRole('link', { name: /فراموش/ }).click()
+    await expect(page.locator('#reset-phone')).toBeVisible()
+  })
+
   test('legacy admin URL is a permanent redirect only', async ({ page }) => {
     await page.goto('/admin.html')
     await page.waitForURL(/studio-m\/|start\.html/, { timeout: 15_000 })

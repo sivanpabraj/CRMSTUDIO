@@ -13,6 +13,26 @@ const SecureDB = {
     'transactions', 'banks', 'cheques', 'invoices', 'expenses', 'salaryPayments', 'financeOutbox'
   ]),
 
+  /** Aggregates whose source of truth is PostgreSQL in production. */
+  SERVER_AUTHORITATIVE_COLLECTIONS: new Set([
+    'contracts', 'transactions', 'banks', 'cheques', 'invoices', 'expenses',
+    'salaryPayments', 'persProjects', 'persContracts', 'attendance'
+  ]),
+
+  _productionBrowser() {
+    try {
+      const localHost = ['localhost', '127.0.0.1'].includes(String(location?.hostname || ''))
+      const demo = globalThis.__SM_BUILD_FLAGS__?.localDemo === true
+      return !localHost || !demo
+    } catch {
+      return true
+    }
+  },
+
+  _serverWriteBlocked(collection) {
+    return this._productionBrowser() && this.SERVER_AUTHORITATIVE_COLLECTIONS.has(collection)
+  },
+
   /** Soft-delete instead of hard splice (must match sync TOMBSTONE_ENTITIES) */
   TOMBSTONE_COLLECTIONS: new Set([
     'contracts', 'transactions', 'invoices', 'bookings', 'personnel', 'equipment',
@@ -55,6 +75,7 @@ const SecureDB = {
 
   /** @param {string} [collection] */
   _canWrite(collection) {
+    if (this._serverWriteBlocked(collection)) return false
     if (typeof canWriteCollection === 'function') {
       const t = this._token()
       const csrfValid = typeof Auth !== 'undefined' && Auth.validateCsrf
@@ -101,6 +122,7 @@ const SecureDB = {
   },
 
   systemSet(collection, data) {
+    if (this._serverWriteBlocked(collection)) throw new Error('server_authoritative_rpc_required')
     if (!this._origSet) return DB.set(collection, data)
     this._systemSync = true
     try {
@@ -111,6 +133,7 @@ const SecureDB = {
   },
 
   systemInsert(collection, item) {
+    if (this._serverWriteBlocked(collection)) throw new Error('server_authoritative_rpc_required')
     if (!this._origInsert) return DB.insert(collection, item)
     this._systemSync = true
     try {
@@ -154,6 +177,7 @@ const SecureDB = {
   },
 
   systemUpdate(collection, id, patch) {
+    if (this._serverWriteBlocked(collection)) throw new Error('server_authoritative_rpc_required')
     if (!this._origUpdate) return DB.update(collection, id, patch)
     this._systemSync = true
     try {
@@ -164,6 +188,7 @@ const SecureDB = {
   },
 
   systemDelete(collection, id) {
+    if (this._serverWriteBlocked(collection)) throw new Error('server_authoritative_rpc_required')
     if (!this._origDelete) return DB.delete(collection, id)
     this._systemSync = true
     try {

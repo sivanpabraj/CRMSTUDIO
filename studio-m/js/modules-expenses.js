@@ -22,7 +22,13 @@ SMModules.expenses = {
   },
 
   render(el) {
-    const expenses = SMH.filterBySearch(DB.active('expenses'), ['title', 'desc', 'category', 'amount', 'date', 'periodMonth', 'notes'], 'expenses')
+    const source = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().financeTransactions
+        .filter(t => t.state === 'posted' && t.type === 'withdrawal'
+          && !['payroll', 'cheque', 'transfer'].includes(t.purposeCategory))
+        .map(t => ({ ...t, title: t.purpose || t.desc || t.purposeCategory || 'هزینه', category: t.purposeCategory || 'general' }))
+      : []
+    const expenses = SMH.filterBySearch(source, ['title', 'desc', 'category', 'amount', 'date', 'periodMonth', 'notes'], 'expenses')
     const total = expenses.reduce((s, e) => s + (e.amount || 0), 0)
     const byCat = {}
     expenses.forEach(e => {
@@ -76,12 +82,12 @@ SMModules.expenses = {
   },
 
   add() { this._form(null) },
-  edit(id) { this._form(DB.find('expenses', e => e.id === id)) },
+  edit() { SM.toast('سند دفترکل قابل ویرایش مستقیم نیست؛ از معکوس‌سازی تراکنش استفاده کنید', 'error') },
 
   _form(item) {
     const catOpts = Object.entries(this.CATEGORIES).map(([k, v]) => ({ value: k, label: v }))
     const monthOpts = this.MONTHS.map(m => ({ value: m, label: m }))
-    const banks = (typeof DB.active === 'function' ? DB.active('banks') : (DB.get('banks') || [])).filter(b => !b._deleted)
+    const banks = window.ErpRuntime?.state?.().bankAccounts || []
     const bankOpts = [{ value: '', label: '— بدون کسر از بانک —' }, ...banks.map(b => ({
       value: b.id, label: `${b.name || b.bank || 'حساب'} — ${SM.fmt(b.balance || 0)} ت`
     }))]
@@ -113,20 +119,12 @@ SMModules.expenses = {
           syncLedger: document.getElementById('exp-ledger')?.checked !== false
         }
 
-        if (item) {
-          await SecureDB.update('expenses', item.id, data)
-        } else {
-          const exp = await SecureDB.insert('expenses', data)
-          if (data.syncLedger && data.bankId) {
-            if (typeof FinanceSync === 'undefined') {
-              try { await SecureDB.delete('expenses', exp.id) } catch (re) {
-                if (typeof SMObservability !== 'undefined') {
-                  SMObservability.captureError('finance_rollback:expenseCreate', re, { rollback: true })
-                }
-              }
-              return SM.toast('ماژول مالی در دسترس نیست', 'error')
-            }
-            const res = await FinanceSync.recordWithdrawal({
+        if (item) return SM.toast('سند هزینه قابل ویرایش مستقیم نیست', 'error')
+        if (!data.syncLedger || !data.bankId) {
+          return SM.toast('هر هزینه باید حساب بانکی و سند دفترکل داشته باشد', 'error')
+        }
+        if (typeof FinanceSync === 'undefined') return SM.toast('ماژول مالی در دسترس نیست', 'error')
+        const res = await FinanceSync.recordWithdrawal({
               amount: data.amount,
               bankId: data.bankId,
               date: data.date,
@@ -135,45 +133,14 @@ SMModules.expenses = {
               purpose: catLabel,
               desc: `${data.title} — ${catLabel}`,
               notes: data.notes || '',
-              expenseId: exp.id,
               syncInvoice: false,
               allowOverdraft: true
-            })
-            if (!res.ok) {
-              try { await SecureDB.delete('expenses', exp.id) } catch (re) {
-                if (typeof SMObservability !== 'undefined') {
-                  SMObservability.captureError('finance_rollback:expenseCreate', re, { rollback: true })
-                }
-              }
-              return SM.toast(res.error || 'خطا در ثبت دفترکل', 'error')
-            }
-            await SecureDB.update('expenses', exp.id, { transactionId: res.transactionId })
-          } else if (data.syncLedger && !data.bankId) {
-            return SM.toast('برای ثبت در دفترکل، حساب بانکی را انتخاب کنید', 'error')
-          }
-        }
+        })
+        if (!res.ok) return SM.toast(res.error || 'خطا در ثبت دفترکل', 'error')
+        await window.ErpRuntime?.refresh?.({ force: true })
         SMH.refresh('expenses')
       },
-      onDelete: item ? async () => {
-        if (!SMH.confirmDelete()) return
-        try {
-          if (item.transactionId) {
-            if (typeof FinanceSync === 'undefined') {
-              return SM.toast('ماژول مالی در دسترس نیست', 'error')
-            }
-            const t = DB.find('transactions', x => x.id === item.transactionId)
-            if (t && !t._deleted) {
-              const res = await FinanceSync.deleteTransaction(t.id)
-              if (!res.ok) return SM.toast(res.error || 'خطا در حذف تراکنش مرتبط', 'error')
-            }
-          }
-          await SecureDB.delete('expenses', item.id)
-          SM.toast('هزینه حذف و موجودی اصلاح شد', 'success')
-          SMH.refresh('expenses')
-        } catch (e) {
-          SM.toast(e.message || 'خطا در حذف', 'error')
-        }
-      } : null,
+      onDelete: null,
       width: 480
     })
   }
@@ -189,4 +156,3 @@ SMModules.expenses = {
 /* ── Payroll (see payroll.js) ── */
 
 /* ── Equipment (see equipment.js) ── */
-

@@ -82,7 +82,7 @@ describe('observability redaction and delivery behavior', () => {
 
   it('sends redacted events to configured remote sink without blocking callers', async () => {
     globalThis.DB = { get: vi.fn(() => ({ observabilityUrl: 'https://obs.example.test/events' })) }
-    globalThis.AppConfig = { APP_VERSION: '1.0.1' }
+    globalThis.AppConfig = { APP_VERSION: '1.1.0' }
     globalThis.fetch = vi.fn(async () => ({ ok: true }))
     const entry = SMObservability.captureEvent('remote', { token: 'private' })
     expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -90,7 +90,7 @@ describe('observability redaction and delivery behavior', () => {
       expect.objectContaining({ method: 'POST', keepalive: true, mode: 'cors' })
     )
     const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body)
-    expect(body).toMatchObject({ scope: 'remote', app: 'studio-m', v: '1.0.1' })
+    expect(body).toMatchObject({ scope: 'remote', app: 'studio-m', v: '1.1.0' })
     expect(body.meta.token).toBe('[redacted]')
     expect(entry.meta.token).toBe('[redacted]')
   })

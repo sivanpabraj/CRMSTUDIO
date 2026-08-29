@@ -43,7 +43,11 @@ for (const csp of cspHeaders) {
   else if (scriptDirective.includes("'unsafe-inline'")) fail('nginx script-src must not allow unsafe-inline')
 }
 
-const migrations = readdirSync('supabase/migrations')
+const allMigrations = readdirSync('supabase/migrations').filter(name => name.endsWith('.sql')).sort()
+for (const name of allMigrations) {
+  if (!/^(?:\d{3}|\d{14})_.+\.sql$/.test(name)) fail(`invalid migration filename: ${name}`)
+}
+const migrations = allMigrations
   .filter((name) => /^\d{3}_.+\.sql$/.test(name))
   .sort()
 const numbers = migrations.map((name) => Number(name.slice(0, 3)))
@@ -52,6 +56,26 @@ for (let i = 1; i < numbers.length; i++) {
   if (numbers[i] !== numbers[i - 1] + 1) {
     fail(`migration gap between ${migrations[i - 1]} and ${migrations[i]}`)
   }
+}
+const timestampMigrations = allMigrations.filter(name => /^\d{14}_.+\.sql$/.test(name))
+if (new Set(timestampMigrations.map(name => name.slice(0, 14))).size !== timestampMigrations.length) {
+  fail('duplicate timestamp migration version')
+}
+
+const otpAuthorityFiles = ['contract.js', 'js/portal-shell.js', 'studio-m/js/employees.js']
+for (const file of otpAuthorityFiles) {
+  const source = readFileSync(file, 'utf8')
+  if (/generateOtp6\s*\(|verification\?*\.code|verification\[['"]code['"]\]/.test(source)) {
+    fail(`${file} contains browser-authoritative OTP generation or comparison`)
+  }
+}
+const personnelPortal = readFileSync('js/portal-shell.js', 'utf8')
+for (const forbidden of [
+  /SecureDB\.(?:insert|update|delete)\(['"]persProjects['"]/,
+  /SecureDB\.(?:insert|update|delete)\(['"]persContracts['"]/,
+  /SecureDB\.(?:insert|update|delete)\(['"]attendance['"]/
+]) {
+  if (forbidden.test(personnelPortal)) fail('personnel portal bypasses typed server commands')
 }
 
 const workflow = readFileSync('.github/workflows/ci.yml', 'utf8')
@@ -92,4 +116,4 @@ if (existsSync('js/customer-login.js')) {
 }
 
 if (process.exitCode) process.exit(process.exitCode)
-console.log(`repository invariants ok (${migrations.length} migrations)`)
+console.log(`repository invariants ok (${allMigrations.length} migrations)`)

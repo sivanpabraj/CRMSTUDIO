@@ -7,7 +7,7 @@ function loadDb({ initial = null, persist = vi.fn(async () => true) } = {}) {
   const context = {
     AppConfig: {
       DB_KEY: 'db', IDB_STORE: 'data', IDB_BACKUP_STORE: 'backups', BACKUP_PREFIX: 'backup:',
-      LEGACY_DB_KEYS: [], APP_VERSION: '1.0.1', DEFAULT_STUDIO_NAME: 'CRMSTUDIO',
+      LEGACY_DB_KEYS: [], APP_VERSION: '1.1.0', DEFAULT_STUDIO_NAME: 'CRMSTUDIO',
     },
     IdbStore: {
       get: vi.fn(async () => structuredClone(initial)), set: persist,
