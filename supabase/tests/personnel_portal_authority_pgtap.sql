@@ -28,6 +28,7 @@ insert into public.erp_attendance_entries(studio_id,personnel_user_id,check_in_a
 
 create temp table _personnel_otp(result jsonb);
 grant select on _personnel_otp to authenticated;
+grant insert on _personnel_otp to service_role;
 set local role service_role;
 insert into _personnel_otp select public.issue_personnel_contract_otp_service(
  '33000000-0000-4000-8000-000000000001','13000000-0000-4000-8000-000000000002');

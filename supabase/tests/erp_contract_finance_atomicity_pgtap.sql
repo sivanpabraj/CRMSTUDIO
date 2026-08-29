@@ -16,6 +16,7 @@ insert into public.studio_members(studio_id,user_id,display_name,roles,status,va
 
 create temp table _contract_otp(result jsonb);
 grant select on _contract_otp to authenticated;
+grant insert on _contract_otp to service_role;
 set local role service_role;
 insert into _contract_otp select public.issue_contract_otp_service(
  '24000000-0000-4000-8000-000000000001','14000000-0000-4000-8000-000000000001','groom','09121111111');

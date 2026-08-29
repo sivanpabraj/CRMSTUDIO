@@ -111,30 +111,30 @@ select throws_ok($$
   update public.contracts
   set studio_id='22000000-0000-4000-8000-000000000002'
   where id='32000000-0000-4000-8000-000000000001'
-$$,'23514','contract_studio_immutable',
-  'manager belonging to both tenants cannot transfer contract ownership');
+$$,'42501',null,
+  'direct browser update cannot transfer contract ownership');
 
 select set_config('request.jwt.claim.sub','12000000-0000-4000-8000-000000000002',true);
-select lives_ok($$
+select throws_ok($$
   update public.contracts set groom='Non-financial edit'
   where id='32000000-0000-4000-8000-000000000001'
-$$,'crm.write can still update non-financial contract fields');
+$$,'42501',null,'crm.write must use a typed contract command for non-financial fields');
 select throws_ok($$
   update public.contracts set total=200000
   where id='32000000-0000-4000-8000-000000000001'
-$$,'42501','contract_finance_write_denied',
-  'crm.write without finance.write cannot alter contract total');
+$$,'42501',null,
+  'crm.write cannot directly alter contract total');
 select throws_ok($$
   update public.contracts set payload=jsonb_set(payload,'{deposit}','20000'::jsonb)
   where id='32000000-0000-4000-8000-000000000001'
-$$,'42501','contract_finance_write_denied',
-  'crm.write without finance.write cannot alter embedded deposit projection');
+$$,'42501',null,
+  'crm.write cannot directly alter embedded deposit projection');
 
 select set_config('request.jwt.claim.sub','12000000-0000-4000-8000-000000000001',true);
-select lives_ok($$
+select throws_ok($$
   update public.contracts set total=200000
   where id='32000000-0000-4000-8000-000000000001'
-$$,'manager with finance.write retains compatible financial maintenance access');
+$$,'42501',null,'finance manager must use the authoritative ledger command');
 select throws_ok($$
   select public.apply_studio_entity_commands(
     '22000000-0000-4000-8000-000000000001','contracts',

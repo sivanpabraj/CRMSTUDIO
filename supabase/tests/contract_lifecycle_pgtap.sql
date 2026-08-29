@@ -102,9 +102,9 @@ select lives_ok(
  where contract_id='40000000-0000-4000-8000-000000000001'),'deliver')$$,
  'manager delivers locked selection');
 select throws_ok(
- $$update public.contracts set event_date='1405-06-21'
+$$update public.contracts set event_date='1405-06-21'
  where id='40000000-0000-4000-8000-000000000001'$$,
- '42501','contract_lifecycle_rpc_required','direct event-date mutation is blocked');
+ '42501',null,'direct event-date mutation is blocked before lifecycle triggers');
 
 select * from finish();
 rollback;
