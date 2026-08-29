@@ -14,14 +14,18 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Pull-request builds verify that public Supabase configuration is embedded and
+# never accept a secret key. Repository variables override these inert CI-only
+# values when authenticated integration tests are configured.
+env:
+  VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://ci-build-only.supabase.co' }}
+  VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || 'sb_publishable_ci_build_only' }}
+
 jobs:
   quality:
     name: Quality, unit tests and build
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -122,8 +126,6 @@ jobs:
         env:
           E2E_LOGIN_PHONE: ${{ secrets.E2E_LOGIN_PHONE }}
           E2E_LOGIN_PASSWORD: ${{ secrets.E2E_LOGIN_PASSWORD }}
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
       - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -149,8 +151,8 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - run: >-
           docker build --pull
-          --build-arg VITE_SUPABASE_URL="${{ vars.VITE_SUPABASE_URL }}"
-          --build-arg VITE_SUPABASE_ANON_KEY="${{ vars.VITE_SUPABASE_ANON_KEY }}"
+          --build-arg VITE_SUPABASE_URL="$VITE_SUPABASE_URL"
+          --build-arg VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY"
           --tag studio-m:${{ github.sha }} .
       - name: Validate nginx and probe runtime headers
         run: |
