@@ -265,12 +265,12 @@ describe('Cloud behavior coverage', () => {
   })
 
   it('calls the backup Edge function and handles HTTP and network failures', async () => {
-    info.supabaseUrl = ''
+    const config = { url: '', anonKey: '', studioId: 'studio-1' }
+    vi.spyOn(Cloud, 'resolvedConfig').mockImplementation(() => config)
     expect((await Cloud._callBackupEdge({})).error).toBe('ورود ابری لازم است')
-    info.supabaseUrl = 'https://local.supabase.co'
-    info.supabaseAnonKey = ''
+    config.url = 'https://local.supabase.co'
     expect((await Cloud._callBackupEdge({})).error).toBe('ورود ابری لازم است')
-    info.supabaseAnonKey = 'publishable'
+    config.anonKey = 'publishable'
     client.auth.getSession.mockResolvedValueOnce({ data: { session: null } })
     expect((await Cloud._callBackupEdge({})).error).toBe('ورود ابری لازم است')
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) })))

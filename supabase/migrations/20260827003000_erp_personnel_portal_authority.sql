@@ -182,22 +182,24 @@ create policy erp_attendance_read on public.erp_attendance_entries for select to
 create or replace function public.record_attendance_action(
   p_studio_id uuid,p_action text,p_expected_version bigint default null
 ) returns jsonb language plpgsql security definer set search_path='' as $$
-declare v_user uuid:=(select auth.uid()); v public.erp_attendance_entries; v_id uuid;
+declare v_user uuid:=(select auth.uid()); v public.erp_attendance_entries; v_id uuid; v_action_at timestamptz;
 begin
   if v_user is null then raise exception 'not_authenticated' using errcode='28000'; end if;
   if not exists(select 1 from public.studio_members m where m.studio_id=p_studio_id and m.user_id=v_user
     and m.status='active' and m.revoked_at is null and m.valid_from<=now() and (m.valid_until is null or m.valid_until>now())) then
     raise exception 'attendance_membership_required' using errcode='42501'; end if;
   if p_action='check_in' then
+    v_action_at:=clock_timestamp();
     insert into public.erp_attendance_entries(studio_id,personnel_user_id,check_in_at,created_by)
-      values(p_studio_id,v_user,now(),v_user) returning id into v_id;
+      values(p_studio_id,v_user,v_action_at,v_user) returning id into v_id;
     return jsonb_build_object('ok',true,'attendanceId',v_id,'status','open');
   elsif p_action='check_out' then
     select * into v from public.erp_attendance_entries where studio_id=p_studio_id and personnel_user_id=v_user
       and check_out_at is null for update;
     if not found then raise exception 'open_attendance_not_found' using errcode='P0002'; end if;
     if p_expected_version is null or v.version<>p_expected_version then raise exception 'attendance_version_conflict' using errcode='40001'; end if;
-    update public.erp_attendance_entries set check_out_at=now(),version=version+1,updated_at=now() where id=v.id;
+    v_action_at:=greatest(clock_timestamp(),v.check_in_at+interval '1 microsecond');
+    update public.erp_attendance_entries set check_out_at=v_action_at,version=version+1,updated_at=v_action_at where id=v.id;
     return jsonb_build_object('ok',true,'attendanceId',v.id,'status','completed','version',v.version+1);
   end if;
   raise exception 'invalid_attendance_action' using errcode='22023';

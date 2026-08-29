@@ -50,7 +50,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','14000000-0000-4000-8000-000000000001',true);
 create temp table _contract_result as select public.create_contract_with_deposit(
  '24000000-0000-4000-8000-000000000001','atomic-contract-command-1',
- '{"localId":"atomic-local","eventDate":"1405/06/01","eventStartsAt":"2026-08-23T05:00:00Z","eventEndsAt":"2026-08-23T10:00:00Z","groom":"A","groomPhone":"09121111111","bride":"B","total":100000,"assignments":[{"userId":"14000000-0000-4000-8000-000000000003","roleKey":"photographer"}]}'::jsonb,
+ '{"localId":"atomic-local","eventDate":"1477/06/01","eventStartsAt":"2099-08-23T05:00:00Z","eventEndsAt":"2099-08-23T10:00:00Z","groom":"A","groomPhone":"09121111111","bride":"B","total":100000,"assignments":[{"userId":"14000000-0000-4000-8000-000000000003","roleKey":"photographer"}]}'::jsonb,
  '{"amount":20000,"bankId":"bank-main"}'::jsonb,
  (select (result->>'challengeId')::uuid from _contract_otp),null) result;
 select is((select result->>'ok' from _contract_result),'true','contract command succeeds as one server transaction');
@@ -79,7 +79,7 @@ select is((select count(*) from public.finance_transactions where studio_id='240
 select set_config('request.jwt.claim.sub','14000000-0000-4000-8000-000000000002',true);
 select throws_ok($$select public.create_contract_with_deposit(
  '24000000-0000-4000-8000-000000000001','secretary-deposit-command',
- '{"localId":"must-rollback","eventDate":"1405/06/02","eventStartsAt":"2026-08-24T05:00:00Z","eventEndsAt":"2026-08-24T10:00:00Z","groom":"C","bride":"D","total":50000}'::jsonb,
+ '{"localId":"must-rollback","eventDate":"1477/06/02","eventStartsAt":"2099-08-24T05:00:00Z","eventEndsAt":"2099-08-24T10:00:00Z","groom":"C","bride":"D","total":50000}'::jsonb,
  '{"amount":10000,"bankId":"bank-main"}'::jsonb,null,null)$$,
  '42501','finance_permission_denied','deposit permission failure rolls back the aggregate');
 reset role;
@@ -91,7 +91,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','14000000-0000-4000-8000-000000000001',true);
 select throws_ok($$select public.create_contract_with_deposit(
  '24000000-0000-4000-8000-000000000001','missing-bank-command',
- '{"localId":"missing-bank","eventDate":"1405/06/03","eventStartsAt":"2026-08-25T05:00:00Z","eventEndsAt":"2026-08-25T10:00:00Z","groom":"E","bride":"F","total":50000}'::jsonb,
+ '{"localId":"missing-bank","eventDate":"1477/06/03","eventStartsAt":"2099-08-25T05:00:00Z","eventEndsAt":"2099-08-25T10:00:00Z","groom":"E","bride":"F","total":50000}'::jsonb,
  '{"amount":10000}'::jsonb,null,null)$$,
  '22023','deposit_bank_required','deposit without bank is rejected inside the transaction');
 reset role;
