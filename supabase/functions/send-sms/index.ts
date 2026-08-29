@@ -1,249 +1,299 @@
-// Supabase Edge Function — SMS proxy (API keys stay server-side)
-// Deploy: supabase functions deploy send-sms
-// Secrets: SMS_PROVIDER, SMS_API_KEY, SMS_LINE_NUMBER (optional)
+import { createClient } from '@supabase/supabase-js'
+import {
+  isAllowedOrigin,
+  readBoundedJson,
+  validateSmsPayload,
+} from '../_shared/request-policy.js'
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const MAX_TEXT_LEN = 500
-const MAX_PHONES = 10
-const RATE_WINDOW_MS = 60_000
-const RATE_MAX_PER_USER = 5
-
-const rateBuckets = new Map()
-
-const corsHeaders = (origin: string | null) => ({
-  'Access-Control-Allow-Origin': origin || '',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Vary': 'Origin',
-})
-
-function allowedOrigin(req: Request): string | null {
-  const reqOrigin = req.headers.get('Origin')
-  const allowList = (Deno.env.get('ALLOWED_ORIGINS') || '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean)
-  if (!reqOrigin) return allowList[0] || null
-  if (allowList.length === 0) return reqOrigin
-  return allowList.includes(reqOrigin) ? reqOrigin : null
+type EdgeDeps = {
+  createClient: typeof createClient
+  env: (name: string) => string | undefined
+  fetch: typeof fetch
 }
 
-function normalizePhone(raw: string): string | null {
-  const digits = String(raw || '').replace(/\D/g, '')
-  if (/^09\d{9}$/.test(digits)) return digits
-  if (/^989\d{9}$/.test(digits)) return '0' + digits.slice(2)
-  if (/^9\d{9}$/.test(digits)) return '0' + digits
-  return null
+function allowedOrigin(req: Request, env: EdgeDeps['env']): string | null {
+  const requestOrigin = req.headers.get('Origin')
+  if (!requestOrigin) return null
+  return isAllowedOrigin(requestOrigin, env('ALLOWED_ORIGINS') || '')
+    ? requestOrigin
+    : null
 }
 
-function checkRate(userId: string): boolean {
-  const now = Date.now()
-  const bucket = rateBuckets.get(userId) || { count: 0, resetAt: now + RATE_WINDOW_MS }
-  if (now > bucket.resetAt) {
-    bucket.count = 0
-    bucket.resetAt = now + RATE_WINDOW_MS
+function headers(origin: string | null) {
+  return {
+    ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}),
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Cache-Control': 'no-store',
+    'Content-Type': 'application/json',
+    'Vary': 'Origin',
+    'X-Content-Type-Options': 'nosniff',
   }
-  bucket.count += 1
-  rateBuckets.set(userId, bucket)
-  return bucket.count <= RATE_MAX_PER_USER
 }
 
-Deno.serve(async (req) => {
-  const origin = allowedOrigin(req)
-  const headers = corsHeaders(origin)
+function json(body: unknown, status: number, origin: string | null) {
+  return new Response(JSON.stringify(body), { status, headers: headers(origin) })
+}
+
+async function responseJson(res: Response): Promise<any> {
+  try { return await res.json() } catch { return {} }
+}
+
+export function createSendSmsHandler(deps: EdgeDeps) {
+  return async (req: Request) => {
+  const requestOrigin = req.headers.get('Origin')
+  const origin = allowedOrigin(req, deps.env)
 
   if (req.method === 'OPTIONS') {
-    if (!origin) return new Response('forbidden', { status: 403 })
-    return new Response('ok', { headers })
+    return origin
+      ? new Response(null, { status: 204, headers: headers(origin) })
+      : json({ ok: false, error: 'origin_not_allowed' }, 403, null)
+  }
+  if (req.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, origin)
+  if (requestOrigin && !origin) return json({ ok: false, error: 'origin_not_allowed' }, 403, null)
+
+  const authorization = req.headers.get('Authorization')
+  if (!authorization?.startsWith('Bearer ')) {
+    return json({ ok: false, error: 'unauthorized' }, 401, origin)
+  }
+
+  const url = deps.env('SUPABASE_URL')
+  const anonKey = deps.env('SUPABASE_ANON_KEY')
+  const serviceRoleKey = deps.env('SUPABASE_SERVICE_ROLE_KEY')
+  if (!url || !anonKey || !serviceRoleKey) {
+    return json({ ok: false, error: 'server_not_configured' }, 503, origin)
   }
 
   try {
-    if (!origin && (Deno.env.get('ALLOWED_ORIGINS') || '').trim()) {
-      return json({ ok: false, error: 'origin not allowed' }, 403, origin)
-    }
+    const body = await readBoundedJson(req)
+    const supabase = deps.createClient(url, anonKey, {
+      global: { headers: { Authorization: authorization } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) return json({ ok: false, error: 'unauthorized' }, 401, origin)
+    const service = deps.createClient(url, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
 
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return json({ ok: false, error: 'unauthorized' }, 401, origin)
-    }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    )
-    const { data: { user }, error: userErr } = await supabase.auth.getUser()
-    if (userErr || !user) {
-      return json({ ok: false, error: 'not authenticated' }, 401, origin)
-    }
-
-    if (!checkRate(user.id)) {
-      return json({ ok: false, error: 'rate limit exceeded' }, 429, origin)
-    }
-
-    const body = await req.json()
-    const rawPhones = Array.isArray(body.phones) ? body.phones : [body.phone].filter(Boolean)
-    if (rawPhones.length > MAX_PHONES) {
-      return json({ ok: false, error: `max ${MAX_PHONES} phones per request` }, 400, origin)
-    }
-
-    const phones = rawPhones.map(normalizePhone).filter(Boolean) as string[]
-    const text = String(body.text || '').trim()
-    if (!phones.length || !text) {
-      return json({ ok: false, error: 'phones and text required' }, 400, origin)
-    }
-    if (text.length > MAX_TEXT_LEN) {
-      return json({ ok: false, error: `text max ${MAX_TEXT_LEN} chars` }, 400, origin)
-    }
-
-    const provider = Deno.env.get('SMS_PROVIDER') || 'kavenegar'
-    const apiKey = Deno.env.get('SMS_API_KEY') || ''
-    const lineNumber = Deno.env.get('SMS_LINE_NUMBER') || ''
-    const username = Deno.env.get('SMS_USERNAME') || ''
-    if (provider === 'melipayamak') {
-      const { user, pass } = parseMeliCreds(username, apiKey)
-      const isConsoleToken = !user && !!apiKey && !String(apiKey).includes(':')
-      if (!isConsoleToken && (!user || !pass)) {
-        return json({ ok: false, error: 'Melipayamak: SMS_API_KEY=console-token یا SMS_USERNAME+رمز، یا user:pass' }, 503, origin)
+    // Personnel contract OTP is issued only for the authenticated contract
+    // owner. The service resolves the destination from auth.users; the browser
+    // supplies neither the phone nor the secret.
+    if (body?.action === 'personnel_contract_otp') {
+      const contractId = String(body?.contractId || '')
+      if (!/^[0-9a-f-]{36}$/i.test(contractId)) {
+        return json({ ok: false, error: 'invalid_personnel_contract_otp_request' }, 400, origin)
       }
-      if (!lineNumber) {
-        return json({ ok: false, error: 'SMS_LINE_NUMBER (شماره خط ملی پیامک) الزامی است' }, 503, origin)
+      const { data: challenge, error: challengeError } = await service.rpc('issue_personnel_contract_otp_service', {
+        p_contract_id: contractId,
+        p_actor_id: user.id,
+      })
+      if (challengeError || !challenge?.challengeId || !/^09\d{9}$/.test(String(challenge?.phone || ''))
+        || !/^\d{6}$/.test(String(challenge?.code || ''))) {
+        const status = /rate_limit|cooldown/i.test(String(challengeError?.message || '')) ? 429 : 403
+        return json({ ok: false, error: status === 429 ? 'personnel_contract_otp_rate_limit' : 'personnel_contract_otp_denied' }, status, origin)
       }
-    } else if (!apiKey) {
-      return json({ ok: false, error: 'SMS not configured on server' }, 503, origin)
+      const provider = deps.env('SMS_PROVIDER') || 'kavenegar'
+      const config = {
+        apiKey: deps.env('SMS_API_KEY') || '',
+        lineNumber: deps.env('SMS_LINE_NUMBER') || '',
+        username: deps.env('SMS_USERNAME') || '',
+      }
+      const result = await sendSms(provider, config, [challenge.phone],
+        `کد تأیید قرارداد همکاری: ${challenge.code}\nاعتبار: ۱۰ دقیقه`, deps.fetch)
+      if (!result.ok) return json({ ok: false, error: result.error || 'sms_provider_failed' }, 502, origin)
+      return json({ ok: true, challengeId: challenge.challengeId, expiresAt: challenge.expiresAt }, 200, origin)
     }
 
-    const result = await sendSms(provider, { apiKey, lineNumber, username }, phones, text)
+    // Contract OTP is a dedicated server flow. The browser supplies neither
+    // code nor message text and never receives the generated code.
+    if (body?.action === 'contract_otp') {
+      const studioId = String(body?.studioId || '')
+      const role = String(body?.role || '')
+      const phone = String(body?.phone || '').replace(/\D/g, '')
+      const idempotencyKey = String(body?.idempotencyKey || '')
+      if (!/^[0-9a-f-]{36}$/i.test(studioId) || !['groom', 'bride'].includes(role)
+        || !/^09\d{9}$/.test(phone) || idempotencyKey.length < 8 || idempotencyKey.length > 128) {
+        return json({ ok: false, error: 'invalid_contract_otp_request' }, 400, origin)
+      }
+      const { data: reservation, error: reserveError } = await supabase.rpc('reserve_sms_dispatch', {
+        p_studio_id: studioId,
+        p_purpose: 'contract_verify',
+        p_recipient_count: 1,
+        p_idempotency_key: idempotencyKey,
+      })
+      if (reserveError) {
+        const status = /rate_limit|daily_quota/i.test(String(reserveError.message || '')) ? 429 : 403
+        return json({ ok: false, error: status === 429 ? 'rate_limit_exceeded' : 'sms_permission_denied' }, status, origin)
+      }
+      if (reservation?.deduped) {
+        return json({ ok: false, error: `duplicate_${reservation.status}` }, 409, origin)
+      }
+      const { data: challenge, error: challengeError } = await service.rpc('issue_contract_otp_service', {
+        p_studio_id: studioId,
+        p_actor_id: user.id,
+        p_party_role: role,
+        p_phone: phone,
+      })
+      if (challengeError || !challenge?.challengeId || !/^\d{6}$/.test(String(challenge?.code || ''))) {
+        await service.rpc('complete_sms_dispatch', {
+          p_dispatch_id: reservation.dispatchId, p_success: false, p_failure_code: 'challenge_failed',
+        })
+        const status = /rate_limit|cooldown/i.test(String(challengeError?.message || '')) ? 429 : 500
+        return json({ ok: false, error: status === 429 ? 'contract_otp_rate_limit' : 'contract_otp_issue_failed' }, status, origin)
+      }
+      const provider = deps.env('SMS_PROVIDER') || 'kavenegar'
+      const config = {
+        apiKey: deps.env('SMS_API_KEY') || '',
+        lineNumber: deps.env('SMS_LINE_NUMBER') || '',
+        username: deps.env('SMS_USERNAME') || '',
+      }
+      const label = role === 'groom' ? 'داماد' : 'عروس'
+      const result = await sendSms(provider, config, [phone],
+        `کد تأیید شماره ${label} برای قرارداد: ${challenge.code}\nاعتبار: ۱۰ دقیقه`, deps.fetch)
+      const { data: completed, error: completionError } = await service.rpc('complete_sms_dispatch', {
+        p_dispatch_id: reservation.dispatchId,
+        p_success: result.ok,
+        p_failure_code: result.ok ? null : String(result.error || 'provider_failed').slice(0, 120),
+      })
+      if (completionError || completed !== true || !result.ok) {
+        return json({ ok: false, error: result.error || 'sms_completion_failed' }, result.ok ? 500 : 502, origin)
+      }
+      return json({ ok: true, challengeId: challenge.challengeId, expiresAt: challenge.expiresAt }, 200, origin)
+    }
+
+    const validated = validateSmsPayload(body)
+    if (!validated.ok) return json({ ok: false, error: validated.error }, 400, origin)
+    const { studioId, purpose, idempotencyKey, phones, text } = validated
+
+    const { data: reservation, error: reserveError } = await supabase.rpc('reserve_sms_dispatch', {
+      p_studio_id: studioId,
+      p_purpose: purpose,
+      p_recipient_count: phones.length,
+      p_idempotency_key: idempotencyKey,
+    })
+    if (reserveError) {
+      const message = String(reserveError.message || '')
+      if (/permission|membership|denied|42501/i.test(message)) {
+        return json({ ok: false, error: 'sms_permission_denied' }, 403, origin)
+      }
+      if (/rate_limit|daily_quota/i.test(message)) {
+        return json({ ok: false, error: message.includes('daily') ? 'studio_daily_quota' : 'rate_limit_exceeded' }, 429, origin)
+      }
+      console.error('sms_reservation_failed', { userId: user.id, code: reserveError.code })
+      return json({ ok: false, error: 'sms_reservation_failed' }, 500, origin)
+    }
+    if (reservation?.deduped) {
+      return reservation.status === 'sent'
+        ? json({ ok: true, deduped: true }, 200, origin)
+        : json({ ok: false, error: `duplicate_${reservation.status}` }, 409, origin)
+    }
+
+    const provider = deps.env('SMS_PROVIDER') || 'kavenegar'
+    const config = {
+      apiKey: deps.env('SMS_API_KEY') || '',
+      lineNumber: deps.env('SMS_LINE_NUMBER') || '',
+      username: deps.env('SMS_USERNAME') || '',
+    }
+    const result = await sendSms(provider, config, phones, text, deps.fetch)
+    const { data: completed, error: completionError } = await service.rpc('complete_sms_dispatch', {
+      p_dispatch_id: reservation.dispatchId,
+      p_success: result.ok,
+      p_failure_code: result.ok ? null : String(result.error || 'provider_failed').slice(0, 120),
+    })
+    if (completionError || completed !== true) {
+      console.error('sms_completion_failed', { userId: user.id, code: completionError?.code || 'not_completed' })
+      return json({ ok: false, error: 'sms_completion_failed' }, 500, origin)
+    }
     return json(result, result.ok ? 200 : 502, origin)
-  } catch (e) {
-    return json({ ok: false, error: String(e?.message || e) }, 500, origin)
+  } catch (error) {
+    const code = error instanceof Error ? error.message : ''
+    if (code === 'request_too_large') return json({ ok: false, error: code }, 413, origin)
+    return json({ ok: false, error: 'invalid_request' }, 400, origin)
   }
-})
-
-function json(data: Record<string, unknown>, status = 200, origin: string | null = null) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
-  })
+  }
 }
 
-function parseMeliCreds(username: string, apiKey: string): { user: string; pass: string } {
+function parseMeliCreds(username: string, apiKey: string) {
   if (username && apiKey) return { user: username, pass: apiKey }
-  const raw = String(apiKey || '')
-  const idx = raw.indexOf(':')
-  if (idx > 0) return { user: raw.slice(0, idx), pass: raw.slice(idx + 1) }
-  return { user: '', pass: '' }
+  const split = String(apiKey || '').indexOf(':')
+  return split > 0
+    ? { user: apiKey.slice(0, split), pass: apiKey.slice(split + 1) }
+    : { user: '', pass: '' }
 }
 
-/** Melipayamak RetStatus=1 is success; Value is RecId or negative error code */
-function meliOk(data: { RetStatus?: number; Value?: string | number; StrRetStatus?: string }): { ok: boolean; error?: string } {
-  if (data?.RetStatus === 1) return { ok: true }
-  const code = data?.Value != null ? String(data.Value) : ''
-  const msg = data?.StrRetStatus || 'melipayamak error'
-  return { ok: false, error: code ? `${msg} (${code})` : msg }
-}
-
-async function sendSms(
+export async function sendSms(
   provider: string,
-  config: { apiKey: string; lineNumber: string; username?: string },
+  config: { apiKey: string; lineNumber: string; username: string },
   phones: string[],
-  text: string
+  text: string,
+  fetchFn: typeof fetch = fetch,
 ): Promise<{ ok: boolean; error?: string }> {
+  if (!config.apiKey) return { ok: false, error: 'sms_not_configured' }
   switch (provider) {
     case 'melipayamak': {
-      const { user, pass } = parseMeliCreds(config.username || '', config.apiKey)
-      const from = config.lineNumber || ''
-      if (!from) return { ok: false, error: 'SMS_LINE_NUMBER (شماره خط ملی پیامک) الزامی است' }
-
-      // کنسول ملی پیامک: توکن در URL — https://console.melipayamak.com/api/send/simple/{token}
-      if (!user && config.apiKey && !String(config.apiKey).includes(':')) {
+      const { user, pass } = parseMeliCreds(config.username, config.apiKey)
+      if (!config.lineNumber) return { ok: false, error: 'line_number_required' }
+      if (!user && !config.apiKey.includes(':')) {
         for (const phone of phones) {
-          const res = await fetch(
-            `https://console.melipayamak.com/api/send/simple/${encodeURIComponent(config.apiKey)}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-              body: JSON.stringify({ from, to: phone, text }),
-            }
-          )
-          const data = await res.json().catch(() => ({}))
-          // status خالی/موفق و recId مثبت = ok؛ status متن خطا می‌دهد
-          const errMsg = typeof data?.status === 'string' ? data.status.trim() : ''
-          const recId = data?.recId
-          const badRec = recId == null || recId === '' || Number(recId) < 0
-          if (!res.ok || (errMsg && badRec) || badRec) {
-            return { ok: false, error: errMsg || `melipayamak console ${res.status}` }
-          }
+          const res = await fetchFn(`https://console.melipayamak.com/api/send/simple/${encodeURIComponent(config.apiKey)}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from: config.lineNumber, to: phone, text }),
+          })
+          const data = await responseJson(res)
+          if (!res.ok || !data?.recId || Number(data.recId) < 0) return { ok: false, error: 'melipayamak_failed' }
         }
         return { ok: true }
       }
-
+      if (!user || !pass) return { ok: false, error: 'melipayamak_credentials_invalid' }
       for (const phone of phones) {
-        const body = new URLSearchParams({
-          username: user,
-          password: pass,
-          to: phone,
-          from,
-          text,
-          isFlash: 'false',
+        const form = new URLSearchParams({ username: user, password: pass, to: phone, from: config.lineNumber, text, isFlash: 'false' })
+        const res = await fetchFn('https://rest.payamak-panel.com/api/SendSMS/SendSMS', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form,
         })
-        const res = await fetch('https://rest.payamak-panel.com/api/SendSMS/SendSMS', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body,
-        })
-        const data = await res.json().catch(() => ({}))
-        const check = meliOk(data)
-        if (!check.ok) return check
+        const data = await responseJson(res)
+        if (!res.ok || data?.RetStatus !== 1) return { ok: false, error: 'melipayamak_failed' }
       }
       return { ok: true }
     }
     case 'kavenegar':
       for (const phone of phones) {
-        const res = await fetch(`https://api.kavenegar.com/v1/${config.apiKey}/sms/send.json`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `receptor=${encodeURIComponent(phone)}&sender=${encodeURIComponent(config.lineNumber)}&message=${encodeURIComponent(text)}`,
+        const res = await fetchFn(`https://api.kavenegar.com/v1/${encodeURIComponent(config.apiKey)}/sms/send.json`, {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ receptor: phone, sender: config.lineNumber, message: text }),
         })
-        const data = await res.json()
-        if (!data.return || data.return.status !== 200) {
-          return { ok: false, error: data.return?.message || 'kavenegar error' }
-        }
+        const data = await responseJson(res)
+        if (!res.ok || data?.return?.status !== 200) return { ok: false, error: 'kavenegar_failed' }
       }
       return { ok: true }
     case 'smsir': {
-      const res = await fetch('https://api.sms.ir/v1/send/bulk', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-KEY': config.apiKey,
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          Message: text,
-          MobileNumbers: phones,
-          LineNumber: config.lineNumber,
-          SendDate: '',
-        }),
+      const res = await fetchFn('https://api.sms.ir/v1/send/bulk', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-KEY': config.apiKey },
+        body: JSON.stringify({ Message: text, MobileNumbers: phones, LineNumber: config.lineNumber, SendDate: '' }),
       })
-      const data = await res.json()
-      return data.IsSuccessful ? { ok: true } : { ok: false, error: data.Message || 'smsir error' }
+      const data = await responseJson(res)
+      return res.ok && data?.IsSuccessful ? { ok: true } : { ok: false, error: 'smsir_failed' }
     }
     case 'farazsms': {
-      const res = await fetch('https://api.iranpayamak.com/ws/v1/sms/simple', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Api-Key': config.apiKey },
-        body: JSON.stringify({
-          text,
-          recipients: phones,
-          line_number: config.lineNumber || '90008361',
-          number_format: 'english',
-        }),
+      const res = await fetchFn('https://api.iranpayamak.com/ws/v1/sms/simple', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Api-Key': config.apiKey },
+        body: JSON.stringify({ text, recipients: phones, line_number: config.lineNumber, number_format: 'english' }),
       })
-      const data = await res.json()
-      return data.status === 'success' ? { ok: true } : { ok: false, error: data.message || 'faraz error' }
+      const data = await responseJson(res)
+      return res.ok && data?.status === 'success' ? { ok: true } : { ok: false, error: 'farazsms_failed' }
     }
     default:
-      return { ok: false, error: 'unknown provider' }
+      return { ok: false, error: 'unknown_provider' }
   }
+}
+
+const runtime = globalThis as typeof globalThis & {
+  Deno?: { env: { get(name: string): string | undefined }; serve(handler: (req: Request) => Promise<Response>): void }
+}
+if (runtime.Deno?.serve) {
+  runtime.Deno.serve(createSendSmsHandler({
+    createClient,
+    env: name => runtime.Deno?.env.get(name),
+    fetch: globalThis.fetch,
+  }))
 }

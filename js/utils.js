@@ -138,9 +138,20 @@ const Utils = {
     return [jy, jm, jd]
   },
 
+  _tehranParts(value = new Date()) {
+    const date = value instanceof Date ? value : new Date(value)
+    if (Number.isNaN(date.getTime())) return null
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(date)
+    const get = type => Number(parts.find(part => part.type === type)?.value)
+    return { year: get('year'), month: get('month'), day: get('day'), hour: get('hour'), minute: get('minute') }
+  },
+
   todayJalali() {
-    const d = new Date()
-    const [jy, jm, jd] = this._gregorianToJalali(d.getFullYear(), d.getMonth() + 1, d.getDate())
+    const p = this._tehranParts()
+    const [jy, jm, jd] = this._gregorianToJalali(p.year, p.month, p.day)
     const pad = n => String(n).padStart(2, '0')
     return `${jy}/${pad(jm)}/${pad(jd)}`
   },
@@ -149,18 +160,20 @@ const Utils = {
   formatJalaliDateTime(isoOrMs) {
     const d = typeof isoOrMs === 'number' ? new Date(isoOrMs) : new Date(isoOrMs)
     if (Number.isNaN(d.getTime())) return '—'
-    const [jy, jm, jd] = this._gregorianToJalali(d.getFullYear(), d.getMonth() + 1, d.getDate())
+    const p = this._tehranParts(d)
+    const [jy, jm, jd] = this._gregorianToJalali(p.year, p.month, p.day)
     const pad = n => String(n).padStart(2, '0')
-    return `${jy}/${pad(jm)}/${pad(jd)} — ساعت ${pad(d.getHours())}:${pad(d.getMinutes())}`
+    return `${jy}/${pad(jm)}/${pad(jd)} — ساعت ${pad(p.hour)}:${pad(p.minute)}`
   },
 
   /** نام فایل پشتیبان با تاریخ و ساعت شمسی */
   backupFileName(label = 'manual') {
     const d = new Date()
-    const [jy, jm, jd] = this._gregorianToJalali(d.getFullYear(), d.getMonth() + 1, d.getDate())
+    const p = this._tehranParts(d)
+    const [jy, jm, jd] = this._gregorianToJalali(p.year, p.month, p.day)
     const pad = n => String(n).padStart(2, '0')
     const safe = String(label || 'manual').replace(/[^\w\u0600-\u06FF-]/g, '-')
-    return `studio-m-${jy}${pad(jm)}${pad(jd)}-${pad(d.getHours())}${pad(d.getMinutes())}-${safe}.json`
+    return `studio-m-${jy}${pad(jm)}${pad(jd)}-${pad(p.hour)}${pad(p.minute)}-${safe}.json`
   },
 
   parseBackupKey(key) {
@@ -314,11 +327,10 @@ const Utils = {
     if (parts.length < 3) return null
     const jy = +parts[0], jm = +parts[1], jd = +parts[2]
     const [gy, gm, gd] = this._jalaliToGregorian(jy, jm, jd)
-    const target = new Date(gy, gm - 1, gd)
-    const now = new Date()
-    now.setHours(0, 0, 0, 0)
-    target.setHours(0, 0, 0, 0)
-    return Math.round((target - now) / 86400000)
+    const today = this._tehranParts()
+    const targetDay = Date.UTC(gy, gm - 1, gd)
+    const todayDay = Date.UTC(today.year, today.month - 1, today.day)
+    return Math.round((targetDay - todayDay) / 86400000)
   },
 
   parseJalali(str) {
@@ -368,59 +380,44 @@ const Utils = {
   },
 
   _jalaliToGregorian(jy, jm, jd) {
-    // Jalaali.js algorithm (دقیق برای همه سال‌ها)
+    const div = (a, b) => Math.trunc(a / b)
+    const mod = (a, b) => a - Math.trunc(a / b) * b
     const breaks = [-61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178]
-    const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
-    const bl = breaks.length
+    if (jy < breaks[0] || jy >= breaks[breaks.length - 1]) throw new Error('Jalali year out of range')
+
     const gy = jy + 621
     let leapJ = -14
     let jp = breaks[0]
-    let _jmLeap = 0
-    for (let i = 1; i < bl; i++) {
-      const jump = breaks[i] - jp
-      if (jy < breaks[i]) break
-      leapJ += Math.floor(jump / 33) * 8 + Math.floor((jump % 33) / 4)
-      jp = breaks[i]
+    let jump = 0
+    for (let index = 1; index < breaks.length; index++) {
+      const next = breaks[index]
+      jump = next - jp
+      if (jy < next) break
+      leapJ += div(jump, 33) * 8 + div(mod(jump, 33), 4)
+      jp = next
     }
     const n = jy - jp
-    leapJ += Math.floor(n / 33) * 8 + Math.floor((n % 33 + 3) / 4)
-    if (jumpMod33(jy, breaks) === 4 && jumpMod33(jy + 1, breaks) - jumpMod33(jy, breaks) === 4) leapJ += 1
-    const leapG = Math.floor(gy / 4) - Math.floor((Math.floor((gy / 100) + 1) * 3) / 4) - 150
+    leapJ += div(n, 33) * 8 + div(mod(n, 33) + 3, 4)
+    if (mod(jump, 33) === 4 && jump - n === 4) leapJ += 1
+    const leapG = div(gy, 4) - div((div(gy, 100) + 1) * 3, 4) - 150
     const march = 20 + leapJ - leapG
-    const jDayNo = 365 * n + Math.floor((n + 3) / 4) + jd + (jm <= 7 ? (jm - 1) * 31 : ((jm - 7) * 30 + 186)) + march - 1
-    let gDayNo = jDayNo + 79
-    let gy2 = 1600 + 400 * Math.floor(gDayNo / 146097)
-    gDayNo %= 146097
-    let leap = true
-    if (gDayNo >= 36525) {
-      gDayNo--
-      gy2 += 100 * Math.floor(gDayNo / 36524)
-      gDayNo %= 36524
-      if (gDayNo >= 365) gDayNo++
-      else leap = false
-    }
-    gy2 += 4 * Math.floor(gDayNo / 1461)
-    gDayNo %= 1461
-    if (gDayNo >= 366) {
-      leap = false
-      gDayNo--
-      gy2 += Math.floor(gDayNo / 365)
-      gDayNo %= 365
-    }
-    let gm = 0
-    while (gm < 12 && gDayNo >= g_d_m[gm + 1] + (gm === 1 && leap ? 1 : 0)) gm++
-    const gd = gDayNo - g_d_m[gm] - (gm > 1 && leap ? 1 : 0) + 1
-    return [gy2, gm + 1, gd]
 
-    function jumpMod33(y, brks) {
-      let jp2 = brks[0]
-      for (let i = 1; i < brks.length; i++) {
-        const _jump = brks[i] - jp2
-        if (y < brks[i]) return (y - jp2) % 33
-        jp2 = brks[i]
-      }
-      return (y - jp2) % 33
+    const g2d = (year, month, day) => {
+      let value = div((year + div(month - 8, 6) + 100100) * 1461, 4)
+      value += div(153 * mod(month + 9, 12) + 2, 5) + day - 34840408
+      return value - div(div(year + 100100 + div(month - 8, 6), 100) * 3, 4) + 752
     }
+    const d2g = dayNumber => {
+      let j = 4 * dayNumber + 139361631
+      j += div(div(4 * dayNumber + 183187720, 146097) * 3, 4) * 4 - 3908
+      const i = div(mod(j, 1461), 4) * 5 + 308
+      const day = div(mod(i, 153), 5) + 1
+      const month = mod(div(i, 153), 12) + 1
+      const year = div(j, 1461) - 100100 + div(8 - month, 6)
+      return [year, month, day]
+    }
+    const jalaliDayNumber = g2d(gy, 3, march) + (jm - 1) * 31 - div(jm, 7) * (jm - 7) + jd - 1
+    return d2g(jalaliDayNumber)
   }
 }
 

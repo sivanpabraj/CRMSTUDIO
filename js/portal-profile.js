@@ -18,7 +18,7 @@ const PortalProfile = {
           <div class="profile-avatar-wrap">
             <div class="profile-avatar-lg" id="profile-avatar-preview">${user.avatarImage ? Utils.safeImgHtml(user.avatarImage, 'style="width:100%;height:100%;object-fit:cover;border-radius:50%"') : Utils.escapeHtml(avatar)}</div>
             <label class="profile-avatar-upload" title="تغییر عکس">
-              <input type="file" accept="image/*" id="prof-avatar-file" style="display:none" onchange="PortalProfile.onAvatarPick(event)"/>
+              <input type="file" accept="image/*" id="prof-avatar-file" style="display:none" data-csp-action="PortalProfile.onAvatarPick" data-csp-event="change" data-csp-pass-event/>
               📷
             </label>
           </div>
@@ -87,7 +87,7 @@ const PortalProfile = {
         </div>
 
         <div class="profile-actions">
-          <button class="portal-btn portal-btn-primary" onclick="PortalProfile.save()">💾 ذخیره تغییرات</button>
+          <button class="portal-btn portal-btn-primary" data-csp-action="PortalProfile.save">💾 ذخیره تغییرات</button>
         </div>
       </div>`
 
@@ -183,11 +183,6 @@ const PortalProfile = {
         name: f.name,
         phone: f.phone,
         profile: { ...(personnel.profile || {}), ...profileData }
-      })
-      DB.filter('persProjects', p => p.personnelId === personnel.id).forEach(p => {
-        if (p.personnelName !== f.name || p.personnelPhone !== f.phone) {
-          SecureDB.update('persProjects', p.id, { personnelName: f.name, personnelPhone: f.phone })
-        }
       })
     } else {
       personnel = DB.syncPersonnelFromUser(DB.find('users', u => u.id === user.id))

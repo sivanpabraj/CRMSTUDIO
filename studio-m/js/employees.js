@@ -44,12 +44,12 @@ const SMEmployees = {
     if (SM.state.viewStack.length) return
     el.innerHTML = `
       ${SMUI.sectionHead('پرسنل', 'چند نقش · حقوق ماهانه و پروژه‌ای · تأیید قرارداد', `
-        <button class="sm-btn sm-btn-primary" onclick="SMEmployees.add()"><i class="fas fa-plus"></i> افزودن پرسنل</button>`)}
+        <button class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMEmployees.add')}><i class="fas fa-plus"></i> افزودن پرسنل</button>`)}
       ${this._tab === 'list' ? SMUI.moduleSearch('employees', 'جستجو — نام، موبایل، نقش...') : ''}
       ${SMUI.tabs([
-        { id: 'list', fa: 'لیست پرسنل', en: 'List', icon: 'fa-list', onclick: "SMEmployees.setTab('list')" },
-        { id: 'approvals', fa: 'تأیید قراردادها', en: 'Approvals', icon: 'fa-file-signature', onclick: "SMEmployees.setTab('approvals')" },
-        { id: 'stats', fa: 'آمار', en: 'Stats', icon: 'fa-chart-pie', onclick: "SMEmployees.setTab('stats')" }
+        { id: 'list', fa: 'لیست پرسنل', en: 'List', icon: 'fa-list', fn: 'SMEmployees.setTab', args: ['list'] },
+        { id: 'approvals', fa: 'تأیید قراردادها', en: 'Approvals', icon: 'fa-file-signature', fn: 'SMEmployees.setTab', args: ['approvals'] },
+        { id: 'stats', fa: 'آمار', en: 'Stats', icon: 'fa-chart-pie', fn: 'SMEmployees.setTab', args: ['stats'] }
       ], this._tab)}
       <div style="margin-top:16px">${this._renderTab()}</div>`
   },
@@ -61,7 +61,7 @@ const SMEmployees = {
   },
 
   _listHtml() {
-    const personnel = SMH.filterBySearch(DB.get('personnel'), ['name', 'phone', 'notes'], 'employees')
+    const personnel = SMH.filterBySearch(DB.active('personnel'), ['name', 'phone', 'notes'], 'employees')
     if (!personnel.length) {
       return SMUI.empty('fa-users', 'پرسنلی ثبت نشده', 'نام، موبایل، نقش‌ها و نحوه پرداخت را اضافه کنید')
     }
@@ -76,7 +76,7 @@ const SMEmployees = {
       : contract?.status === 'pending' || contract?.status === 'sms_sent'
         ? SMUI.badge('در انتظار تأیید', 'warning') : ''
 
-    return `<div class="sm-emp-card" style="--emp-color:${color}" onclick="SMEmployees.view('${p.id}')">
+    return `<div class="sm-emp-card" style="--emp-color:${color}" ${SMEvents.attrs('SMEmployees.view', [p.id])}>
       <div class="sm-emp-stripe"></div>
       <div class="sm-emp-avatar" style="background:color-mix(in srgb, ${color} 18%, transparent);color:${color}">${SM.esc((p.name || '?').charAt(0))}</div>
       <div class="sm-emp-body">
@@ -90,32 +90,42 @@ const SMEmployees = {
       <div class="sm-emp-side">
         ${contractBadge}
         ${SMUI.badge(p.status === 'active' ? 'فعال' : 'غیرفعال', p.status === 'active' ? 'success' : 'muted')}
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="event.stopPropagation();SMEmployees.edit('${p.id}')"><i class="fas fa-pen"></i></button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMEmployees.edit', [p.id])} data-sm-stop="1"><i class="fas fa-pen"></i></button>
       </div>
     </div>`
   },
 
   _latestContract(personnelId) {
-    return (DB.get('persContracts') || [])
+    if (window.ErpRuntime?.hasTypedData?.()) {
+      const person = DB.find('personnel', x => x.id === personnelId)
+      return window.ErpRuntime.state().personnelContracts
+        .filter(c => c.personnel_user_id === person?.userId)
+        .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0]
+    }
+    if (window.ErpRuntime?.requiresAuthority?.()) return null
+    return (DB.active('persContracts') || [])
       .filter(c => c.personnelId === personnelId && c.type === 'employment')
       .sort((a, b) => String(b.sentAt || b.createdAt || '').localeCompare(String(a.sentAt || a.createdAt || '')))[0]
   },
 
   _approvalsHtml() {
-    const contracts = (DB.get('persContracts') || []).filter(c => c.type === 'employment')
+    const contracts = (window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().personnelContracts
+      : window.ErpRuntime?.requiresAuthority?.() ? []
+      : (DB.active('persContracts') || []).filter(c => c.type === 'employment'))
       .sort((a, b) => String(b.sentAt || '').localeCompare(String(a.sentAt || '')))
     if (!contracts.length) {
       return SMUI.empty('fa-file-signature', 'قرارداد همکاری ارسال نشده', 'از صفحه پرسنل → «ارسال قرارداد به پنل» استفاده کنید')
     }
     return `<div class="sm-emp-contract-list">${contracts.map(c => {
-      const p = DB.find('personnel', x => x.id === c.personnelId)
-      const st = { pending: 'در انتظار', sms_sent: 'کد ارسال شد', verified: 'تأیید شده', rejected: 'رد شده' }[c.status] || c.status
-      const stType = c.status === 'verified' ? 'success' : c.status === 'rejected' ? 'danger' : 'warning'
+      const p = DB.find('personnel', x => x.id === c.personnelId || x.userId === c.personnel_user_id)
+      const st = { pending: 'در انتظار', offered: 'در انتظار تأیید', sms_sent: 'کد ارسال شد', accepted: 'تأیید شده', verified: 'تأیید شده', rejected: 'رد شده' }[c.status] || c.status
+      const stType = ['accepted', 'verified'].includes(c.status) ? 'success' : c.status === 'rejected' ? 'danger' : 'warning'
       return `<div class="sm-emp-contract-row">
         <div>
           <strong>${SM.esc(p?.name || c.personnelName || '—')}</strong>
-          <div class="sm-emp-meta">${SM.esc(c.paySummary || '—')}</div>
-          <div class="sm-emp-meta">ارسال: ${SM.esc(c.sentAt || '—')}${c.verification?.verifiedAt ? ` · تأیید: ${SM.esc(c.verification.verifiedAt)}` : ''}</div>
+          <div class="sm-emp-meta">${SM.esc(c.terms?.paySummary || c.paySummary || '—')}</div>
+          <div class="sm-emp-meta">ارسال: ${SM.esc(c.created_at || c.sentAt || '—')}${c.accepted_at || c.verification?.verifiedAt ? ` · تأیید: ${SM.esc(c.accepted_at || c.verification.verifiedAt)}` : ''}</div>
         </div>
         <div>${SMUI.badge(st, stType)}</div>
       </div>`
@@ -123,7 +133,7 @@ const SMEmployees = {
   },
 
   _statsHtml() {
-    const personnel = DB.get('personnel')
+    const personnel = DB.active('personnel')
     const active = personnel.filter(p => p.status === 'active')
     const byRole = {}
     active.forEach(p => {
@@ -137,7 +147,9 @@ const SMEmployees = {
       { label: 'کل پرسنل', value: SM.fmt(personnel.length), color: 'var(--sm-accent)' },
       { label: 'فعال', value: SM.fmt(active.length), color: 'var(--sm-success)' },
       { label: 'حقوق ماهانه', value: SM.fmt(monthlyTotal), color: 'var(--sm-warning)' },
-      { label: 'قرارداد تأییدشده', value: SM.fmt((DB.get('persContracts') || []).filter(c => c.type === 'employment' && c.status === 'verified').length), color: 'var(--sm-info)' }
+      { label: 'قرارداد تأییدشده', value: SM.fmt(window.ErpRuntime?.hasTypedData?.()
+        ? window.ErpRuntime.state().personnelContracts.filter(c => c.status === 'accepted').length
+        : (DB.active('persContracts') || []).filter(c => c.type === 'employment' && c.status === 'verified').length), color: 'var(--sm-info)' }
     ])}
     <div class="sm-card" style="margin-top:16px"><div class="sm-card-head"><div class="sm-card-title">توزیع نقش‌ها</div></div>
       <div class="sm-card-body">${Object.keys(byRole).length ? Object.entries(byRole).map(([role, count]) =>
@@ -163,7 +175,7 @@ const SMEmployees = {
       <div class="sm-grid-2">
         <div class="sm-card"><div class="sm-card-head">
           <div class="sm-card-title">اطلاعات و پرداخت</div>
-          <button class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMEmployees.edit('${p.id}')"><i class="fas fa-pen"></i></button>
+          <button class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMEmployees.edit', [p.id])}><i class="fas fa-pen"></i></button>
         </div><div class="sm-card-body">
           <p><strong>موبایل:</strong> <span dir="ltr">${SM.esc(p.phone || '—')}</span></p>
           <p style="margin-top:8px"><strong>نحوه پرداخت:</strong> ${SM.esc(this._paySummary(p))}</p>
@@ -178,7 +190,7 @@ const SMEmployees = {
               <p style="margin-top:8px;font-size:.85rem;color:var(--sm-text-muted)">${SM.esc(contract.paySummary || '')}</p>
               <p style="margin-top:8px;font-size:.82rem">ارسال: ${SM.esc(contract.sentAt || '—')}</p>
             ` : '<p class="sm-emp-meta">هنوز قرارداد همکاری ارسال نشده</p>'}
-            <button type="button" class="sm-btn sm-btn-primary sm-btn-sm" style="margin-top:12px" onclick="SMEmployees.sendContract('${p.id}')">
+            <button type="button" class="sm-btn sm-btn-primary sm-btn-sm" style="margin-top:12px" ${SMEvents.attrs('SMEmployees.sendContract', [p.id])}>
               <i class="fas fa-paper-plane"></i> ${contract?.status === 'verified' ? 'ارسال مجدد قرارداد' : 'ارسال قرارداد به پنل پرسنل'}
             </button>
           </div></div>
@@ -267,7 +279,7 @@ const SMEmployees = {
       if (el && el.value) roleAmounts[r] = +el.value || 0
     })
 
-    const idx = item ? DB.get('personnel').findIndex(x => x.id === item.id) : DB.get('personnel').length
+    const idx = item ? DB.active('personnel').findIndex(x => x.id === item.id) : DB.active('personnel').length
     const data = {
       name: d['emp-name'],
       phone,
@@ -297,7 +309,7 @@ const SMEmployees = {
       return
     }
 
-    if (phone && DB.get('personnel').some(p => p.phone === phone)) {
+    if (phone && DB.active('personnel').some(p => p.phone === phone)) {
       return SM.toast('این موبایل قبلاً ثبت شده', 'error')
     }
     DB.insert('personnel', { ...data, jobs: 0 })
@@ -328,51 +340,32 @@ const SMEmployees = {
 
   async sendContract(personnelId) {
     const p = DB.find('personnel', x => x.id === personnelId)
-    if (!p?.phone) return SM.toast('موبایل پرسنل الزامی است', 'error')
+    if (!p?.userId) return SM.toast('حساب ابری پرسنل باید ابتدا فعال شود', 'error')
 
     const studio = SM.studio().name || 'استودیو'
     const paySummary = this._paySummary(p)
     const roleList = normalizeRoles(p.roles || []).map(r => typeof getRoleTitle === 'function' ? getRoleTitle(r) : r).join('، ')
-    const code = Utils.generateOtp6()
-    const today = Utils.todayJalali()
-
-    const contractBody = `قرارداد همکاری بین ${studio} و ${p.name} — نقش: ${roleList} — ${paySummary}`
-
-    const contract = DB.insert('persContracts', {
-      type: 'employment',
-      personnelId: p.id,
-      personnelName: p.name,
-      studioName: studio,
-      roles: p.roles,
-      paySummary,
-      body: contractBody,
-      salaryMonthly: p.salaryMonthly || p.salary || 0,
-      payMonthly: p.payMonthly,
-      payPerProject: p.payPerProject,
-      roleAmounts: p.roleAmounts || {},
-      monthlyProjectPercent: p.monthlyProjectPercent,
-      status: 'sms_sent',
-      sentAt: today,
-      verification: { code, sentAt: today, verified: false, phone: p.phone }
-    })
-
-    const smsText = `${studio}: قرارداد همکاری شما ثبت شد. کد تأیید: ${code}`
-    if (typeof SmsProvider !== 'undefined' && SmsProvider.isConfigured()) {
-      const res = await SmsProvider.sendStudio(p.phone, smsText)
-      if (!res.ok) {
-        SM.toast(res.error || 'خطا در SMS', 'error')
-        return
-      }
-    } else {
-      SM.toast(`SMS تنظیم نشده — کد تست: ${code}`, 'info')
-    }
-
-    DB.update('persContracts', contract.id, { status: 'sms_sent' })
-    SM.toast('قرارداد به پنل پرسنل ارسال شد', 'success')
-    if (SM.state.viewStack.length) {
-      SM.state.viewStack.pop()
-      this.view(personnelId)
-    } else SM.navigate('employees')
+    try {
+      await window.DomainApi.createPersonnelContract({
+        personnelUserId: p.userId,
+        startsOn: new Date().toISOString().slice(0, 10),
+        endsOn: '',
+        compensation: {
+          salaryMonthly: p.salaryMonthly || p.salary || 0,
+          payMonthly: p.payMonthly,
+          payPerProject: p.payPerProject,
+          roleAmounts: p.roleAmounts || {},
+          monthlyProjectPercent: p.monthlyProjectPercent
+        },
+        terms: { studioName: studio, personnelName: p.name, roles: p.roles, roleList, paySummary }
+      })
+      await window.ErpRuntime?.refresh?.({ force: true })
+      SM.toast('قرارداد همکاری به پنل معتبر پرسنل ارسال شد', 'success')
+      if (SM.state.viewStack.length) {
+        SM.state.viewStack.pop()
+        this.view(personnelId)
+      } else SM.navigate('employees')
+    } catch (error) { SM.toast(error.message || 'ثبت قرارداد همکاری ناموفق بود', 'error') }
   }
 }
 

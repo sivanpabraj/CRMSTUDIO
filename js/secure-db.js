@@ -1,4 +1,4 @@
-/* SecureDB — لایه نازک برای نوشتن امن با CSRF */
+/* SecureDB — لایه نوشتن امن با CSRF + RBAC مالی + soft-delete */
 const SecureDB = {
   _wrapped: false,
   _authInternal: false,
@@ -7,6 +7,40 @@ const SecureDB = {
   _origInsert: null,
   _origUpdate: null,
   _origDelete: null,
+
+  /** Collections requiring manage_finance (or manager) to mutate */
+  FINANCE_COLLECTIONS: new Set([
+    'transactions', 'banks', 'cheques', 'invoices', 'expenses', 'salaryPayments', 'financeOutbox'
+  ]),
+
+  /** Aggregates whose source of truth is PostgreSQL in production. */
+  SERVER_AUTHORITATIVE_COLLECTIONS: new Set([
+    'contracts', 'transactions', 'banks', 'cheques', 'invoices', 'expenses',
+    'salaryPayments', 'persProjects', 'persContracts', 'attendance'
+  ]),
+
+  _productionBrowser() {
+    try {
+      const localHost = ['localhost', '127.0.0.1'].includes(String(location?.hostname || ''))
+      const demo = globalThis.__SM_BUILD_FLAGS__?.localDemo === true
+      return !localHost || !demo
+    } catch {
+      return true
+    }
+  },
+
+  _serverWriteBlocked(collection) {
+    return this._productionBrowser() && this.SERVER_AUTHORITATIVE_COLLECTIONS.has(collection)
+  },
+
+  /** Soft-delete instead of hard splice (must match sync TOMBSTONE_ENTITIES) */
+  TOMBSTONE_COLLECTIONS: new Set([
+    'contracts', 'transactions', 'invoices', 'bookings', 'personnel', 'equipment',
+    'workflows', 'packages', 'expenses', 'leads', 'banks', 'cheques',
+    'appointments', 'customerRequests', 'fileAssets', 'salaryPayments',
+    'attendance', 'notifications', 'persProjects', 'persContracts',
+    'calendarReminders', 'galleries', 'customerCustody'
+  ]),
 
   _token() {
     return typeof Auth !== 'undefined' && Auth.getCsrfToken ? Auth.getCsrfToken() : ''
@@ -21,14 +55,52 @@ const SecureDB = {
     })
   },
 
+  _isManagerUser() {
+    const user = typeof Auth !== 'undefined' ? Auth.getUser?.() : null
+    if (!user) return false
+    if (typeof Access !== 'undefined') {
+      return Access.isStudioManager?.(user) || Access.isSystemAdmin?.(user)
+    }
+    const roles = (user.roles || []).map(r => typeof normalizeRole === 'function' ? normalizeRole(r) : r)
+    return roles.includes('studio_manager') || roles.includes('system_admin')
+  },
+
+  _canWriteFinance(collection) {
+    if (!this.FINANCE_COLLECTIONS.has(collection)) return true
+    if (this._authInternal || this._systemSync || this._isSetupPhase()) return true
+    if (typeof Auth === 'undefined') return false
+    if (Auth.userHasPermission?.('manage_finance') || Auth.userHasPermission?.('all')) return true
+    return this._isManagerUser()
+  },
+
   /** @param {string} [collection] */
   _canWrite(collection) {
+    if (this._serverWriteBlocked(collection)) return false
+    if (typeof canWriteCollection === 'function') {
+      const t = this._token()
+      const csrfValid = typeof Auth !== 'undefined' && Auth.validateCsrf
+        ? !!(t && Auth.validateCsrf(t))
+        : false
+      const manageFinance = typeof Auth !== 'undefined' &&
+        !!(Auth.userHasPermission?.('manage_finance') || Auth.userHasPermission?.('all'))
+      return canWriteCollection({
+        collection,
+        authInternal: this._authInternal,
+        systemSync: this._systemSync,
+        setupPhase: this._isSetupPhase(),
+        csrfValid,
+        manageFinance,
+        isManager: this._isManagerUser(),
+        financeCollections: this.FINANCE_COLLECTIONS
+      })
+    }
     if (this._authInternal || this._systemSync) return true
     if (collection === 'securityState' || collection === 'logs') return true
     if (this._isSetupPhase()) return true
     if (typeof Auth === 'undefined' || !Auth.validateCsrf) return false
     const t = this._token()
-    return !!t && Auth.validateCsrf(t)
+    if (!(!!t && Auth.validateCsrf(t))) return false
+    return this._canWriteFinance(collection)
   },
 
   runInternal(fn) {
@@ -50,6 +122,7 @@ const SecureDB = {
   },
 
   systemSet(collection, data) {
+    if (this._serverWriteBlocked(collection)) throw new Error('server_authoritative_rpc_required')
     if (!this._origSet) return DB.set(collection, data)
     this._systemSync = true
     try {
@@ -60,6 +133,7 @@ const SecureDB = {
   },
 
   systemInsert(collection, item) {
+    if (this._serverWriteBlocked(collection)) throw new Error('server_authoritative_rpc_required')
     if (!this._origInsert) return DB.insert(collection, item)
     this._systemSync = true
     try {
@@ -70,8 +144,12 @@ const SecureDB = {
   },
 
   async set(collection, data) {
-    if (!this._canWrite(collection)) throw new Error('CSRF token invalid')
-    if (this._isSetupPhase()) return DB.set(collection, data)
+    if (!this._canWrite(collection)) throw new Error(this._denyMsg(collection))
+    if (this._isSetupPhase()) {
+      DB.set(collection, data)
+      await DB.flush()
+      return true
+    }
     if (typeof DB !== 'undefined' && DB.secureSet) {
       return DB.secureSet(collection, data, this._token())
     }
@@ -85,20 +163,21 @@ const SecureDB = {
   },
 
   async insert(collection, item) {
-    if (!this._canWrite(collection)) throw new Error('CSRF token invalid')
+    if (!this._canWrite(collection)) throw new Error(this._denyMsg(collection))
     const res = DB.insert(collection, item)
-    await DB.flush?.()
+    await DB.flush()
     return res
   },
 
   async update(collection, id, patch) {
-    if (!this._canWrite(collection)) throw new Error('CSRF token invalid')
+    if (!this._canWrite(collection)) throw new Error(this._denyMsg(collection))
     DB.update(collection, id, patch)
-    await DB.flush?.()
+    await DB.flush()
     return true
   },
 
   systemUpdate(collection, id, patch) {
+    if (this._serverWriteBlocked(collection)) throw new Error('server_authoritative_rpc_required')
     if (!this._origUpdate) return DB.update(collection, id, patch)
     this._systemSync = true
     try {
@@ -109,6 +188,7 @@ const SecureDB = {
   },
 
   systemDelete(collection, id) {
+    if (this._serverWriteBlocked(collection)) throw new Error('server_authoritative_rpc_required')
     if (!this._origDelete) return DB.delete(collection, id)
     this._systemSync = true
     try {
@@ -118,15 +198,37 @@ const SecureDB = {
     }
   },
 
+  _denyMsg(collection) {
+    if (this.FINANCE_COLLECTIONS.has(collection) && this._token() && Auth.validateCsrf?.(this._token())) {
+      return 'مجوز مالی ندارید'
+    }
+    return 'CSRF token invalid'
+  },
+
+  /** Soft-delete (tombstone) for sync entities; hard-delete otherwise */
   async delete(collection, id) {
-    if (!this._canWrite(collection)) throw new Error('CSRF token invalid')
+    if (!this._canWrite(collection)) throw new Error(this._denyMsg(collection))
+    if (this.TOMBSTONE_COLLECTIONS.has(collection)) {
+      const row = DB.find(collection, x => x.id === id)
+      if (!row) return false
+      DB.update(collection, id, {
+        _deleted: true,
+        deletedAtIso: new Date().toISOString()
+      })
+      await DB.flush()
+      return true
+    }
     const res = this._origDelete ? this._origDelete(collection, id) : DB.delete(collection, id)
-    await DB.flush?.()
+    await DB.flush()
     return res
   },
 
+  /** Permanent remove (admin/purge only) */
   async hardDelete(collection, id) {
-    return this.delete(collection, id)
+    if (!this._canWrite(collection)) throw new Error(this._denyMsg(collection))
+    const res = this._origDelete ? this._origDelete(collection, id) : DB.delete(collection, id)
+    await DB.flush?.()
+    return res
   },
 
   hardenDbWrites() {
@@ -141,19 +243,25 @@ const SecureDB = {
     const origUpdate = this._origUpdate
     const origDelete = this._origDelete
     DB.set = (collection, data) => {
-      if (!SecureDB._canWrite(collection)) throw new Error('CSRF token invalid')
+      if (!SecureDB._canWrite(collection)) throw new Error(SecureDB._denyMsg(collection))
       return origSet(collection, data)
     }
     DB.insert = (collection, item) => {
-      if (!SecureDB._canWrite(collection)) throw new Error('CSRF token invalid')
+      if (!SecureDB._canWrite(collection)) throw new Error(SecureDB._denyMsg(collection))
       return origInsert(collection, item)
     }
     DB.update = (collection, id, patch) => {
-      if (!SecureDB._canWrite(collection)) throw new Error('CSRF token invalid')
+      if (!SecureDB._canWrite(collection)) throw new Error(SecureDB._denyMsg(collection))
       return origUpdate(collection, id, patch)
     }
     DB.delete = (collection, id) => {
-      if (!SecureDB._canWrite(collection)) throw new Error('CSRF token invalid')
+      if (!SecureDB._canWrite(collection)) throw new Error(SecureDB._denyMsg(collection))
+      if (SecureDB.TOMBSTONE_COLLECTIONS.has(collection)) {
+        return origUpdate(collection, id, {
+          _deleted: true,
+          deletedAtIso: new Date().toISOString()
+        })
+      }
       return origDelete(collection, id)
     }
   }

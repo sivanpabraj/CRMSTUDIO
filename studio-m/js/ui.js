@@ -2,29 +2,74 @@
 const SMUI = {
   modal(title, bodyHtml, { onSave, onDelete, saveLabel, width, onBack } = {}) {
     const root = document.getElementById('sm-modal-root')
+    if (!root) throw new Error('Modal root is missing')
+    if (SMUI._modalKeyHandler) SMUI.closeModal()
     const overlay = document.createElement('div')
     overlay.className = 'sm-modal-overlay'
+    const titleId = 'sm-modal-title-' + Date.now().toString(36)
+    const allowedWidths = [420, 440, 480, 520, 540, 560, 640, 720]
+    const requestedWidth = Number(width) || 520
+    const modalWidth = allowedWidths.reduce((best, item) =>
+      Math.abs(item - requestedWidth) < Math.abs(best - requestedWidth) ? item : best, 520)
     overlay.innerHTML = `
-      <div class="sm-modal" style="${width ? `max-width:${width}px` : ''}" role="dialog" aria-modal="true">
+      <div class="sm-modal sm-modal-w-${modalWidth}" role="dialog" aria-modal="true" aria-labelledby="${titleId}" tabindex="-1">
         <div class="sm-modal-head">
-          <button type="button" class="sm-btn-icon sm-modal-back" onclick="SMUI._modalBack()" title="${SM.t('back')}"><i class="fas fa-arrow-right"></i></button>
-          <div class="sm-modal-title">${SM.esc(title)}</div>
-          <button type="button" class="sm-btn-icon" onclick="SMUI.closeModal()" title="${SM.t('close')}"><i class="fas fa-times"></i></button>
+          <button type="button" class="sm-btn-icon sm-modal-back" ${SMEvents.attrs('SMUI._modalBack')} aria-label="${SM.t('back')}" title="${SM.t('back')}"><i class="fas fa-arrow-right"></i></button>
+          <div class="sm-modal-title" id="${titleId}">${SM.esc(title)}</div>
+          <button type="button" class="sm-btn-icon" ${SMEvents.attrs('SMUI.closeModal')} aria-label="${SM.t('close')}" title="${SM.t('close')}"><i class="fas fa-times"></i></button>
         </div>
         <div class="sm-modal-body">${bodyHtml}</div>
         ${onSave ? `<div class="sm-modal-foot sm-modal-foot-split">
           ${onDelete ? `<button type="button" class="sm-btn sm-btn-danger" id="sm-modal-delete"><i class="fas fa-trash"></i> ${SM.t('delete')}</button>` : '<span></span>'}
           <div class="sm-modal-foot-actions">
-            <button type="button" class="sm-btn sm-btn-ghost" onclick="SMUI._modalBack()"><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
+            <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMUI._modalBack')}><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
             <button type="button" class="sm-btn sm-btn-primary" id="sm-modal-save">${SM.esc(saveLabel || SM.t('save'))}</button>
           </div>
         </div>` : `<div class="sm-modal-foot">
-          <button type="button" class="sm-btn sm-btn-ghost" onclick="SMUI._modalBack()"><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
+          <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMUI._modalBack')}><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
         </div>`}
       </div>`
     root.innerHTML = ''
     root.appendChild(overlay)
     overlay.addEventListener('click', e => { if (e.target === overlay) SMUI.closeModal() })
+
+    // Accessibility: Escape closes; focus trap inside dialog
+    const previouslyFocused = document.activeElement
+    SMUI._modalPrevFocus = previouslyFocused
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        SMUI.closeModal()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const focusables = overlay.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+      const list = Array.from(focusables).filter(el => el.offsetParent !== null)
+      const dialog = overlay.querySelector('[role="dialog"]')
+      if (!list.length) {
+        e.preventDefault()
+        dialog?.focus?.()
+        return
+      }
+      const first = list[0]
+      const last = list[list.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    SMUI._modalKeyHandler = onKey
+    document.addEventListener('keydown', onKey)
+    setTimeout(() => {
+      const firstInput = overlay.querySelector('input, select, textarea, button.sm-btn-primary')
+      ;(firstInput || overlay.querySelector('[role="dialog"]'))?.focus?.()
+    }, 30)
+
     document.getElementById('sm-modal-save')?.addEventListener('click', async () => {
       if (!onSave) return
       const btn = document.getElementById('sm-modal-save')
@@ -61,29 +106,45 @@ const SMUI = {
   },
 
   closeModal() {
+    if (SMUI._modalKeyHandler) {
+      document.removeEventListener('keydown', SMUI._modalKeyHandler)
+      SMUI._modalKeyHandler = null
+    }
     document.getElementById('sm-modal-root').innerHTML = ''
     SMUI._modalBackHandler = null
+    try { SMUI._modalPrevFocus?.focus?.() } catch { /* */ }
+    SMUI._modalPrevFocus = null
   },
 
-  backBar(title, onclick = 'SM.popSubView()') {
+  backBar(title, fnPath = 'SM.popSubView', args = []) {
+    const attrs = typeof fnPath === 'string' && !fnPath.includes('(')
+      ? SMEvents.attrs(fnPath, args)
+      : SMEvents.attrs('SM.popSubView')
     return `<div class="sm-back-bar">
-      <button type="button" class="sm-btn sm-btn-ghost sm-back-btn" onclick="${onclick}"><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
+      <button ${attrs} class="sm-btn sm-btn-ghost sm-back-btn"><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
       <div class="sm-back-title">${SM.esc(title)}</div>
     </div>`
   },
 
   tabs(items, activeId, attr = 'data-sm-tab') {
-    return `<div class="sm-tabs" role="tablist">${items.map(t => `
-      <button type="button" class="sm-tab${t.id === activeId ? ' active' : ''}" role="tab"
-        ${attr}="${t.id}" onclick="${t.onclick || ''}" aria-selected="${t.id === activeId}">
+    return `<div class="sm-tabs" role="tablist">${items.map(t => {
+      const action = t.fn
+        ? SMEvents.attrs(t.fn, t.args || [])
+        : (t.attrs || 'type="button"')
+      return `
+      <button ${action} class="sm-tab${t.id === activeId ? ' active' : ''}" role="tab"
+        ${attr}="${t.id}" aria-selected="${t.id === activeId}" id="sm-tab-${t.id}">
         ${t.icon ? `<i class="fas ${t.icon}"></i>` : ''}${SM.esc(t.label)}
-      </button>`).join('')}</div>`
+      </button>`
+    }).join('')}</div>`
   },
 
   rowActions(buttons) {
-    return `<div class="sm-row-actions">${buttons.map(b =>
-      `<button type="button" class="sm-btn sm-btn-sm ${b.className || 'sm-btn-ghost'}" onclick="${b.onclick}">${b.icon ? `<i class="fas ${b.icon}"></i> ` : ''}${SM.esc(b.label)}</button>`
-    ).join('')}</div>`
+    return `<div class="sm-row-actions">${buttons.map(b => {
+      const attrs = b.attrs || (b.fn ? SMEvents.attrs(b.fn, b.args || []) : null)
+      if (!attrs) return ''
+      return `<button ${attrs} class="sm-btn sm-btn-sm ${b.className || 'sm-btn-ghost'}" title="${SM.esc(b.label)}" aria-label="${SM.esc(b.label)}">${b.icon ? `<i class="fas ${b.icon}"></i>` : SM.esc(b.label)}</button>`
+    }).join('')}</div>`
   },
 
   formField(label, id, { type = 'text', value = '', options, placeholder, dir } = {}) {
@@ -112,7 +173,7 @@ const SMUI = {
 
   statCards(items) {
     return `<div class="sm-stats">${items.map((s, i) => {
-      const route = s.route ? ` onclick="SM.navigate('${s.route}')" role="button" tabindex="0"` : ''
+      const route = s.route ? ` ${SMEvents.elAttrs('SM.navigate', [s.route])} role="button" tabindex="0"` : ''
       const cls = s.route ? ' sm-stat--click' : ''
       return `
       <div class="sm-stat${cls}" style="--stat-color:${s.color || 'var(--sm-accent)'};animation-delay:${i * 0.05}s"${route}>
@@ -136,8 +197,8 @@ const SMUI = {
     return `<div class="sm-module-search">
       <i class="fas fa-search" aria-hidden="true"></i>
       <input type="search" id="sm-search-${route}" placeholder="${SM.esc(placeholder)}" value="${SM.esc(val)}"
-        autocomplete="off" oninput="SM.setModuleSearch('${route}', this.value)"/>
-      ${val ? `<button type="button" class="sm-search-clear" onclick="SM.setModuleSearch('${route}','')" title="پاک کردن"><i class="fas fa-times"></i></button>` : ''}
+        autocomplete="off" ${SMEvents.inputAttrs('SM.setModuleSearch', [route])} aria-label="${SM.esc(placeholder)}"/>
+      ${val ? `<button ${SMEvents.attrs('SM.setModuleSearch', [route, ''])} class="sm-search-clear" title="پاک کردن" aria-label="پاک کردن"><i class="fas fa-times"></i></button>` : ''}
     </div>`
   },
 
@@ -152,7 +213,7 @@ const SMUI = {
       <h2>${SM.esc(title)}</h2>
       <p class="sm-module-disabled-lead">این بخش فعلاً غیرفعال است.</p>
       <p>در حال ارتقا و به‌روزرسانی هستیم — به‌زودی با امکانات کامل در دسترس قرار می‌گیرد.</p>
-      <button type="button" class="sm-btn sm-btn-primary" onclick="SM.navigate('dashboard')"><i class="fas fa-home"></i> بازگشت به داشبورد</button>
+      <button ${SMEvents.attrs('SM.navigate', ['dashboard'])} class="sm-btn sm-btn-primary"><i class="fas fa-home"></i> بازگشت به داشبورد</button>
     </div>`
   },
 
@@ -164,9 +225,16 @@ const SMUI = {
   },
 
   tableActionsCell(viewOnclick, editOnclick, extra = '') {
+    const toBtn = (spec, label, icon) => {
+      if (!spec) return null
+      if (typeof spec === 'object' && spec.fn) {
+        return { label, icon, attrs: SMEvents.attrs(spec.fn, spec.args || []) }
+      }
+      return null
+    }
     return `<td>${SMUI.rowActions([
-      viewOnclick ? { label: SM.t('view'), icon: 'fa-eye', onclick: viewOnclick } : null,
-      editOnclick ? { label: SM.t('edit'), icon: 'fa-pen', onclick: editOnclick } : null
+      toBtn(viewOnclick, SM.t('view'), 'fa-eye'),
+      toBtn(editOnclick, SM.t('edit'), 'fa-pen')
     ].filter(Boolean))}${extra}</td>`
   },
 

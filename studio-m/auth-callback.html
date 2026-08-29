@@ -13,18 +13,25 @@
 </head>
 <body>
   <div class="box">
-    <p id="msg">در حال تکمیل ورود...</p>
+    <p id="msg">در حال تکمیل ورود Google / ابر...</p>
     <p id="err" class="err" hidden></p>
     <p id="hint" class="hint" hidden></p>
   </div>
   <script type="module">
     import { createClient } from '@supabase/supabase-js'
+    import { safeStudioReturn } from '../js/safe-oauth-return.js'
 
     async function main() {
       const msg = document.getElementById('msg')
       const errEl = document.getElementById('err')
       const hintEl = document.getElementById('hint')
-      const appUrl = '/studio-m/index.html#settings'
+      const defaultAppUrl = '/studio-m/index.html#settings'
+      let appUrl = defaultAppUrl
+      try {
+        const rawReturn = sessionStorage.getItem('sm_oauth_return') || ''
+        appUrl = safeStudioReturn(rawReturn, location.origin)
+        sessionStorage.removeItem('sm_oauth_return')
+      } catch { /* */ }
 
       function fail(text, hint) {
         msg.hidden = true
@@ -36,34 +43,49 @@
         }
       }
 
-      const url = String(import.meta.env.VITE_SUPABASE_URL || sessionStorage.getItem('sm_cloud_url') || '').replace(/\/+$/, '')
-      const anonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || sessionStorage.getItem('sm_cloud_key') || '').trim()
+      const url = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '')
+      const anonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
       const hash = window.location.hash || ''
       const params = new URLSearchParams(window.location.search)
       const queryErr = params.get('error_description') || params.get('error')
 
       if (queryErr) {
-        fail(decodeURIComponent(queryErr.replace(/\+/g, ' ')))
+        fail(
+          decodeURIComponent(queryErr.replace(/\+/g, ' ')),
+          'Google provider یا Redirect URL را در Supabase / Google Cloud بررسی کنید.'
+        )
         return
       }
 
-      if (hash.includes('access_token') || hash.includes('error=')) {
-        window.location.replace('/studio-m/index.html' + hash)
+      if (hash.includes('error=')) {
+        fail('ورود Google ناموفق بود', hash.slice(0, 200))
+        return
+      }
+
+      // Implicit flow: pass hash to app so supabase-js can detectSessionInUrl
+      if (hash.includes('access_token')) {
+        window.location.replace(defaultAppUrl)
         return
       }
 
       const code = params.get('code')
       if (code) {
         if (!url || !anonKey) {
-          fail('پیکربندی Supabase یافت نشد', 'از اپ دوباره ثبت‌نام کنید یا .env را بررسی کنید.')
+          fail(
+            'پیکربندی Supabase یافت نشد',
+            'VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY باید هنگام build تنظیم شوند.'
+          )
           return
         }
         const client = createClient(url, anonKey, {
-          auth: { persistSession: true, storageKey: 'sm_supabase_auth' }
+          auth: { persistSession: true, storageKey: 'sm_supabase_auth', detectSessionInUrl: true }
         })
         const { error } = await client.auth.exchangeCodeForSession(code)
         if (error) {
-          fail(error.message, 'Site URL در Supabase باید http://localhost:5173/studio-m/auth-callback.html باشد.')
+          fail(
+            error.message,
+            `Redirect باید شامل ${location.origin}/studio-m/auth-callback.html باشد.`
+          )
           return
         }
         window.location.replace(appUrl)

@@ -85,6 +85,12 @@ body.auth-screen .auth-otp-meta {
   }
 }
 
+/* Setup/success cards have no brand-side column and must never collapse into
+   the flexible cell of the desktop two-column authentication layout. */
+.auth-layout.auth-layout--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* ── Brand panel (desktop) ── */
 .auth-brand {
   display: none;
@@ -437,6 +443,31 @@ body.auth-screen .auth-otp-meta {
 }
 .auth-forgot a:hover { text-decoration: underline; }
 
+.auth-view-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.auth-notice {
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, #34c759 35%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, #34c759 10%, transparent);
+  color: var(--auth-text, #1d1d1f);
+  font-size: .86rem;
+  line-height: 1.7;
+}
+
+.auth-field-help {
+  margin: 6px 2px 0;
+  color: var(--auth-muted, #555b66);
+  font-size: .78rem;
+  line-height: 1.65;
+}
+
 .pw-hint {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.45);
@@ -700,6 +731,11 @@ body.auth-screen .glass-rail {
   background: var(--glass-accent-soft, rgba(245,158,11,.15));
   color: #fff;
 }
+.auth-social-divider { display: flex; align-items: center; gap: 10px; margin: 16px 0 10px; color: rgba(255,255,255,.42); font-size: 11px; }
+.auth-social-divider::before, .auth-social-divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.1); }
+.auth-social-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.auth-btn-social { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: #fff; }
+.auth-btn-social:hover { background: rgba(255,255,255,.11); }
 
 .auth-method-tab:focus-visible,
 .auth-btn:focus-visible {

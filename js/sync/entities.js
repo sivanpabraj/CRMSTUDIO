@@ -5,25 +5,38 @@
 /** @typedef {{ table?: string, rpc?: boolean, excludeFields?: string[] }} EntityConfig */
 
 export const SYNC_ENTITIES = [
-  'contracts',
-  'transactions',
-  'invoices',
   'bookings',
   'personnel',
   'equipment',
   'workflows',
   'packages',
-  'expenses',
   'leads',
-  'banks',
-  'cheques',
   'appointments',
   'customerRequests',
-  'fileAssets'
+  'fileAssets',
+  'attendance',
+  'notifications',
+  'calendarReminders',
+  'galleries',
+  'customerCustody'
 ]
+
+/** Collections that soft-delete (tombstone) instead of hard-splice */
+export const TOMBSTONE_ENTITIES = new Set(SYNC_ENTITIES)
 
 /** Collections never row-synced (snapshot / server-only) */
 export const SYNC_EXCLUDED = new Set([
+  // These domains are server-authoritative and may only change through typed
+  // commands/RPCs. A browser-originated generic JSON payload is never trusted.
+  'contracts',
+  'transactions',
+  'invoices',
+  'expenses',
+  'banks',
+  'cheques',
+  'salaryPayments',
+  'persProjects',
+  'persContracts',
   'users',
   'securityState',
   'logs',
@@ -43,6 +56,15 @@ export function isSyncEntity(name) {
   return SYNC_ENTITIES.includes(name) && !SYNC_EXCLUDED.has(name)
 }
 
+export function isTombstoneEntity(name) {
+  return TOMBSTONE_ENTITIES.has(name)
+}
+
+/** Active (non-deleted) rows helper for UI */
+export function activeRows(items) {
+  return (items || []).filter(i => i && !i._deleted)
+}
+
 export function stripSensitive(collection, item) {
   if (!item || typeof item !== 'object') return item
   const copy = { ...item }
@@ -53,7 +75,10 @@ export function stripSensitive(collection, item) {
   if (collection === 'fileAssets') {
     delete copy.data
   }
-  delete copy._deleted
+  delete copy._serverRevision
+  delete copy._serverSeq
+  delete copy._syncMutationId
+  // Keep _deleted so tombstones sync to peers
   return copy
 }
 

@@ -2,10 +2,12 @@
 
 const PackageCatalog = {
   TIERS: {
+    economic: { label: 'اقتصادی', color: '#16A34A', icon: '🌱' },
     silver: { label: 'سیلور', color: '#94A3B8', icon: '🥈' },
     gold: { label: 'گلد', color: '#C9A96E', icon: '🥇' },
     vip: { label: 'وی‌آی‌پی', color: '#5856D6', icon: '👑' },
-    cbi: { label: 'سی‌بی‌آی', color: '#0071E3', icon: '💎' }
+    cip: { label: 'سی‌آی‌پی', color: '#0071E3', icon: '💎' },
+    custom: { label: 'سفارشی', color: '#64748B', icon: '✏️' }
   },
 
   ADDONS: [
@@ -41,6 +43,9 @@ const PackageCatalog = {
     if (!p.album) p.album = { enabled: false, size: '20x20', photoCount: 10, price: 0, note: '' }
     if (!p.disk) p.disk = { enabled: false, label: 'دیسک USB', price: 0, note: '' }
     if (!p.customItems) p.customItems = []
+    if (p.tier === 'cbi') p.tier = 'cip'
+    if (p.active === undefined) p.active = true
+    if (!Number.isFinite(Number(p.version))) p.version = 1
     ;['photoVenue', 'photoGarden', 'helishot', 'fpv', 'crane', 'tv'].forEach(k => {
       if (!p[k]) p[k] = { enabled: false, price: 0, note: '' }
     })
@@ -98,8 +103,43 @@ const PackageCatalog = {
     return lines
   },
 
+  /** نسخه غیرقابل‌تغییر پکیج برای نگهداری داخل قرارداد */
+  snapshot(pkg) {
+    const p = this.normalize(pkg)
+    if (!p) return null
+    return JSON.parse(JSON.stringify({
+      sourcePackageId: pkg.id || '',
+      sourceVersion: Number(p.version) || 1,
+      name: p.name || '',
+      tier: p.tier || 'custom',
+      description: p.description || '',
+      video: p.video,
+      addons: this._toAddons(p),
+      album: p.album,
+      disk: p.disk,
+      customItems: p.customItems,
+      total: this.packageTotal(p),
+      features: this.featureLines(p),
+      capturedAt: new Date().toISOString()
+    }))
+  },
+
   defaultPackages() {
     return [
+      {
+        tier: 'economic', name: 'پکیج اقتصادی', featured: false,
+        description: 'پوشش پایه و قابل ویرایش برای مراسم جمع‌وجور',
+        video: { cameras: 2, quality: 'fullhd', price: 0, price4k: 0, clip: true, note: 'فیلمبرداری و کلیپ روز مراسم' },
+        photoVenue: { enabled: false, price: 0, note: '' },
+        photoGarden: { enabled: false, price: 0, note: '' },
+        helishot: { enabled: false, price: 0, note: '' },
+        fpv: { enabled: false, price: 0, note: '' },
+        crane: { enabled: false, price: 0, note: '' },
+        tv: { enabled: false, price: 0, note: '' },
+        album: { enabled: false, size: '20x20', photoCount: 10, price: 0, note: '' },
+        disk: { enabled: false, label: 'فلش تحویل فایل', price: 0, note: '' },
+        customItems: []
+      },
       {
         tier: 'silver', name: 'پکیج سیلور', featured: false,
         description: 'فیلمبرداری پایه — مناسب مراسم جمع‌وجور',
@@ -143,7 +183,7 @@ const PackageCatalog = {
         customItems: []
       },
       {
-        tier: 'cbi', name: 'پکیج CBI', featured: false,
+        tier: 'cip', name: 'پکیج CIP', featured: false,
         description: 'سفارشی سینمایی — FPV، کرین و TV',
         video: { cameras: 5, quality: '4k', price: 55000000, price4k: 0, clip: true, note: 'پوشش سینمایی کامل' },
         photoVenue: { enabled: true, price: 8000000, note: '' },
@@ -220,6 +260,7 @@ const PackageCatalog = {
       state.packageExtras = extras
       state.selectedPackageId = pkg.id
       state.selectedPackageName = p.name
+      state.selectedPackageSnapshot = this.snapshot(pkg)
     }
 
     if (typeof updateCamOperators === 'function') updateCamOperators()
@@ -256,6 +297,7 @@ const PackageCatalog = {
       state.packageExtras = []
       state.selectedPackageId = null
       state.selectedPackageName = ''
+      state.selectedPackageSnapshot = null
     }
 
     if (typeof updateCamOperators === 'function') updateCamOperators()

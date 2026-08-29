@@ -83,14 +83,22 @@ const SMDashboard = {
   },
 
   _ctx() {
-    const contracts = DB.get('contracts') || []
-    const tx = DB.get('transactions') || []
-    const personnel = (DB.get('personnel') || []).filter(p => p.status === 'active')
-    const bookings = DB.get('bookings') || []
-    const cheques = DB.get('cheques') || []
-    const persProjects = DB.get('persProjects') || []
-    const expenses = DB.get('expenses') || []
-    const requests = DB.get('customerRequests') || []
+    const rows = (name) => (typeof DB.active === 'function'
+      ? DB.active(name)
+      : (DB.get(name) || []).filter(i => i && !i._deleted))
+    const typedReady = window.ErpRuntime?.hasTypedData?.()
+    const authorityRequired = window.ErpRuntime?.requiresAuthority?.()
+    const typedState = typedReady ? window.ErpRuntime.state() : null
+    const contracts = typedReady ? typedState.contracts : authorityRequired ? [] : rows('contracts')
+    const tx = typedReady ? typedState.financeTransactions : authorityRequired ? [] : rows('transactions')
+    const personnel = rows('personnel').filter(p => p.status === 'active')
+    const bookings = rows('bookings')
+    const cheques = typedReady ? typedState.cheques : authorityRequired ? [] : rows('cheques')
+    const persProjects = typedReady ? typedState.assignments : authorityRequired ? [] : rows('persProjects')
+    const expenses = typedReady
+      ? tx.filter(t => t.type === 'withdrawal' && t.state === 'posted')
+      : authorityRequired ? [] : rows('expenses')
+    const requests = rows('customerRequests')
 
     const income = tx.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0)
     const expense = tx.filter(t => t.type === 'withdrawal').reduce((s, t) => s + (t.amount || 0), 0)
@@ -168,11 +176,14 @@ const SMDashboard = {
       const p = Utils.parseJalali(key)
       if (p && p.jy === jy && p.jm === jm) map[key] = (map[key] || 0) + 1
     }
-    ;(DB.get('contracts') || []).forEach(c => {
+    const rows = (name) => (typeof DB.active === 'function'
+      ? DB.active(name)
+      : (DB.get(name) || []).filter(i => i && !i._deleted))
+    rows('contracts').forEach(c => {
       if (c.status !== 'cancelled' && (c.eventDate || c.date)) add(c.eventDate || c.date)
     })
-    ;(DB.get('bookings') || []).forEach(b => { if (b.date) add(b.date) })
-    ;(DB.get('appointments') || []).forEach(a => { if (a.date) add(a.date) })
+    rows('bookings').forEach(b => { if (b.date) add(b.date) })
+    rows('appointments').forEach(a => { if (a.date) add(a.date) })
     return map
   },
 
@@ -240,9 +251,9 @@ const SMDashboard = {
           </div>
         </div>
         <div class="sm-finance-dash-links">
-          <button type="button" class="sm-finance-link" onclick="event.stopPropagation();SMDashboard.go('accounting')"><i class="fas fa-calculator"></i> حسابداری</button>
-          <button type="button" class="sm-finance-link" onclick="event.stopPropagation();SMDashboard.go('invoices')"><i class="fas fa-file-invoice"></i> فاکتور</button>
-          <button type="button" class="sm-finance-link" onclick="event.stopPropagation();SMDashboard.go('expenses')"><i class="fas fa-receipt"></i> هزینه</button>
+          <button type="button" class="sm-finance-link" ${SMEvents.attrs('SMDashboard.go', ["accounting"])} data-sm-stop="1"><i class="fas fa-calculator"></i> حسابداری</button>
+          <button type="button" class="sm-finance-link" ${SMEvents.attrs('SMDashboard.go', ["invoices"])} data-sm-stop="1"><i class="fas fa-file-invoice"></i> فاکتور</button>
+          <button type="button" class="sm-finance-link" ${SMEvents.attrs('SMDashboard.go', ["expenses"])} data-sm-stop="1"><i class="fas fa-receipt"></i> هزینه</button>
         </div>
         ${ctx.recentDeposits.length ? `
           <div class="sm-finance-recent">
@@ -258,7 +269,7 @@ const SMDashboard = {
     const off = meta.route && SM.isModuleDisabled(meta.route)
     return `<div class="sm-dash-widget sm-dash-widget--click${wide ? ' sm-dash-widget--wide' : ''}${off ? ' sm-dash-widget--off' : ''}"
       style="--w-color:${meta.color}" role="button" tabindex="0"
-      onclick="SMDashboard.go('${meta.route}')" onkeydown="if(event.key==='Enter')SMDashboard.go('${meta.route}')">
+      ${typeof SMEvents !== 'undefined' ? SMEvents.elAttrs('SMDashboard.go', [meta.route]) : ''}>
       <div class="sm-dash-widget-head">
         <span class="sm-dash-widget-title"><i class="fas ${meta.icon}"></i> ${SM.esc(meta.title)}</span>
         <span class="sm-dash-widget-go"><i class="fas fa-arrow-left"></i></span>
@@ -377,7 +388,7 @@ const SMDashboard = {
     const badgeType = days <= 0 ? 'danger' : days <= 7 ? 'warning' : 'success'
     const groom = c.groom || '—'
     const bride = c.bride || c.couple?.split(' و ')[0] || '—'
-    return `<div class="sm-event-card" style="--ev-color:${color}" onclick="event.stopPropagation();SMDashboard.go('contracts')">
+    return `<div class="sm-event-card" style="--ev-color:${color}" ${SMEvents.attrs('SMDashboard.go', ["contracts"])} data-sm-stop="1">
       <div class="sm-event-body">
         <div class="sm-event-names">
           <span class="sm-couple-name">${SM.esc(bride)}</span>
@@ -419,11 +430,18 @@ const SMDashboard = {
   },
 
   _financialModel(ctx) {
-    const monthIncome = this._monthAmount(ctx.tx, 'deposit', 0)
-    const previousIncome = this._monthAmount(ctx.tx, 'deposit', -1)
-    const monthExpense = this._monthAmount(ctx.tx, 'withdrawal', 0)
-    const previousExpense = this._monthAmount(ctx.tx, 'withdrawal', -1)
-    const bankBalance = this._sum(DB.get('banks') || [], 'balance')
+    const typedSeries = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().financeSeries
+      : []
+    const typedCurrent = typedSeries.at(-1)
+    const typedPrevious = typedSeries.at(-2)
+    const monthIncome = typedCurrent?.actual ?? this._monthAmount(ctx.tx, 'deposit', 0)
+    const previousIncome = typedPrevious?.actual ?? this._monthAmount(ctx.tx, 'deposit', -1)
+    const monthExpense = typedCurrent?.expense ?? this._monthAmount(ctx.tx, 'withdrawal', 0)
+    const previousExpense = typedPrevious?.expense ?? this._monthAmount(ctx.tx, 'withdrawal', -1)
+    const bankBalance = window.ErpRuntime?.hasTypedData?.()
+      ? this._sum(window.ErpRuntime.state().bankAccounts, 'balance')
+      : window.ErpRuntime?.requiresAuthority?.() ? 0 : this._sum(DB.get('banks') || [], 'balance')
     const net = monthIncome - monthExpense
     const billableContracts = ctx.contracts.filter(contract => contract.status !== 'cancelled')
     const collectionRate = billableContracts.length
@@ -451,6 +469,11 @@ const SMDashboard = {
   },
 
   _forecastSeries(ctx) {
+    if (window.ErpRuntime?.hasTypedData?.()) {
+      const typed = window.ErpRuntime.state().financeSeries
+      if (typed.length) return typed.map(item => ({ label: item.label, actual: item.actual, expected: item.expected }))
+    }
+    if (window.ErpRuntime?.requiresAuthority?.()) return []
     return [-5, -4, -3, -2, -1, 0].map(offset => {
       const ref = this._monthRef(offset)
       const actual = this._monthAmount(ctx.tx, 'deposit', offset)
@@ -500,6 +523,23 @@ const SMDashboard = {
       { id: 'review', label: 'بازبینی', color: '#F472B6' },
       { id: 'delivery', label: 'تحویل', color: '#34D399' }
     ]
+    const typed = window.ErpRuntime?.hasTypedData?.()
+      ? window.ErpRuntime.state().workOrders
+      : []
+    if (typed.length) {
+      const statusGroups = {
+        ingest: ['planned', 'scheduled', 'shooting'],
+        cull: ['selecting'],
+        edit: ['editing', 'album_design', 'printing'],
+        review: ['review'],
+        delivery: ['ready', 'delivered']
+      }
+      return stages.map(stage => ({
+        ...stage,
+        count: typed.filter(item => statusGroups[stage.id]?.includes(item.status)).length
+      }))
+    }
+    if (window.ErpRuntime?.requiresAuthority?.()) return stages.map(stage => ({ ...stage, count: 0 }))
     const workflows = DB.get('workflows') || []
     return stages.map(stage => ({
       ...stage,
@@ -526,7 +566,7 @@ const SMDashboard = {
   },
 
   _kpiCard(label, value, meta, icon, color, route, trend = null, inverse = false) {
-    return `<button type="button" class="sm-exec-kpi" style="--kpi-color:${color}" onclick="SMDashboard.go('${route}')">
+    return `<button type="button" class="sm-exec-kpi" style="--kpi-color:${color}" ${SMEvents.attrs('SMDashboard.go', [route])}>
       <span class="sm-exec-kpi-icon"><i class="fas ${icon}"></i></span>
       <span class="sm-exec-kpi-label">${SM.esc(label)}</span>
       <strong>${SM.fmt(value)}</strong>
@@ -539,7 +579,7 @@ const SMDashboard = {
     const points = values => values.map((value, index) => `${index * 20},${92 - ((value / max) * 76)}`).join(' ')
     const actualPoints = points(series.map(item => item.actual))
     const forecastPoints = points(series.map(item => item.expected))
-    return `<div class="sm-exec-chart" role="img" aria-label="مقایسه وصول واقعی و برآورد قراردادی شش ماه اخیر">
+    return `<div class="sm-exec-chart" dir="ltr" role="img" aria-label="مقایسه وصول واقعی و برآورد قراردادی شش ماه اخیر">
       <div class="sm-exec-chart-legend"><span><i class="is-actual"></i>وصول واقعی</span><span><i class="is-forecast"></i>برآورد قراردادی</span></div>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
         <defs><linearGradient id="smActualFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C9A96E" stop-opacity=".38"/><stop offset="1" stop-color="#C9A96E" stop-opacity="0"/></linearGradient></defs>
@@ -548,7 +588,7 @@ const SMDashboard = {
         <polyline class="sm-exec-line is-forecast" points="${forecastPoints}"/>
         <polyline class="sm-exec-line is-actual" points="${actualPoints}"/>
       </svg>
-      <div class="sm-exec-chart-labels">${series.map(item => `<span><b>${SM.esc(item.label)}</b><small>${SM.fmt(item.actual)}</small></span>`).join('')}</div>
+      <div class="sm-exec-chart-labels">${series.map(item => `<span dir="rtl"><b>${SM.esc(item.label)}</b><small>${SM.fmt(item.actual)}</small></span>`).join('')}</div>
     </div>`
   },
 
@@ -556,7 +596,7 @@ const SMDashboard = {
     const status = finance.health >= 75 ? 'عالی' : finance.health >= 55 ? 'قابل قبول' : finance.health >= 35 ? 'نیازمند توجه' : 'پرریسک'
     return `<section class="sm-exec-panel sm-exec-health">
       <div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">کنترل مالی</span><h3>سلامت مالی</h3></div>${SMUI.badge(status, finance.health >= 55 ? 'success' : 'warning')}</div>
-      <div class="sm-health-ring" style="--health:${finance.health}" aria-label="امتیاز سلامت مالی ${finance.health} از ۱۰۰"><strong>${finance.health.toLocaleString('fa-IR')}</strong><small>از ۱۰۰</small></div>
+      <div class="sm-health-ring" style="--health:${finance.health}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${finance.health}" aria-label="امتیاز سلامت مالی"><strong>${finance.health.toLocaleString('fa-IR')}</strong><small>از ۱۰۰</small></div>
       <div class="sm-health-legend">
         <span><i style="--ring-color:#34D399"></i><b>${finance.collectionRate.toLocaleString('fa-IR')}٪</b><small>وصول</small></span>
         <span><i style="--ring-color:#60A5FA"></i><b>${finance.liquidity.toLocaleString('fa-IR')}٪</b><small>نقدینگی</small></span>
@@ -570,7 +610,7 @@ const SMDashboard = {
   _expensePanel(expenses) {
     const max = Math.max(1, ...expenses.items.map(item => item.value))
     return `<section class="sm-exec-panel sm-exec-expenses">
-      <div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">ماه جاری</span><h3>ترکیب هزینه‌ها</h3></div><button type="button" class="sm-exec-link" onclick="SMDashboard.go('expenses')">مشاهده کامل <i class="fas fa-arrow-left"></i></button></div>
+      <div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">ماه جاری</span><h3>ترکیب هزینه‌ها</h3></div><button type="button" class="sm-exec-link" ${SMEvents.attrs('SMDashboard.go', ['expenses'])}>مشاهده کامل <i class="fas fa-arrow-left"></i></button></div>
       <div class="sm-expense-list">${expenses.items.map(item => `<div class="sm-expense-row">
         <span class="sm-expense-label"><i class="fas ${item.icon}" style="--expense-color:${item.color}"></i>${SM.esc(item.label)}</span>
         <span class="sm-expense-track"><i style="width:${Math.round((item.value / max) * 100)}%;--expense-color:${item.color}"></i></span>
@@ -589,35 +629,88 @@ const SMDashboard = {
   _workflowPanel(stages) {
     const max = Math.max(1, ...stages.map(stage => stage.count))
     return `<section class="sm-exec-panel sm-exec-workflow">
-      <div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">عملیات استودیو</span><h3>گردش تولید</h3></div><button type="button" class="sm-exec-link" onclick="SMDashboard.go('workflow')">باز کردن برد <i class="fas fa-arrow-left"></i></button></div>
+      <div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">عملیات استودیو</span><h3>گردش تولید</h3></div><button type="button" class="sm-exec-link" ${SMEvents.attrs('SMDashboard.go', ['workflow'])}>باز کردن برد <i class="fas fa-arrow-left"></i></button></div>
       <div class="sm-workflow-bars">${stages.map(stage => `<div class="sm-workflow-row"><span>${SM.esc(stage.label)}</span><div><i style="width:${Math.max(4, (stage.count / max) * 100)}%;--stage-color:${stage.color}"></i></div><strong>${stage.count.toLocaleString('fa-IR')}</strong></div>`).join('')}</div>
     </section>`
   },
 
   _eventsPanel(ctx) {
     const events = ctx.events.filter(item => item.days >= 0).slice(0, 5)
-    return `<section class="sm-exec-panel sm-exec-events"><div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">برنامه نزدیک</span><h3>مراسم‌های پیش‌رو</h3></div><button type="button" class="sm-exec-link" onclick="SMDashboard.go('calendar')">تقویم <i class="fas fa-arrow-left"></i></button></div>
-      <div class="sm-exec-event-list">${events.length ? events.map(event => `<button type="button" onclick="SMDashboard.go('contracts')"><span class="sm-exec-event-date"><strong>${event.days.toLocaleString('fa-IR')}</strong><small>${event.days === 0 ? 'امروز' : 'روز مانده'}</small></span><span><b>${SM.esc(event.couple || 'مراسم')}</b><small>${SM.esc(event.eventDate || '—')} · ${SM.esc(event.venue || 'محل ثبت نشده')}</small></span><i class="fas fa-chevron-left"></i></button>`).join('') : SMUI.empty('fa-calendar', 'مراسم پیش‌رو ثبت نشده')}</div>
+    return `<section class="sm-exec-panel sm-exec-events"><div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">برنامه نزدیک</span><h3>مراسم‌های پیش‌رو</h3></div><button type="button" class="sm-exec-link" ${SMEvents.attrs('SMDashboard.go', ['calendar'])}>تقویم <i class="fas fa-arrow-left"></i></button></div>
+      <div class="sm-exec-event-list">${events.length ? events.map(event => `<button type="button" ${SMEvents.attrs('SMDashboard.go', ['contracts'])}><span class="sm-exec-event-date"><strong>${event.days.toLocaleString('fa-IR')}</strong><small>${event.days === 0 ? 'امروز' : 'روز مانده'}</small></span><span><b>${SM.esc(event.couple || 'مراسم')}</b><small>${SM.esc(event.eventDate || '—')} · ${SM.esc(event.venue || 'محل ثبت نشده')}</small></span><i class="fas fa-chevron-left"></i></button>`).join('') : SMUI.empty('fa-calendar', 'مراسم پیش‌رو ثبت نشده')}</div>
     </section>`
   },
 
   _transactionsPanel(ctx) {
     const rows = ctx.tx.slice(-7).reverse()
-    return `<section class="sm-exec-panel sm-exec-transactions"><div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">آخرین ثبت‌ها</span><h3>گردش مالی اخیر</h3></div><button type="button" class="sm-exec-link" onclick="SMDashboard.go('accounting')">حسابداری <i class="fas fa-arrow-left"></i></button></div>
+    return `<section class="sm-exec-panel sm-exec-transactions"><div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">آخرین ثبت‌ها</span><h3>گردش مالی اخیر</h3></div><button type="button" class="sm-exec-link" ${SMEvents.attrs('SMDashboard.go', ['accounting'])}>حسابداری <i class="fas fa-arrow-left"></i></button></div>
       ${rows.length ? `<div class="sm-exec-table-wrap"><table><thead><tr><th>عنوان</th><th>تاریخ</th><th>مبلغ</th><th>وضعیت</th></tr></thead><tbody>${rows.map(row => `<tr><td>${SM.esc(row.title || row.note || 'تراکنش')}</td><td>${SM.esc(row.date || '—')}</td><td class="${row.type === 'deposit' ? 'is-income' : 'is-expense'}">${row.type === 'deposit' ? '+' : '−'} ${SM.fmt(row.amount || 0)}</td><td>${SMUI.badge(row.status === 'pending' ? 'در انتظار' : 'ثبت‌شده', row.status === 'pending' ? 'warning' : 'success')}</td></tr>`).join('')}</tbody></table></div>` : SMUI.empty('fa-receipt', 'تراکنشی ثبت نشده')}</section>`
   },
 
   _canViewFinance() {
     const user = typeof SM !== 'undefined' ? SM.user?.() : null
-    return !!(user && typeof Access !== 'undefined' && (Access.isSystemAdmin(user) || Access.isStudioManager(user)))
+    return !!(user && typeof SM !== 'undefined' && SM.can('manage_finance'))
+  },
+
+  _bindErpRuntime() {
+    if (this._erpRuntimeBound || !window.ErpRuntime) return
+    this._erpRuntimeBound = true
+    window.addEventListener('sm-erp-runtime', event => {
+      if (!['ready', 'offline', 'error', 'disabled'].includes(event.detail?.status)) return
+      if (SM.state.route !== 'dashboard' || SM.state.viewStack.length) return
+      const main = document.getElementById('sm-content')
+      if (main) this.render(main)
+    })
+  },
+
+  _erpStatus() {
+    if (!window.ErpRuntime) return ''
+    const state = window.ErpRuntime.state()
+    const meta = {
+      loading: ['در حال دریافت ERP', 'is-loading', 'fa-rotate'],
+      ready: ['داده مرجع ERP', 'is-ready', 'fa-shield-check'],
+      offline: ['آفلاین · داده محلی', 'is-offline', 'fa-cloud-arrow-down'],
+      error: ['خطای اتصال ERP', 'is-error', 'fa-triangle-exclamation'],
+      disabled: ['حالت محلی', 'is-local', 'fa-database']
+    }[state.status]
+    if (!meta) return ''
+    const detail = state.status === 'error'
+      ? state.error
+      : (state.updatedAt ? `آخرین دریافت ${new Date(state.updatedAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}` : '')
+    return `<button type="button" class="sm-erp-source ${meta[1]}" ${SMEvents.attrs('SMDashboard.refreshErp')} title="${SM.esc(detail || meta[0])}"><i class="fas ${meta[2]}"></i><span>${meta[0]}</span></button>`
+  },
+
+  refreshErp() {
+    window.ErpRuntime?.refresh({ force: true })
+  },
+
+  _searchContext(ctx) {
+    const q = SM.getModuleSearch('dashboard')
+    if (!q) return { ...ctx, searchQuery: '', searchCount: null }
+    const has = item => [
+      item.couple, item.groom, item.bride, item.contractNum, item.contract_num,
+      item.phone, item.phoneGroom, item.phoneBride, item.groomPhone, item.bridePhone,
+      item.venue, item.title, item.note, item.client
+    ].filter(Boolean).join(' ').toLowerCase().includes(q)
+    const contracts = ctx.contracts.filter(has)
+    const ids = new Set(contracts.map(item => item.id))
+    const events = ctx.events.filter(item => ids.has(item.id) || has(item))
+    const tx = ctx.tx.filter(has)
+    const bookings = ctx.bookings.filter(has)
+    return {
+      ...ctx, contracts, events, tx, bookings,
+      upcomingBookings: ctx.upcomingBookings.filter(has),
+      searchQuery: q,
+      searchCount: contracts.length + tx.length + bookings.length
+    }
   },
 
   _operationalDashboard(ctx) {
     const stages = this._workflowSummary()
     const closeEvents = ctx.events.filter(event => event.days >= 0 && event.days <= 30).length
     return `<div class="sm-exec-dashboard sm-exec-dashboard--operations">
-      <div class="sm-exec-toolbar"><div><span class="sm-exec-eyebrow">نمای عملیاتی مجاز</span><h2>پیشخوان کارها</h2><p>${SM.esc(Utils.todayJalali())} · اطلاعات مالی فقط برای مدیر استودیو نمایش داده می‌شود</p></div>
-        <div class="sm-exec-toolbar-actions">${SMUI.moduleSearch('dashboard', 'جستجو در مراسم و مشتری...')}</div></div>
+      <div class="sm-exec-toolbar"><div><span class="sm-exec-eyebrow">نمای عملیاتی مجاز</span><h2>پیشخوان کارها</h2><p>${SM.esc(Utils.todayJalali())} · اطلاعات مالی فقط برای نقش‌های مالی مجاز نمایش داده می‌شود</p></div>
+        <div class="sm-exec-toolbar-actions">${this._erpStatus()}${SMUI.moduleSearch('dashboard', 'جستجو در مراسم و مشتری...')}</div></div>
       <div class="sm-exec-kpis sm-exec-kpis--operations">
         ${this._kpiCard('مراسم ۳۰ روز آینده', closeEvents, 'برنامه کاری نزدیک', 'fa-calendar-check', '#A78BFA', 'calendar')}
         ${this._kpiCard('درخواست‌های باز', ctx.openInbox, 'پیام و پیگیری مشتری', 'fa-inbox', '#60A5FA', 'inbox')}
@@ -629,7 +722,13 @@ const SMDashboard = {
   },
 
   render(el) {
-    const ctx = this._ctx()
+    this._bindErpRuntime()
+    if (window.ErpRuntime) Promise.resolve().then(() => window.ErpRuntime.ensureLoaded())
+    const ctx = this._searchContext(this._ctx())
+    if (ctx.searchQuery && ctx.searchCount === 0) {
+      el.innerHTML = `<div class="sm-exec-dashboard"><div class="sm-exec-toolbar"><div><span class="sm-exec-eyebrow">جستجوی سراسری</span><h2>نتیجه‌ای پیدا نشد</h2><p>نام، شماره تماس یا شماره قرارداد را بررسی کنید.</p></div><div class="sm-exec-toolbar-actions">${this._erpStatus()}${SMUI.moduleSearch('dashboard', 'جستجو در مراسم و مشتری...')}</div></div>${SMUI.empty('fa-magnifying-glass', 'نتیجه‌ای برای این عبارت وجود ندارد')}</div>`
+      return
+    }
     if (!this._canViewFinance()) {
       el.innerHTML = this._operationalDashboard(ctx)
       return
@@ -647,8 +746,9 @@ const SMDashboard = {
         <div class="sm-exec-toolbar">
           <div><span class="sm-exec-eyebrow">نمای لحظه‌ای استودیو</span><h2>پیشخوان مدیریت</h2><p>${SM.esc(Utils.todayJalali())} · همه ارقام به تومان</p></div>
           <div class="sm-exec-toolbar-actions">
+            ${this._erpStatus()}
             ${SMUI.moduleSearch('dashboard', 'جستجو در مراسم و مشتری...')}
-            <button type="button" class="sm-btn sm-btn-primary" onclick="window.location.href='../contract.html'"><i class="fas fa-plus"></i> قرارداد جدید</button>
+            <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMDashboard.newContract')}><i class="fas fa-plus"></i> قرارداد جدید</button>
           </div>
         </div>
         <div class="sm-exec-kpis">
@@ -674,6 +774,10 @@ const SMDashboard = {
         </div>
       </div>
       `
+  },
+
+  newContract() {
+    window.location.href = '../contract.html'
   },
 
   _block(id, inner) {

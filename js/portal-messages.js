@@ -60,11 +60,12 @@ const PortalMessages = {
                 <span>${Utils.escapeHtml(InboxShared?.formatWhen?.(t.date, t.time) || '')}</span>
               </div>
               <p>${Utils.escapeHtml(t.text || '')}</p>
+              ${t.author === 'staff' ? `<span class="portal-inbox-receipt"><i class="fas fa-check-double"></i> ${t.readBy?.includes('customer') ? 'خوانده‌شده توسط مشتری' : 'ارسال‌شده'}</span>` : ''}
             </div>`).join('')}
         </div>
         ${canAct ? `<div class="actions" style="margin-top:10px">
-          ${!req.readByStaff ? `<button class="accept" onclick="PortalMessages.markRead('${req.id}')">✓ مشاهده شد</button>` : ''}
-          <button class="reject" onclick="PortalMessages.reply('${req.id}')">پاسخ پرسنل</button>
+          ${!req.readByStaff ? `<button class="accept" data-csp-action="PortalMessages.markRead" data-csp-arg="${Utils.escapeHtml(req.id)}">✓ مشاهده شد</button>` : ''}
+          <button class="reject" data-csp-action="PortalMessages.reply" data-csp-arg="${Utils.escapeHtml(req.id)}">پاسخ پرسنل</button>
         </div>` : ''}
       </div>`
   },
@@ -78,6 +79,7 @@ const PortalMessages = {
       return
     }
     await SecureDB.update('customerRequests', id, { readByStaff: true, readByStaffAt: new Date().toISOString() })
+    InboxShared?.markRead?.(id, 'staff')
     if (typeof InboxShared !== 'undefined') {
       InboxShared.appendThread(id, {
         author: 'staff',

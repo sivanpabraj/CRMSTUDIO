@@ -45,8 +45,11 @@ describe('generateCsrfToken', () => {
 })
 
 describe('detectConflict', () => {
-  it('detects equal timestamp different payload', () => {
-    const local = { id: '1', total: 100, updatedAtIso: '2026-06-01T12:00:00.000Z', _syncRev: 2 }
+  it('detects a pending local mutation against a newer server revision', () => {
+    const local = {
+      id: '1', total: 100, updatedAtIso: '2026-06-01T12:00:00.000Z',
+      _serverRevision: 2, _syncMutationId: 'mutation-0001'
+    }
     const remote = {
       local_id: '1',
       payload: { id: '1', total: 200 },
@@ -56,8 +59,11 @@ describe('detectConflict', () => {
     expect(detectConflict(local, remote)).toBe(true)
   })
 
-  it('detects concurrent edits within 2 minutes', () => {
-    const local = { id: '1', total: 100, updatedAtIso: '2026-06-01T12:00:30.000Z', _syncRev: 5 }
+  it('uses server revision even when the client clock is far in the future', () => {
+    const local = {
+      id: '1', total: 100, updatedAtIso: '2099-06-01T12:00:30.000Z',
+      _serverRevision: 5, _syncMutationId: 'mutation-0002'
+    }
     const remote = {
       local_id: '1',
       payload: { id: '1', total: 200 },
@@ -70,7 +76,10 @@ describe('detectConflict', () => {
 
 describe('mergeCollection conflicts', () => {
   it('queues conflict instead of overwriting', () => {
-    const local = [{ id: '1', total: 100, updatedAtIso: '2026-06-01T12:00:00.000Z', _syncRev: 2 }]
+    const local = [{
+      id: '1', total: 100, updatedAtIso: '2026-06-01T12:00:00.000Z',
+      _serverRevision: 2, _syncMutationId: 'mutation-0003'
+    }]
     const remote = [{
       local_id: '1',
       payload: { id: '1', total: 200 },

@@ -3,14 +3,12 @@
    ══════════════════════════════════════════════ */
 
 const FactoryReset = {
-  DEFAULT_PHONE: AppConfig.INITIAL_ADMIN_PHONE,
-  DEFAULT_PASSWORD: AppConfig.INITIAL_ADMIN_PASSWORD,
   STORAGE_PREFIXES: ['talar_', 'studio_', 'man_', 'sm_'],
 
   IDENTITY_KEYS: [
     'id', 'name', 'logo', 'phone', 'address', 'manager', 'managerEmail', 'social',
     'slug', 'joinCode', 'siteLinks', 'appBaseUrl', 'externalSiteUrl', 'tagline',
-    'setupCompleted', 'smsProvider', 'smsApiKey', 'smsLineNumber', 'smsMorningReminders',
+    'setupCompleted', 'smsMorningReminders',
     'autoBackup', 'backupHourly', 'backupDaily', 'backupAutoDownload', 'backupPathNote',
     'lastBackup', 'backupLastAt', 'backupLastKey', 'backupLastLabel'
   ],
@@ -22,7 +20,6 @@ const FactoryReset = {
       AppConfig.DRAFT_KEY,
       'customer_session',
       'talar_unified_otp',
-      'talar_customer_otp',
       'talar_pw_reset_otp',
       'man_demo_mode',
       ...(AppConfig.LEGACY_DB_KEYS || [])
@@ -75,11 +72,9 @@ const FactoryReset = {
   },
 
   async _seedManager(identity) {
-    const password = AppConfig.isLocalDev()
-      ? this.DEFAULT_PASSWORD
-      : Utils.generateRandomPassword(12)
+    const password = Utils.generateRandomPassword(16)
     const creds = await Auth.hashCredentials(password)
-    const phone = Utils.normalizePhone(this.DEFAULT_PHONE)
+    const phone = Utils.normalizePhone(identity.phone || AppConfig.generateBootstrapPhone())
     const admin = DB.insert('users', {
       name: identity.manager || 'مدیر استودیو',
       phone,
@@ -88,13 +83,14 @@ const FactoryReset = {
       roles: ['studio_manager'],
       status: 'active',
       mustChangePassword: !identity.setupCompleted,
+      isBootstrapAdmin: !identity.setupCompleted,
       profileCompleted: !!identity.setupCompleted,
       createdAt: Utils.todayJalali()
     })
     DB.insert('banks', {
       id: 'bank_cash_' + Date.now(),
       name: 'صندوق نقدی',
-      accountNumber: '', shaba: '', card: '',
+      account: '', accountNumber: '', iban: '', shaba: '', card: '',
       balance: 0, color: '#22C55E', icon: '💰'
     })
     DB.syncPersonnelFromUser(admin)
@@ -185,9 +181,6 @@ const FactoryReset = {
         appBaseUrl: '',
         externalSiteUrl: '',
         tagline: '',
-        smsProvider: '',
-        smsApiKey: '',
-        smsLineNumber: '',
         autoBackup: false,
         backupHourly: false,
         backupDaily: false
@@ -207,10 +200,7 @@ const FactoryReset = {
   },
 
   credentialsLabel() {
-    if (AppConfig.isLocalDev()) {
-      return `موبایل: ${this.DEFAULT_PHONE} — رمز: ${this.DEFAULT_PASSWORD}`
-    }
-    return 'پس از بازنشانی، رمز یک‌بار در صفحه ورود نمایش داده می‌شود'
+    return 'پس از بازنشانی، اطلاعات ورود یک‌بار در صفحه ورود نمایش داده می‌شود'
   }
 }
 

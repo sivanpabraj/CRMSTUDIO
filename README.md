@@ -1,15 +1,16 @@
 # Studio M — پلتفرم مدیریت استودیو
 
-نسخه **6.0.0** — ERP/CRM استودیو عکاسی و فیلمبرداری (RTL / فارسی)
+نسخه **1.1.0** — ERP/CRM استودیو عکاسی و فیلمبرداری (RTL / فارسی)
 
 ## اجرا
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173/site.html
+npm run dev      # http://localhost:5173/site.html (LAN: 0.0.0.0)
 npm run build    # خروجی در dist/
-npm run test     # 42+ unit tests
+npm run test     # Vitest unit tests (83+)
 npm run lint     # ESLint (zero warnings policy)
+npm run test:e2e # Playwright smoke (نیاز به build)
 ```
 
 ### Docker
@@ -19,55 +20,46 @@ docker build -t studio-m .
 docker run -p 8080:80 studio-m
 ```
 
-مستندات: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) · [docs/SMS_DEFERRED.md](docs/SMS_DEFERRED.md) (بدون SMS تا فردا)
+مستندات: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) · [docs/SECURITY.md](docs/SECURITY.md) · [docs/QUALITY_SCORES.md](docs/QUALITY_SCORES.md) · [docs/AUDIT_REPORT.md](docs/AUDIT_REPORT.md)
 
 ## ساختار
 
 | مسیر | توضیح |
 |------|--------|
 | `studio-m/` | پنل Pro (ERP اصلی) |
-| `js/` | لایه داده، auth، ماژول‌های مشترک |
-| `admin.html` | پنل کلاسیک (legacy) |
+| `studio-m/js/modules-*.js` | ماژول‌های شکستهٔ Pro (bookings, contracts, invoices, …) |
+| `js/` | لایه داده، auth، FinanceSync، sync |
+| `js/lib/` | توابع خالص قابل‌تست (ledger, sanitize, policy, …) |
 | `contract.html` | قرارداد و فاکتور |
 | `customer.html` | پورتال مشتری |
 
 ### ماژول‌های Studio M Pro
 
-- **گردش کار تدوین** (`studio-m/#workflow`) — خط تولید ingest → تحویل، لینک قرارداد، ادیتور، اولویت، تب فعال/معلق/تمام‌شده
-- **مدیریت فایل** — به‌زودی
+- داشبورد، رزرو، تقویم، قرارداد، پکیج، فاکتور، حسابداری، هزینه، گزارش
+- پرسنل، حضور، حقوق، تجهیزات، امانات، گردش کار، فایل، پیامک، پرتال، تنظیمات
 
 ## ذخیره‌سازی
 
-- **IndexedDB** (`talar_studio_v5`) — داده اصلی
-- **sessionStorage** — نشست کاربر
+- **IndexedDB** (`talar_studio_v5`) — داده اصلی (offline-first)
+- **sessionStorage** — نشست امضاشده + CSRF
 
-> ⚠️ این نسخه **offline-first** است. برای **cloud sync** → [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)
+> برای **cloud sync** → [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)
 
-## Cloud (Supabase MVP)
+## قرارداد مالی (مهم)
 
-- Auth سرور-side (Supabase Auth)
-- Snapshot sync کل دیتابیس
-- جدول contracts ساختاریافته
-- RLS multi-tenant آماده
+همهٔ تغییرات موجودی بانک / `paid` قرارداد باید از **`FinanceSync`** عبور کنند:
 
-## راه‌اندازی اول
+- `recordDeposit` / `recordWithdrawal` / `transferBetweenBanks`
+- پاس چک از `ChequeManager` (با rollback)
 
-1. `start.html` — ساخت استودیو و مدیر
-2. یا ورود از `index.html`
-
-در **production** (غیر localhost) رمز مدیر اولیه **تصادفی** است و یک‌بار در صفحه ورود نشان داده می‌شود.
-
-## حالت demo
-
-فقط روی `localhost` با `?demo=1` فعال است.
+مستقیم `SecureDB.insert('transactions')` + `applyBankDelta` در مسیرهای جدید ممنوع است.
 
 ## امنیت
 
-- Snapshot ابری قبل از آپلود **sanitize** می‌شود (بدون رمز/کلید SMS)
-- دعوت پرتال: کد SMS جداگانه — بدون bypass در ورود یکپارچه
-- Session در production نیاز به امضای HMAC دارد
-- کلید SMS را فقط از طریق **Edge Function** (`send-sms`) در production استفاده کنید
-- migration **005** را روی Supabase اعمال کنید
+- Snapshot ابری sanitize می‌شود
+- SMS در production فقط از طریق Edge proxy؛ کلید API روی دستگاه ذخیره نمی‌شود اگر proxy ست باشد
+- Session در production بدون امضا رد می‌شود
+- بازیابی بکاپ و عملیات مخرب نیاز به تأیید مدیر + رمز دارند
 
 ## مجوز
 

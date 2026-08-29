@@ -7,6 +7,24 @@ const UnifiedLogin = {
   RATE_PREFIX: 'talar_unified_otp_rate_',
   OTP_TTL_MS: AppConfig.OTP_TTL_MS || 5 * 60 * 1000,
 
+  _cloudRequired() {
+    const local = typeof AppConfig.allowsLocalIdentity === 'function'
+      ? AppConfig.allowsLocalIdentity()
+      : AppConfig.isLocalDev?.()
+    return !local
+  },
+
+  _resolvedCloudIdentity(identity) {
+    const roles = identity?.roles || []
+    const manager = roles.includes('studio_manager') || roles.includes('system_admin')
+    const management = manager || roles.some(role => ['office_secretary', 'coordinator', 'inspector'].includes(role))
+    return {
+      kind: manager ? 'manager' : management ? 'admin' : 'staff',
+      user: identity,
+      label: manager ? 'مدیر استودیو' : management ? 'مدیریت' : 'پرسنل'
+    }
+  },
+
   _contractPhones(c) {
     return [c.groomPhone, c.bridePhone, c.phoneGroom, c.phoneBride, c.phone]
       .map(p => Utils.normalizePhone(p))
@@ -144,6 +162,20 @@ const UnifiedLogin = {
     phone = Utils.normalizePhone(phone)
     if (!Utils.isValidPhone(phone)) return { ok: false, error: 'شماره موبایل نامعتبر است' }
 
+    if (this._cloudRequired()) {
+      if (typeof Cloud === 'undefined' || !Cloud.isConfigured?.()) {
+        return { ok: false, code: 'cloud_required', error: 'ورود سرور در این استقرار پیکربندی نشده است' }
+      }
+      const cloudOtp = await Cloud.sendPhoneOtp(phone, { shouldCreateUser: false })
+      if (!cloudOtp.ok) return { ok: false, error: 'ارسال کد ورود ممکن نشد؛ کمی بعد دوباره تلاش کنید' }
+      this._setPending({
+        phone,
+        cloudOtp: true,
+        expires: Date.now() + this.OTP_TTL_MS
+      })
+      return { ok: true, cloudOtp: true, resolved: { kind: 'server_pending', phone } }
+    }
+
     const locked = typeof Auth !== 'undefined'
       ? Auth.isLocked(phone)
       : (CustomerSession?.isLocked?.(phone) || 0)
@@ -153,6 +185,23 @@ const UnifiedLogin = {
     if (!rate.ok) return rate
 
     const resolved = this.resolvePhone(phone)
+
+    // Customer/unknown phones use Supabase Auth OTP in cloud mode. The OTP is
+    // generated and verified server-side, never stored in browser storage.
+    if (typeof Cloud !== 'undefined' && Cloud.isConfigured?.() &&
+        ['customer', 'guest'].includes(resolved.kind)) {
+      const cloudOtp = await Cloud.sendPhoneOtp(phone, { shouldCreateUser: false })
+      if (!cloudOtp.ok) return cloudOtp
+      this._setPending({
+        phone,
+        cloudOtp: true,
+        kind: resolved.kind,
+        label: resolved.label,
+        expires: Date.now() + this.OTP_TTL_MS
+      })
+      this._recordSend(phone)
+      return { ok: true, resolved, cloudOtp: true }
+    }
 
     // پرسنل/ادمین دعوت‌شده: همان کد دعوت مدیر را دوباره بفرست / نشان بده (کد دوم نساز)
     if (resolved.user && typeof PortalInvite !== 'undefined' &&
@@ -227,6 +276,62 @@ const UnifiedLogin = {
       this.clearPending()
       return { ok: false, error: 'کد منقضی شده — دوباره درخواست دهید.' }
     }
+    if (this._cloudRequired() && !pending.cloudOtp) {
+      this.clearPending()
+      return { ok: false, code: 'cloud_otp_required', error: 'درخواست OTP محلی در محیط عملیاتی معتبر نیست' }
+    }
+
+    if (pending.cloudOtp) {
+      if (typeof Cloud === 'undefined') return { ok: false, error: 'ورود ابری در دسترس نیست' }
+      const verified = await Cloud.verifyPhoneOtp(phone, inputCode)
+      if (!verified.ok) return verified
+      const identity = await Cloud.restoreAuthoritativeIdentity()
+      if (identity.ok) {
+        const resolved = this._resolvedCloudIdentity(identity.identity)
+        this.clearPending()
+        return {
+          ok: true,
+          next: 'redirect',
+          url: this.landingUrl(resolved),
+          resolved,
+          user: identity.identity
+        }
+      }
+      if (identity.code !== 'no_active_membership') return identity
+      const claimed = await Cloud.claimCustomerContracts()
+      if (!claimed.ok) return claimed
+      if (!claimed.contracts.length) {
+        pending.verified = true
+        this._setPending(pending)
+        return { ok: true, next: 'consultation', resolved: { kind: 'guest', phone }, pending }
+      }
+
+      const row = claimed.contracts[0]
+      const payload = row.payload && typeof row.payload === 'object' ? row.payload : {}
+      const localId = String(row.local_id || payload.id || row.contract_id)
+      const contractData = {
+        ...payload,
+        id: localId,
+        contractNum: payload.contractNum || row.contract_num || '',
+        groom: payload.groom || row.groom || '',
+        bride: payload.bride || row.bride || '',
+        eventDate: payload.eventDate || row.event_date || '',
+        status: row.status || payload.status || 'active',
+        _cloudContractId: row.contract_id,
+        _cloudStudioId: row.studio_id
+      }
+      const existing = DB.find('contracts', c => String(c.id) === localId)
+      const contract = existing
+        ? DB.update('contracts', localId, contractData)
+        : DB.insert('contracts', contractData)
+      const session = CustomerSession.create(contract, phone)
+      session.cloudContractId = row.contract_id
+      session.studioId = row.studio_id
+      await CustomerSession.save(session)
+      await DB.flush?.()
+      this.clearPending()
+      return { ok: true, next: 'redirect', url: 'customer.html', resolved: { kind: 'customer', contract } }
+    }
 
     const code = Utils.faToEn(String(inputCode || '')).replace(/\D/g, '')
     const verifyKey = `unified:${phone}`
@@ -252,6 +357,18 @@ const UnifiedLogin = {
       CustomerSession?.clearAttempts?.(phone)
     }
     const resolved = this.resolvePhone(phone)
+
+    // ورود پرسنل دو مدرک مستقل می‌خواهد: کد ورود یکپارچه و کد دعوت پرتال.
+    // تأیید کد عمومی نباید حساب دعوت‌شده را خودکار فعال کند.
+    if (resolved.user && typeof PortalInvite !== 'undefined' &&
+        PortalInvite.needsOtpVerification(resolved.user)) {
+      pending.portalVerify = true
+      pending.userId = resolved.user.id
+      pending.kind = resolved.kind
+      pending.label = resolved.label
+      this._setPending(pending)
+      return { ok: true, next: 'portal_verify', resolved, pending }
+    }
 
     if (resolved.kind === 'guest') {
       pending.verified = true
@@ -281,21 +398,6 @@ const UnifiedLogin = {
 
     const user = resolved.user || DB.find('users', u => u.id === resolved.user?.id)
     if (!user) return { ok: false, error: 'کاربر یافت نشد.' }
-
-    // یک مرحله: تأیید پیامک ورود = فعال‌سازی پرتال (بدون کد دوم)
-    if (typeof PortalInvite !== 'undefined' && PortalInvite.needsOtpVerification(user)) {
-      try {
-        await SecureDB.update('users', user.id, {
-          portalStatus: 'active',
-          portalOtp: {
-            ...(user.portalOtp || {}),
-            verified: true,
-            verifiedAt: new Date().toISOString(),
-            via: 'unified_sms_login'
-          }
-        })
-      } catch { /* */ }
-    }
 
     return this.finishStaffLogin(resolved, user)
   },
@@ -348,6 +450,11 @@ const UnifiedLogin = {
 
     const result = await Auth.login(phone, password)
     if (!result.ok) return result
+
+    if (this._cloudRequired()) {
+      const resolved = this._resolvedCloudIdentity(result.user)
+      return { ok: true, user: result.user, url: this.landingUrl(resolved), resolved }
+    }
 
     const resolved = this.resolvePhone(phone)
     if (resolved.kind === 'guest') {

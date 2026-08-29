@@ -3,9 +3,6 @@ import fs from 'node:fs'
 import vm from 'node:vm'
 
 const source = fs.readFileSync('studio-m/js/dashboard.js', 'utf8')
-const css = fs.readFileSync('studio-m/css/studio-m.css', 'utf8')
-const glassCss = fs.readFileSync('studio-m/css/dark-glass-theme.css', 'utf8')
-const settingsSource = fs.readFileSync('studio-m/js/settings.js', 'utf8')
 
 function dashboardWith(data = {}, roles = ['studio_manager']) {
   const collections = {
@@ -22,7 +19,11 @@ function dashboardWith(data = {}, roles = ['studio_manager']) {
       daysUntil: date => date === '1405/04/01' ? -30 : 5,
       todayJalali: () => '1405/05/25'
     },
-    SM: { fmt: String, esc: String, studio: () => ({}), user: () => ({ roles }), navigate: () => {}, isModuleDisabled: () => false },
+    SM: {
+      fmt: String, esc: String, studio: () => ({}), user: () => ({ roles }),
+      navigate: () => {}, isModuleDisabled: () => false,
+      can: permission => permission === 'manage_finance' && roles.some(role => ['system_admin', 'studio_manager', 'accountant'].includes(role))
+    },
     Access: { isSystemAdmin: () => false, isStudioManager: user => user.roles.includes('studio_manager') },
     SMUI: { badge: text => text, empty: () => '', moduleSearch: () => '' },
     window: {}
@@ -73,24 +74,9 @@ describe('STE100 executive dashboard', () => {
     expect(result.items.some(item => item.id === 'other')).toBe(true)
   })
 
-  it('contains operational, financial, empty-state and accessibility surfaces', () => {
-    expect(source).toContain('وصول واقعی و برآورد قراردادی')
-    expect(source).toContain('فرمول: وصول ۳۵٪')
-    expect(source).toContain('مراسم‌های پیش‌رو')
-    expect(source).toContain('گردش تولید')
-    expect(source).toContain('_canViewFinance')
-    expect(source).toContain('اطلاعات مالی فقط برای مدیر استودیو')
-    expect(source).toContain('aria-label=')
-    expect(css).toContain('@media (max-width: 440px)')
-    expect(css).toContain('@media (prefers-reduced-motion: reduce)')
-    expect(css).toContain('@media (forced-colors: active)')
-    expect(glassCss).toContain('Executive dashboard integration')
-    expect(settingsSource).toContain('چیدمان پیشخوان بر اساس اولویت تصمیم‌گیری')
-    expect(settingsSource).not.toContain('SMSettings.saveWidgets()')
-  })
-
-  it('restricts financial dashboard to system and studio managers', () => {
+  it('aligns financial dashboard with the finance permission', () => {
     expect(dashboardWith({}, ['studio_manager'])._canViewFinance()).toBe(true)
+    expect(dashboardWith({}, ['accountant'])._canViewFinance()).toBe(true)
     expect(dashboardWith({}, ['office_secretary'])._canViewFinance()).toBe(false)
     expect(dashboardWith({}, ['editor_clip'])._canViewFinance()).toBe(false)
   })

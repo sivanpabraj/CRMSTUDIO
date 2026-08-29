@@ -2,28 +2,188 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Pull-request builds verify that public Supabase configuration is embedded and
+# never accept a secret key. Repository variables override these inert CI-only
+# values when authenticated integration tests are configured.
+env:
+  VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://ci-build-only.supabase.co' }}
+  VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || 'sb_publishable_ci_build_only' }}
 
 jobs:
-  build-and-test:
+  quality:
+    name: Quality, unit tests and build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: npm
-
       - run: npm ci
+      - run: npm run ci:verify
+      - name: Enforce core and security coverage thresholds
+        run: npm run test:coverage
+      - name: Upload coverage evidence even when thresholds fail
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-m-coverage-${{ github.sha }}
+          path: coverage/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Static load smoke test
+        run: |
+          python3 -m http.server 4174 --directory dist --bind 127.0.0.1 >/tmp/studio-m-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            curl --fail --silent http://127.0.0.1:4174/index.html >/dev/null && break
+            sleep 0.25
+          done
+          npm run test:load
+      - name: Upload production artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-m-dist-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
 
-      - run: npm run lint
+  security:
+    name: Dependency security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run security:scan
+      - run: npm run sbom
+      - name: Upload CI software bill of materials
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-m-sbom-${{ github.sha }}
+          path: artifacts/sbom.spdx.json
+          if-no-files-found: error
+          retention-days: 30
 
-      - run: npm run test
+  sast:
+    name: CodeQL SAST
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: github/codeql-action/init@3599b3baa15b485a2e49ef411a7a4bb2452e7f93 # v3.30.5
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@3599b3baa15b485a2e49ef411a7a4bb2452e7f93 # v3.30.5
 
-      - run: npm run build
+  e2e:
+    name: Browser and authenticated finance tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Reject partially configured authenticated E2E
+        run: |
+          if { [ -n "${E2E_LOGIN_PHONE:-}" ] && [ -z "${E2E_LOGIN_PASSWORD:-}" ]; } || \
+             { [ -z "${E2E_LOGIN_PHONE:-}" ] && [ -n "${E2E_LOGIN_PASSWORD:-}" ]; }; then
+            echo "::error::Both E2E login secrets must be configured together"
+            exit 1
+          fi
+        env:
+          E2E_LOGIN_PHONE: ${{ secrets.E2E_LOGIN_PHONE }}
+          E2E_LOGIN_PASSWORD: ${{ secrets.E2E_LOGIN_PASSWORD }}
+      - run: npm run test:e2e
+        env:
+          E2E_LOGIN_PHONE: ${{ secrets.E2E_LOGIN_PHONE }}
+          E2E_LOGIN_PASSWORD: ${{ secrets.E2E_LOGIN_PASSWORD }}
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-failure-${{ github.sha }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload visual QA screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: visual-qa-${{ github.sha }}
+          path: test-results/visual/*.png
+          if-no-files-found: warn
+          retention-days: 14
 
-      - name: Docker build
-        run: docker build -t studio-m:ci .
+  container:
+    name: Container build and network smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: >-
+          docker build --pull
+          --build-arg VITE_SUPABASE_URL="$VITE_SUPABASE_URL"
+          --build-arg VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY"
+          --tag studio-m:${{ github.sha }} .
+      - name: Validate nginx and probe runtime headers
+        run: |
+          docker run --detach --name studio-m-ci -p 127.0.0.1:8080:80 studio-m:${{ github.sha }}
+          trap 'docker rm --force studio-m-ci >/dev/null 2>&1 || true' EXIT
+          docker exec studio-m-ci nginx -t
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8080/health.json >/dev/null; then break; fi
+            sleep 1
+          done
+          DEPLOYMENT_APP_URL=http://127.0.0.1:8080 node scripts/deployment-security-smoke.mjs
+
+  database:
+    name: Migrations, RLS and concurrency
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
+        with:
+          version: 2.111.0
+      - name: Start pinned local Supabase services
+        run: supabase start -x studio,mailpit,imgproxy,logflare,vector,supavisor
+      - name: Rebuild database from every migration
+        run: supabase db reset --local
+      - name: Execute behavioral pgTAP policy and domain tests
+        run: supabase test db
+      - name: Prove concurrent assignment exclusion
+        run: bash scripts/test-assignment-concurrency.sh
+        env:
+          SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup

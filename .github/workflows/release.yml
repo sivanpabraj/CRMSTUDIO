@@ -1,0 +1,123 @@
+name: Release package
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    name: Version and immutable tag gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: node scripts/validate-release.mjs
+        env:
+          RELEASE_REQUIRE_TAG: '1'
+
+  verify-database:
+    needs: metadata
+    name: Release migration and RLS gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
+        with:
+          version: 2.111.0
+      - run: supabase start -x studio,mailpit,imgproxy,logflare,vector,supavisor
+      - run: supabase db reset --local
+      - run: supabase test db
+      - run: bash scripts/test-assignment-concurrency.sh
+        env:
+          SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      - if: always()
+        run: supabase stop --no-backup
+
+  package:
+    needs: [metadata, verify-database]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run ci:verify
+      - name: Enforce core and security coverage thresholds
+        run: npm run test:coverage
+      - name: Preserve release coverage evidence on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-m-release-coverage-${{ github.ref_name }}
+          path: coverage/
+          if-no-files-found: error
+          retention-days: 30
+      - run: npx playwright install --with-deps chromium
+      - name: Require real authenticated release test identity
+        run: |
+          test -n "$E2E_LOGIN_PHONE" || { echo "::error::E2E_LOGIN_PHONE is required for release"; exit 1; }
+          test -n "$E2E_LOGIN_PASSWORD" || { echo "::error::E2E_LOGIN_PASSWORD is required for release"; exit 1; }
+        env:
+          E2E_LOGIN_PHONE: ${{ secrets.E2E_LOGIN_PHONE }}
+          E2E_LOGIN_PASSWORD: ${{ secrets.E2E_LOGIN_PASSWORD }}
+      - run: npm run test:e2e
+        env:
+          E2E_LOGIN_PHONE: ${{ secrets.E2E_LOGIN_PHONE }}
+          E2E_LOGIN_PASSWORD: ${{ secrets.E2E_LOGIN_PASSWORD }}
+          E2E_REQUIRE_AUTH: '1'
+      - run: npm run sbom
+      - name: Package immutable static release
+        run: tar -czf studio-m-release.tar.gz -C dist .
+      - name: Generate release checksums
+        run: sha256sum studio-m-release.tar.gz artifacts/sbom.spdx.json > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-m-release-${{ github.ref_name }}
+          path: |
+            studio-m-release.tar.gz
+            artifacts/sbom.spdx.json
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+
+  container:
+    needs: [verify-database, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: >-
+          docker build --pull
+          --build-arg VITE_SUPABASE_URL="${{ vars.VITE_SUPABASE_URL }}"
+          --build-arg VITE_SUPABASE_ANON_KEY="${{ vars.VITE_SUPABASE_ANON_KEY }}"
+          --tag studio-m:${{ github.ref_name }} .
+      - name: Boot and probe release container
+        run: |
+          docker run --detach --name studio-m-release -p 127.0.0.1:8080:80 studio-m:${{ github.ref_name }}
+          trap 'docker rm --force studio-m-release >/dev/null 2>&1 || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8080/health.json >/dev/null; then break; fi
+            sleep 1
+          done
+          docker exec studio-m-release nginx -t
+          DEPLOYMENT_APP_URL=http://127.0.0.1:8080 node scripts/deployment-security-smoke.mjs

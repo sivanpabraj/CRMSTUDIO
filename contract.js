@@ -43,6 +43,7 @@ const state = {
   lineItems: [],
   selectedPackageId: null,
   selectedPackageName: '',
+  selectedPackageSnapshot: null,
   packageExtras: [],
   verify: {
     groom: { code: '', sentAt: null, verified: false, verifiedAt: null, phone: '' },
@@ -51,7 +52,6 @@ const state = {
 }
 
 const VERIFY_TTL_MS = 10 * 60 * 1000
-const VERIFY_PROOF_PREFIX = 'talar_contract_verify_'
 const VERIFY_ROLES = {
   groom: { phoneId: 'groom-phone', label: 'داماد' },
   bride: { phoneId: 'bride-phone', label: 'عروس' }
@@ -83,13 +83,31 @@ function gotoStep(n) {
   document.querySelector('.form-col')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+function selectedContractTypes() {
+  return [...document.querySelectorAll('input[name="contract-type"]:checked')].map(el => el.value)
+}
+
+function onContractTypesChange() {
+  const types = selectedContractTypes()
+  const industrialFields = document.getElementById('industrial-client-fields')
+  if (industrialFields) industrialFields.hidden = !types.includes('صنعتی')
+}
+
 function validateStep(s) {
   if (s === 1) {
-    if (!gv('groom-name')) { toast('نام داماد الزامی است', 'error'); return false }
-    if (!gv('bride-name')) { toast('نام عروس الزامی است', 'error'); return false }
+    const types = selectedContractTypes()
+    if (!types.length) { toast('حداقل یک نوع پروژه را انتخاب کنید', 'error'); return false }
+    const industrialOnly = types.length === 1 && types[0] === 'صنعتی'
+    if (industrialOnly && !gv('client-name')) { toast('نام مشتری یا مجموعه الزامی است', 'error'); return false }
+    if (!industrialOnly && !gv('groom-name')) { toast('نام داماد الزامی است', 'error'); return false }
+    if (!industrialOnly && !gv('bride-name')) { toast('نام عروس الزامی است', 'error'); return false }
     if (!gv('event-date')) { toast('تاریخ مراسم را وارد کنید', 'error'); return false }
-    if (!gv('groom-phone')) { toast('شماره تماس داماد الزامی است', 'error'); return false }
-    if (!isVerifyValid('groom')) {
+    if (!gv('event-start-time') || !gv('event-end-time') || gv('event-end-time') <= gv('event-start-time')) {
+      toast('بازهٔ ساعت شروع و پایان مراسم معتبر نیست', 'error'); return false
+    }
+    const primaryPhone = industrialOnly ? gv('client-phone') : gv('groom-phone')
+    if (!primaryPhone) { toast('شماره تماس اصلی الزامی است', 'error'); return false }
+    if (!industrialOnly && !isVerifyValid('groom')) {
       toast('شماره داماد باید با پیامک تأیید شود', 'error')
       return false
     }
@@ -136,7 +154,6 @@ function onVerifyPhoneChange(role) {
   if (v.verified && v.phone && v.phone !== phone) {
     v.verified = false
     v.verifiedAt = null
-    v.code = ''
     v.sentAt = null
     clearVerifyProof(role)
     updateVerifyUi(role)
@@ -148,62 +165,11 @@ function getVerifyPhone(role) {
   return digitsOnly(gv(id))
 }
 
-function generateVerifyCode() {
-  return Utils.generateOtp6()
-}
-
 function clearVerifyProof(role) {
   const v = state.verify[role]
   if (v) {
-    delete v.proofToken
-    delete v.proofSigned
+    delete v.challengeId
   }
-  try { sessionStorage.removeItem(VERIFY_PROOF_PREFIX + role) } catch { /* */ }
-  if (typeof SignedProof !== 'undefined') SignedProof.clear(VERIFY_PROOF_PREFIX + role)
-}
-
-async function setVerifyProof(role, phone) {
-  const token = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-    .map(b => b.toString(16).padStart(2, '0')).join('')
-  state.verify[role].proofToken = token
-  if (typeof SignedProof !== 'undefined' && SignedProof.issue) {
-    await SignedProof.issue(VERIFY_PROOF_PREFIX + role, { phone, token, role }, VERIFY_TTL_MS * 3)
-    state.verify[role].proofSigned = true
-    return
-  }
-  try {
-    sessionStorage.setItem(VERIFY_PROOF_PREFIX + role, JSON.stringify({
-      phone,
-      token,
-      verifiedAt: Date.now(),
-      expires: Date.now() + VERIFY_TTL_MS * 3
-    }))
-    state.verify[role].proofSigned = true
-  } catch { /* */ }
-}
-
-function hasVerifyProof(role, phone) {
-  const v = state.verify[role]
-  if (!v?.proofToken || !phone || !v.proofSigned) return false
-  try {
-    const raw = sessionStorage.getItem(VERIFY_PROOF_PREFIX + role)
-    if (!raw) return false
-    const proof = JSON.parse(raw)
-    if (proof.phone !== phone || proof.token !== v.proofToken) return false
-    if (proof.expires && Date.now() > proof.expires) return false
-    return !!(proof.sig || proof.token)
-  } catch {
-    return false
-  }
-}
-
-async function verifyContractProof(role, phone) {
-  if (typeof SignedProof === 'undefined' || !SignedProof.verify) {
-    return hasVerifyProof(role, phone)
-  }
-  const v = state.verify[role]
-  if (!v?.proofToken || !phone) return false
-  return SignedProof.verify(VERIFY_PROOF_PREFIX + role, { phone, token: v.proofToken, role })
 }
 
 function isVerifyValid(role) {
@@ -211,7 +177,7 @@ function isVerifyValid(role) {
   if (!v?.verified) return false
   const phone = getVerifyPhone(role)
   if (v.phone !== phone) return false
-  return hasVerifyProof(role, phone)
+  return !!v.challengeId
 }
 
 function updateVerifyUi(role) {
@@ -242,42 +208,28 @@ async function sendVerifySms(role) {
       return
     }
   }
-  const code = generateVerifyCode()
   clearVerifyProof(role)
-  const studio = gv('studio-name') || (DB.get('studioInfo') || {}).name || 'استودیو'
-  const couple = `${gv('bride-name') || 'عروس'} و ${gv('groom-name') || 'داماد'}`
-  const text = `${studio}\nکد تأیید قرارداد: ${code}\nاین کد منزله تأیید مالکیت شماره شما و بستن قرارداد «${couple}» است.\nاعتبار: ۱۰ دقیقه`
   state.verify[role] = {
     ...state.verify[role],
-    code,
-    sentAt: Date.now(),
+    sentAt: null,
     verified: false,
     verifiedAt: null,
     phone
   }
   updateVerifyUi(role)
-  if (typeof SmsProvider === 'undefined') {
-    toast('ماژول پیامک بارگذاری نشده', 'error')
-    return
-  }
-  if (!SmsProvider.isConfigured()) {
-    if (typeof Auth !== 'undefined') Auth.recordOtpSend(rateKey)
-    if (isDemoOtpMode()) {
-      toast(`پیامک تنظیم نشده — کد تست ${meta.label}: ${code}`, 'info')
-    } else {
-      toast('پیامک تنظیم نشده — ابتدا SMS را در تنظیمات فعال کنید', 'error')
-    }
-    return
-  }
+  if (typeof DomainApi === 'undefined') return toast('API دامنهٔ قرارداد بارگذاری نشده است', 'error')
   const btn = document.querySelector(`#verify-${role} .btn-verify-send`)
   if (btn) btn.disabled = true
   try {
-    const res = await SmsProvider.sendStudio(phone, text)
-    if (res.ok) {
-      if (typeof Auth !== 'undefined') Auth.recordOtpSend(rateKey)
-      toast(`کد برای ${meta.label} ارسال شد`, 'success')
-    }
-    else toast(res.error || 'خطا در ارسال پیامک', 'error')
+    const res = await DomainApi.requestContractOtp({ role, phone })
+    state.verify[role].challengeId = res.challengeId
+    state.verify[role].sentAt = Date.now()
+    if (typeof Auth !== 'undefined') Auth.recordOtpSend(rateKey)
+    updateVerifyUi(role)
+    toast(`کد برای ${meta.label} ارسال شد`, 'success')
+  } catch (error) {
+    clearVerifyProof(role)
+    toast(error.message || 'خطا در ارسال پیامک', 'error')
   } finally {
     if (btn) btn.disabled = false
   }
@@ -296,13 +248,13 @@ async function confirmVerify(role) {
     }
   }
   const input = digitsOnly(gv(`verify-input-${role}`))
-  if (!v.code || !v.sentAt) {
+  if (!v.challengeId || !v.sentAt) {
     toast('ابتدا کد پیامکی را ارسال کنید', 'error')
     return
   }
   if (Date.now() - v.sentAt > VERIFY_TTL_MS) {
     toast('کد منقضی شده — دوباره ارسال کنید', 'error')
-    v.code = ''
+    clearVerifyProof(role)
     v.sentAt = null
     updateVerifyUi(role)
     return
@@ -311,7 +263,10 @@ async function confirmVerify(role) {
     toast('شماره تغییر کرده — دوباره استعلام بگیرید', 'error')
     return
   }
-  if (input !== v.code) {
+  try {
+    const result = await DomainApi.verifyContractOtp(v.challengeId, input)
+    if (!result?.verified) throw new Error('کد وارد‌شده نادرست است')
+  } catch (error) {
     if (typeof Auth !== 'undefined') {
       const locked = Auth.recordOtpVerifyFail(verifyKey)
       if (locked) {
@@ -319,14 +274,13 @@ async function confirmVerify(role) {
         return
       }
     }
-    toast('کد وارد‌شده نادرست است', 'error')
+    toast(error.message || 'کد وارد‌شده نادرست است', 'error')
     return
   }
   if (typeof Auth !== 'undefined') Auth.clearOtpVerify(verifyKey)
   v.verified = true
   v.verifiedAt = todayFa()
   v.phone = phone
-  await setVerifyProof(role, phone)
   updateVerifyUi(role)
   toast(`شماره ${meta.label} تأیید شد`, 'success')
 }
@@ -426,19 +380,23 @@ function renderPackagePicker() {
     wrap.innerHTML = '<p class="block-desc">پکیجی در Studio M تعریف نشده — از منوی «پکیج قیمت» اضافه کنید.</p>'
     return
   }
+  if (typeof ContractRenderSecurity === 'undefined') {
+    wrap.textContent = 'نمایش امن پکیج در دسترس نیست.'
+    return
+  }
   wrap.innerHTML = pkgs.map(p => {
     const tier = PackageCatalog.tierMeta(p.tier)
-    const color = p.color || tier.color
     const total = PackageCatalog.packageTotal(p)
     const active = state.selectedPackageId === p.id ? ' active' : ''
     const feats = PackageCatalog.featureLines(p).slice(0, 4)
-    return `<button type="button" class="pkg-pick-card${active}" style="--pkg-color:${color}" onclick="applyContractPackage('${p.id}')">
-      <div class="pkg-pick-tier">${tier.icon} ${tier.label}</div>
-      <div class="pkg-pick-name">${escapeHtml(p.name)}</div>
-      <ul class="pkg-pick-feats">${feats.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
-      <div class="pkg-pick-price">${fmtNum(total)} <small>تومان</small></div>
-    </button>`
-  }).join('') + `<button type="button" class="pkg-pick-card pkg-pick-custom${!state.selectedPackageId ? ' active' : ''}" onclick="clearContractPackage()">
+    return ContractRenderSecurity.renderPackageCard({
+      packageItem: p,
+      tier,
+      totalLabel: fmtNum(total),
+      active: !!active,
+      features: feats
+    })
+  }).join('') + `<button type="button" class="pkg-pick-card pkg-pick-custom${!state.selectedPackageId ? ' active' : ''}" data-contract-action="clear-package">
     <div class="pkg-pick-tier">✏️</div>
     <div class="pkg-pick-name">سفارشی</div>
     <div class="pkg-pick-feats"><li>بدون پکیج — دستی</li></div>
@@ -452,7 +410,7 @@ function updatePackageSelectedBanner() {
   if (!state.selectedPackageId) { el.hidden = true; return }
   el.hidden = false
   el.innerHTML = `<span>پکیج انتخاب‌شده: <strong>${escapeHtml(state.selectedPackageName || '')}</strong></span>
-    <button type="button" class="btn-link" onclick="clearContractPackage()">حذف پکیج</button>`
+    <button type="button" class="btn-link" data-contract-action="clear-package">حذف پکیج</button>`
 }
 
 function camOrdinalLabel(i) {
@@ -464,6 +422,7 @@ function applyContractPackage(id) {
   const pkg = DB.find('packages', p => p.id === id)
   if (!pkg || typeof PackageCatalog === 'undefined') return
   PackageCatalog.applyToContractForm(pkg, state)
+  state.selectedPackageSnapshot = PackageCatalog.snapshot(pkg)
   renderPackagePicker()
   calcTotals()
   toast(`پکیج «${pkg.name}» اعمال شد`, 'success')
@@ -477,6 +436,7 @@ function clearContractPackage() {
     state.selectedPackageName = ''
     state.packageExtras = []
   }
+  state.selectedPackageSnapshot = null
   renderPackagePicker()
   calcTotals()
 }
@@ -583,7 +543,7 @@ function renderPdfFormatGrid() {
   const grid = document.getElementById('pdf-format-grid')
   if (!grid) return
   grid.innerHTML = Object.values(PDF_FORMATS).map(f => `
-    <div class="pdf-format-card${f.id === pdfFormatId ? ' active' : ''}" data-format="${f.id}" onclick="setPdfFormat('${f.id}')">
+    <div class="pdf-format-card${f.id === pdfFormatId ? ' active' : ''}" data-format="${f.id}" data-contract-action="set-pdf-format">
       <div class="pdf-format-icon">${f.icon}</div>
       <div class="pdf-format-name">${f.label}</div>
       <div class="pdf-format-size">${f.size}</div>
@@ -727,8 +687,10 @@ function openInvoice() {
 function exportPDF(forcedFormat) {
   const fmt = getPdfFormat(forcedFormat)
   const element = document.getElementById('inv-doc')
-  if (!element || typeof html2pdf === 'undefined') {
-    toast('کتابخانه PDF در دسترس نیست', 'error')
+  if (!element) return
+  if (typeof html2pdf === 'undefined') {
+    toast('پنجره چاپ باز شد؛ مقصد «ذخیره به‌صورت PDF» را انتخاب کنید', 'info')
+    printContract()
     return
   }
   const opt = {
@@ -864,6 +826,15 @@ document.addEventListener('DOMContentLoaded', () => {
   populateDepositBanks()
   calcTotals()
   renderPackagePicker()
+  try {
+    const prefill = JSON.parse(sessionStorage.getItem('sm_contract_prefill') || 'null')
+    if (prefill) {
+      const set = (id, value) => { const field = document.getElementById(id); if (field && value) field.value = value }
+      set('groom-name', prefill.groom || prefill.name)
+      set('groom-phone', prefill.phone)
+      sessionStorage.removeItem('sm_contract_prefill')
+    }
+  } catch { sessionStorage.removeItem('sm_contract_prefill') }
 })
 
 function personMatchesStaffRole(p, keywords) {
@@ -949,17 +920,13 @@ async function finalizeContract() {
       toast(`شماره ${VERIFY_ROLES[role].label} باید با پیامک تأیید شود`, 'error')
       return gotoStep(1)
     }
-    if (!(await verifyContractProof(role, phone))) {
-      toast('اعتبارسنجی پیامکی نامعتبر است — دوباره تأیید کنید', 'error')
-      return gotoStep(1)
-    }
   }
 
   const contractObj = buildContractObject(true)
   if (!contractObj) return
 
-  if (typeof DB === 'undefined' || !DB.insert) {
-    toast('دیتابیس بارگذاری نشده. صفحه را رفرش کنید.', 'error')
+  if (typeof DomainApi === 'undefined') {
+    toast('API دامنهٔ قرارداد بارگذاری نشده. صفحه را رفرش کنید.', 'error')
     return
   }
 
@@ -979,51 +946,46 @@ async function finalizeContract() {
     return
   }
 
-  await SecureDB.insert('contracts', record)
-
-  if (depositVal > 0 && typeof FinanceSync !== 'undefined') {
-    const fin = await FinanceSync.recordContractInitialDeposit(record, depositBankId, {
-      paymentMethod: document.getElementById('deposit-method')?.value || 'transfer',
-      transactionRef: document.getElementById('deposit-ref')?.value?.trim() || '',
-      date: record.contractDate || record.createdAt
-    })
-    if (fin && !fin.ok && !fin.skipped) {
-      toast(fin.error || 'خطا در ثبت حسابداری بیعانه', 'warning')
-    }
-  }
-
   const assignedStaff = getAssignedStaff()
-  for (const s of assignedStaff) {
-    const person = (DB.get('personnel') || []).find(p => p.id === s.personnelId) ||
-      (DB.get('personnel') || []).find(p => p.name === s.name)
-    const amount = getStaffRate(s.personnelId || s.name, s.roleTitle)
-    const proj = await SecureDB.insert('persProjects', {
-      couple: contractObj.couple,
-      personnelId: person?.id || s.personnelId || '',
-      personnelName: s.name,
-      role: s.roleTitle,
-      roleId: s.roleKey.replace(/-/g, '_'),
-      contractId: record.id,
-      eventDate: contractObj.date,
-      venue: contractObj.venue,
-      amount,
-      paid: 0,
-      accepted: null,
-      status: 'pending',
-      deadline: contractObj.date
+  let result
+  try {
+    const commandKeyName = 'talar_contract_command_key'
+    let commandKey = localStorage.getItem(commandKeyName)
+    if (!commandKey) {
+      commandKey = `contract-create:${crypto.randomUUID()}`
+      localStorage.setItem(commandKeyName, commandKey)
+    }
+    result = await DomainApi.createContractWithDeposit({
+      contract: {
+        ...record,
+        localId: record.id,
+        eventStartsAt: record.eventStartsAt || record.eventStart || null,
+        eventEndsAt: record.eventEndsAt || record.eventEnd || null,
+        assignments: assignedStaff
+      },
+      deposit: {
+        amount: depositVal,
+        bankId: depositBankId,
+        paymentMethod: document.getElementById('deposit-method')?.value || 'transfer',
+        transactionRef: document.getElementById('deposit-ref')?.value?.trim() || '',
+        date: record.contractDate || record.createdAt
+      },
+      challenges: {
+        groom: state.verify.groom.challengeId || null,
+        bride: state.verify.bride.challengeId || null
+      },
+      idempotencyKey: commandKey
     })
-    SecureDB.insert('notifications', {
-      title: `دعوت به آفیش: ${s.roleTitle}`,
-      text: `همکار ${s.name} — مراسم ${contractObj.couple} — ${contractObj.date}`,
-      read: false,
-      createdAt: typeof Utils !== 'undefined' ? Utils.todayJalali() : ''
-    })
+    localStorage.removeItem(commandKeyName)
+  } catch (error) {
+    toast(error.message || 'ثبت اتمیک قرارداد ناموفق بود', 'error')
+    return
   }
 
   if (typeof DB.log === 'function') DB.log('contract_final', contractObj.couple)
   DB.flush?.()
   localStorage.removeItem('talar_contract_draft')
-  toast('قرارداد ثبت شد' + (assignedStaff.length ? ` — ${assignedStaff.length} همکار ابلاغ شد` : ''), 'success')
+  toast(`قرارداد ${result.contractNum || ''} و بیعانه به‌صورت اتمیک ثبت شد`, 'success')
   setTimeout(() => { window.location.href = 'studio-m/#contracts' }, 1200)
 }
 
@@ -1039,17 +1001,31 @@ function buildContractObject(isFinalized) {
   const phoneBride = gv('bride-phone') || gv('c-phone-b');
   const phoneGroom = gv('groom-phone') || gv('c-phone-g');
 
-  if (!bride || !groom) {
+  const contractTypes = selectedContractTypes()
+  const industrialOnly = contractTypes.length === 1 && contractTypes[0] === 'صنعتی'
+  const clientName = gv('client-name')
+  const clientPhone = normalizePhoneField('client-phone')
+
+  if ((!industrialOnly && (!bride || !groom)) || (industrialOnly && !clientName)) {
     toast('نام عروس و داماد الزامی است', 'error');
     return null;
   }
 
   const total = state.total || 0
   const depositVal = parseMoney(gv('deposit'))
+  if (depositVal < 0 || depositVal > total) {
+    toast('بیعانه نمی‌تواند منفی یا بیشتر از مبلغ کل قرارداد باشد', 'error')
+    return null
+  }
   const contractId = gv('contract-num') || generateContractNum(gv('event-date')) || ('TMP-' + Date.now())
   const venue = gv('event-venue') || '—'
   const eventDate = gv('event-date') || todayFa()
   const contractDate = gv('contract-date') || todayFa()
+  const eventParts = Utils.parseJalali(eventDate)
+  const [eventGy, eventGm, eventGd] = Utils._jalaliToGregorian(eventParts.jy, eventParts.jm, eventParts.jd)
+  const eventDay = `${eventGy}-${String(eventGm).padStart(2, '0')}-${String(eventGd).padStart(2, '0')}`
+  const eventStartsAt = `${eventDay}T${gv('event-start-time')}:00+03:30`
+  const eventEndsAt = `${eventDay}T${gv('event-end-time')}:00+03:30`
 
   // جمع دستمزد پرسنل
   const staffCost = getAssignedStaff().reduce((sum, s) => sum + getStaffRate(s.name, s.roleTitle), 0);
@@ -1057,7 +1033,9 @@ function buildContractObject(isFinalized) {
   const assignedStaff = getAssignedStaff()
   return {
     id: contractId,
-    couple: bride + ' و ' + groom,
+    couple: industrialOnly ? clientName : bride + ' و ' + groom,
+    clientName: clientName || '',
+    phone: clientPhone || '',
     bride: bride,
     groom: groom,
     phoneBride: normalizePhoneField('bride-phone'),
@@ -1065,9 +1043,12 @@ function buildContractObject(isFinalized) {
     groomNid: digitsOnly(gv('groom-nid')),
     brideNid: digitsOnly(gv('bride-nid')),
     date: eventDate,
+    eventStartsAt,
+    eventEndsAt,
     contractDate,
     venue,
-    type: 'عروسی',
+    type: contractTypes[0] || 'عروسی',
+    types: contractTypes,
     makeup: gv('event-makeup') || '',
     music: gv('event-music') || '',
     tailor: gv('event-tailor') || '',
@@ -1104,6 +1085,7 @@ function buildContractObject(isFinalized) {
     }, {}),
     packageId: state.selectedPackageId || '',
     packageName: state.selectedPackageName || '',
+    packageSnapshot: state.selectedPackageSnapshot || null,
     verification: getVerificationSnapshot(!isFinalized),
     createdAt: todayFa()
   };
@@ -1138,7 +1120,12 @@ function getAssignedStaff() {
       const person = personnel.find(p => p.id === val) ||
         personnel.find(p => p.name === val) ||
         personnel.find(p => p.name === el.options[el.selectedIndex]?.dataset.name)
-      return { ...m, name: person?.name || el.options[el.selectedIndex]?.dataset.name || val, personnelId: person?.id || '' }
+      return {
+        ...m,
+        name: person?.name || el.options[el.selectedIndex]?.dataset.name || val,
+        personnelId: person?.id || '',
+        userId: person?.userId || person?.user_id || ''
+      }
     })
 }
 

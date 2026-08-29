@@ -16,11 +16,27 @@ export default [
     },
   },
   {
-    files: ["contract.js", "admin.js"],
+    files: ["contract.js"],
     languageOptions: { sourceType: "script", globals: browserGlobals },
     rules: {
       "no-unused-vars": "off",
       "no-redeclare": "off",
     },
+  },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        ...browserGlobals,
+        process: "readonly",
+        Buffer: "readonly",
+        AbortSignal: "readonly",
+        performance: "readonly",
+      },
+    },
+  },
+  {
+    files: ["scripts/migrate-*.mjs"],
+    rules: { "no-unused-vars": "off" },
   },
 ];

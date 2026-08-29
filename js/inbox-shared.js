@@ -49,6 +49,33 @@ const InboxShared = {
     }]
   },
 
+  unreadFor(req, audience) {
+    const allowed = audience === 'customer' ? ['manager', 'staff', 'system'] : ['customer']
+    return this.ensureThread(req).filter(row =>
+      allowed.includes(row.author) && !row.readBy?.includes(audience)
+    ).length
+  },
+
+  markRead(requestId, audience) {
+    if (!['customer', 'manager', 'staff'].includes(audience)) return 0
+    const req = DB.find('customerRequests', row => row.id === requestId)
+    if (!req) return 0
+    const parts = this.nowParts()
+    let changed = 0
+    const thread = this.ensureThread(req).map(row => {
+      const isInbound = audience === 'customer' ? row.author !== 'customer' : row.author === 'customer'
+      if (!isInbound || row.readBy?.includes(audience)) return row
+      changed++
+      return {
+        ...row,
+        readBy: [...new Set([...(row.readBy || []), audience])],
+        readAt: { ...(row.readAt || {}), [audience]: parts.iso }
+      }
+    })
+    if (changed) DB.update('customerRequests', requestId, { thread, lastReadAt: parts.iso })
+    return changed
+  },
+
   appendThread(requestId, entry) {
     const req = DB.find('customerRequests', r => r.id === requestId)
     if (!req) return null
@@ -62,7 +89,10 @@ const InboxShared = {
       author: entry.author || 'manager',
       authorName: entry.authorName || '',
       text: entry.text || '',
-      action: entry.action || 'reply'
+      attachment: entry.attachment || null,
+      action: entry.action || 'reply',
+      replyTo: entry.replyTo || '',
+      readBy: [entry.author || 'manager']
     }
     thread.push(row)
     const patch = { thread, lastActivityAt: parts.iso }

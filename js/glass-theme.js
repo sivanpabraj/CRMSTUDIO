@@ -108,7 +108,7 @@ const GlassTheme = {
     rail.id = 'glass-rail'
     rail.className = 'glass-rail'
     rail.innerHTML = `
-      <button class="glass-rail-btn" type="button" title="تنظیم ظاهر (پس‌زمینه و رنگ)" onclick="GlassTheme.openPicker()" aria-label="تنظیم ظاهر">
+      <button class="glass-rail-btn" type="button" title="تنظیم ظاهر (پس‌زمینه و رنگ)" data-csp-action="GlassTheme.openPicker" aria-label="تنظیم ظاهر">
         <i class="fas fa-wand-magic-sparkles"></i>
       </button>`
     document.body.appendChild(rail)
@@ -130,31 +130,31 @@ const GlassTheme = {
         <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:10px">پس‌زمینه‌های آماده</div>
         <div class="glass-preset-grid" id="glass-preset-grid">
           ${this.PRESETS.map(p => `
-            <div class="glass-preset-tile preset-${p.id} ${!s.custom && s.preset === p.id ? 'selected' : ''}"
-              data-preset="${p.id}" onclick="GlassTheme.selectPreset('${p.id}')" title="${p.label}">
+            <button type="button" class="glass-preset-tile preset-${p.id} ${!s.custom && s.preset === p.id ? 'selected' : ''}"
+              data-preset="${p.id}" data-csp-action="GlassTheme.selectPreset" data-csp-arg="${p.id}" title="${p.label}">
               <span class="glass-preset-label">${p.icon} ${p.label}</span>
-            </div>`).join('')}
+            </button>`).join('')}
         </div>
 
         <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:10px">رنگ تم</div>
         <div class="glass-accent-row" id="glass-accent-row">
           ${this.ACCENTS.map(a => `
             <button type="button" class="glass-accent-swatch ${s.accent === a ? 'selected' : ''}"
-              data-accent="${a}" onclick="GlassTheme.selectAccent('${a}')" aria-label="${a}"></button>`).join('')}
+              data-accent="${a}" data-csp-action="GlassTheme.selectAccent" data-csp-arg="${a}" aria-label="${a}"></button>`).join('')}
         </div>
 
         <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:10px">آپلود تصویر شخصی</div>
         <label class="glass-upload-zone" for="glass-bg-upload">
           <i class="fas fa-cloud-upload-alt"></i>
           <p>کلیک کنید یا تصویر را بکشید<br><span style="font-size:11px;opacity:0.7">حداکثر ۱.۵ مگابایت — JPG, PNG, WebP</span></p>
-          <input type="file" id="glass-bg-upload" accept="image/jpeg,image/png,image/webp" hidden onchange="GlassTheme.onUpload(event)"/>
+          <input type="file" id="glass-bg-upload" accept="image/jpeg,image/png,image/webp" hidden data-csp-action="GlassTheme.onUpload" data-csp-event="change" data-csp-pass-event/>
         </label>
 
-        ${s.custom ? `<button type="button" class="glass-btn" style="width:100%;margin-bottom:12px" onclick="GlassTheme.clearCustom()"><i class="fas fa-undo"></i> بازگشت به پس‌زمینه آماده</button>` : ''}
+        ${s.custom ? `<button type="button" class="glass-btn" style="width:100%;margin-bottom:12px" data-csp-action="GlassTheme.clearCustom"><i class="fas fa-undo"></i> بازگشت به پس‌زمینه آماده</button>` : ''}
 
         <div class="glass-picker-actions">
-          <button type="button" class="glass-btn" onclick="document.getElementById('glass-picker-overlay')?.remove()">بستن</button>
-          <button type="button" class="glass-btn glass-btn--solid" onclick="GlassTheme.saveSettings({syncGlobal:true});Utils.toast('تنظیمات ظاهر برای همه بخش‌ها ذخیره شد','success');document.getElementById('glass-picker-overlay')?.remove()">
+          <button type="button" class="glass-btn" data-csp-action="GlassTheme.closePicker">بستن</button>
+          <button type="button" class="glass-btn glass-btn--solid" data-csp-action="GlassTheme.saveGlobalAndClosePicker">
             <i class="fas fa-check"></i> اعمال در همه بخش‌ها
           </button>
         </div>
@@ -170,22 +170,22 @@ const GlassTheme = {
     el.innerHTML = `
       <div class="glass-preset-grid" style="margin-bottom:12px">
         ${this.PRESETS.map(p => `
-          <div class="glass-preset-tile preset-${p.id} ${!s.custom && s.preset === p.id ? 'selected' : ''}"
-            data-preset="${p.id}" onclick="GlassTheme.selectPreset('${p.id}')" title="${p.label}">
+          <button type="button" class="glass-preset-tile preset-${p.id} ${!s.custom && s.preset === p.id ? 'selected' : ''}"
+            data-preset="${p.id}" data-csp-action="GlassTheme.selectPreset" data-csp-arg="${p.id}" title="${p.label}">
             <span class="glass-preset-label">${p.icon} ${p.label}</span>
-          </div>`).join('')}
+          </button>`).join('')}
       </div>
       <div class="glass-accent-row">
         ${this.ACCENTS.map(a => `
           <button type="button" class="glass-accent-swatch ${s.accent === a ? 'selected' : ''}"
-            data-accent="${a}" onclick="GlassTheme.selectAccent('${a}')"></button>`).join('')}
+            data-accent="${a}" data-csp-action="GlassTheme.selectAccent" data-csp-arg="${a}"></button>`).join('')}
       </div>
       <label class="glass-upload-zone" for="glass-bg-upload-inline" style="margin-top:12px">
         <i class="fas fa-image"></i>
         <p>آپلود تصویر پس‌زمینه</p>
-        <input type="file" id="glass-bg-upload-inline" accept="image/jpeg,image/png,image/webp" hidden onchange="GlassTheme.onUpload(event,'${containerId}')"/>
+        <input type="file" id="glass-bg-upload-inline" accept="image/jpeg,image/png,image/webp" hidden data-csp-action="GlassTheme.onUpload" data-csp-event="change" data-csp-pass-event data-csp-arg="${Utils.escapeHtml(containerId)}"/>
       </label>
-      ${s.custom ? `<button type="button" class="glass-btn" style="width:100%;margin-top:8px" onclick="GlassTheme.clearCustom();GlassTheme.renderInlinePicker('${containerId}')">بازگشت به پس‌زمینه آماده</button>` : ''}`
+      ${s.custom ? `<button type="button" class="glass-btn" style="width:100%;margin-top:8px" data-csp-action="GlassTheme.clearAndRenderInlinePicker" data-csp-arg="${Utils.escapeHtml(containerId)}">بازگشت به پس‌زمینه آماده</button>` : ''}`
   },
 
   selectPreset(id) {
@@ -227,6 +227,21 @@ const GlassTheme = {
     const s = this.getSettings()
     this.saveSettings({ custom: null, preset: s.preset || 'sunset' })
     Utils.toast('پس‌زمینه آماده بازگردانده شد', 'info')
+  },
+
+  closePicker() {
+    document.getElementById('glass-picker-overlay')?.remove()
+  },
+
+  saveGlobalAndClosePicker() {
+    this.saveSettings({ syncGlobal: true })
+    Utils.toast('تنظیمات ظاهر برای همه بخش‌ها ذخیره شد', 'success')
+    this.closePicker()
+  },
+
+  clearAndRenderInlinePicker(containerId) {
+    this.clearCustom()
+    this.renderInlinePicker(containerId)
   }
 }
 

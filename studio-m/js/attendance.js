@@ -55,7 +55,30 @@ const SMAttendance = {
   },
 
   _records() {
-    return DB.get('attendance') || []
+    if (window.ErpRuntime?.hasTypedData?.()) {
+      return window.ErpRuntime.state().attendanceEntries.map(r => {
+        const person = DB.find('personnel', p => p.userId === r.personnelUserId)
+        const inDate = new Date(r.checkInAt)
+        const date = new Intl.DateTimeFormat('fa-IR-u-nu-latn', {
+          timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit'
+        }).format(inDate)
+        const time = value => value ? new Intl.DateTimeFormat('fa-IR-u-nu-latn', {
+          timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hour12: false
+        }).format(new Date(value)) : ''
+        return { ...r, personnelId: person?.id || '', personnelName: person?.name || '', date,
+          checkIn: time(r.checkInAt), checkOut: time(r.checkOutAt), notes: r.note || '' }
+      })
+    }
+    if (window.ErpRuntime?.requiresAuthority?.()) return []
+    return DB.active('attendance') || []
+  },
+
+  _serverTimestamp(jalaliDate, time) {
+    const parsed = Utils.parseJalali(jalaliDate)
+    const match = String(time || '').match(/^(\d{1,2}):(\d{2})$/)
+    if (!parsed || !match) return null
+    const [gy, gm, gd] = Utils._jalaliToGregorian(parsed.jy, parsed.jm, parsed.jd)
+    return `${gy}-${String(gm).padStart(2, '0')}-${String(gd).padStart(2, '0')}T${String(+match[1]).padStart(2, '0')}:${match[2]}:00+03:30`
   },
 
   _forMonth(jy, jm, personId) {
@@ -114,12 +137,12 @@ const SMAttendance = {
     this._initView()
     el.innerHTML = `
       ${SMUI.sectionHead('حضور و غیاب', 'ثبت ورود و خروج · تقویم شمسی · گزارش ماهانه', `
-        <button type="button" class="sm-btn sm-btn-ghost" onclick="SMAttendance.add()"><i class="fas fa-plus"></i> ثبت دستی</button>
-        <button type="button" class="sm-btn sm-btn-primary" onclick="SMAttendance.quickCheckIn()"><i class="fas fa-sign-in-alt"></i> ورود امروز</button>`)}
+        <button type="button" class="sm-btn sm-btn-ghost" ${SMEvents.attrs('SMAttendance.add')}><i class="fas fa-plus"></i> ثبت دستی</button>
+        <button type="button" class="sm-btn sm-btn-primary" ${SMEvents.attrs('SMAttendance.quickCheckIn')}><i class="fas fa-sign-in-alt"></i> ورود امروز</button>`)}
       ${SMUI.tabs([
-        { id: 'calendar', fa: 'تقویم', en: 'Calendar', icon: 'fa-calendar-days', onclick: "SMAttendance.setTab('calendar')" },
-        { id: 'list', fa: 'لیست', en: 'List', icon: 'fa-list', onclick: "SMAttendance.setTab('list')" },
-        { id: 'stats', fa: 'آمار', en: 'Stats', icon: 'fa-chart-bar', onclick: "SMAttendance.setTab('stats')" }
+        { id: 'calendar', fa: 'تقویم', en: 'Calendar', icon: 'fa-calendar-days', fn: 'SMAttendance.setTab', args: ['calendar'] },
+        { id: 'list', fa: 'لیست', en: 'List', icon: 'fa-list', fn: 'SMAttendance.setTab', args: ['list'] },
+        { id: 'stats', fa: 'آمار', en: 'Stats', icon: 'fa-chart-bar', fn: 'SMAttendance.setTab', args: ['stats'] }
       ], this._tab)}
       <div style="margin-top:16px">${this._renderTab()}</div>`
   },
@@ -130,11 +153,11 @@ const SMAttendance = {
     return this._calendarHtml()
   },
 
-  _personFilterHtml(onchange) {
-    const personnel = DB.get('personnel').filter(p => p.status !== 'inactive')
+  _personFilterHtml() {
+    const personnel = DB.active('personnel').filter(p => p.status !== 'inactive')
     return `<div class="sm-att-filter">
-      <label class="sm-label">پرسنل</label>
-      <select class="sm-input" id="att-filter-person" onchange="${onchange}">
+      <label class="sm-label" for="att-filter-person">پرسنل</label>
+      <select class="sm-input" id="att-filter-person" data-sm-change-fn="SMAttendance.onPersonFilterChange" data-sm-args='[]'>
         <option value="">همه پرسنل</option>
         ${personnel.map(p => `<option value="${p.id}"${this._filterPersonId === p.id ? ' selected' : ''}>${SM.esc(p.name)}</option>`).join('')}
       </select>
@@ -149,11 +172,11 @@ const SMAttendance = {
 
     return `<div class="sm-att-layout">
       <div class="sm-att-side">
-        ${this._personFilterHtml('SMAttendance.setPersonFilter(this.value)')}
+        ${this._personFilterHtml()}
         <div class="sm-cal-nav">
-          <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="SMAttendance.prevMonth()"><i class="fas fa-chevron-right"></i></button>
+          <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" ${SMEvents.attrs('SMAttendance.prevMonth')}><i class="fas fa-chevron-right"></i></button>
           <strong>${Utils.jalaliMonthName(jm)} ${jy.toLocaleString('fa-IR')}</strong>
-          <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="SMAttendance.nextMonth()"><i class="fas fa-chevron-left"></i></button>
+          <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" ${SMEvents.attrs('SMAttendance.nextMonth')}><i class="fas fa-chevron-left"></i></button>
         </div>
         ${this._renderGrid(jy, jm, map)}
         <div class="sm-att-legend">${Object.entries(this.STATUS).map(([_k, v]) =>
@@ -191,7 +214,7 @@ const SMAttendance = {
 
       html += `<button type="button" class="sm-cal-day sm-att-day${isToday ? ' is-today' : ''}${isSelected ? ' is-selected' : ''}${count ? ' has-events' : ''}"
         style="${meta ? `--cal-accent:${meta.color}` : ''}"
-        onclick="SMAttendance.pickDay('${date}')">
+        ${SMEvents.attrs('SMAttendance.pickDay', [date])}>
         <span class="sm-cal-day-num">${d.toLocaleString('fa-IR')}</span>
         ${count ? `<span class="sm-att-day-badge">${count.toLocaleString('fa-IR')}</span>` : ''}
       </button>`
@@ -211,7 +234,7 @@ const SMAttendance = {
           <strong>${SM.esc(title)}</strong>
           <span class="sm-cal-day-panel-sub">${recs.length ? `${recs.length.toLocaleString('fa-IR')} ثبت` : 'ثبت نشده'}</span>
         </div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMAttendance.add('${date}')"><i class="fas fa-plus"></i> ثبت</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMAttendance.add', [date])}><i class="fas fa-plus"></i> ثبت</button>
       </div>
       ${recs.length ? `<div class="sm-att-rec-list">${recs.map(r => this._recordCard(r)).join('')}</div>` :
         `<div class="sm-cal-empty-day">برای این روز حضور ثبت نشده — پرسنل را انتخاب و وضعیت را مشخص کنید.</div>`}
@@ -234,8 +257,8 @@ const SMAttendance = {
         ${r.notes ? `<span><i class="fas fa-sticky-note"></i> ${SM.esc(r.notes)}</span>` : ''}
       </div>
       <div class="sm-att-rec-actions">
-        ${!r.checkOut && r.status !== 'absent' && r.status !== 'leave' ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMAttendance.checkOut('${r.id}')">ثبت خروج</button>` : ''}
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAttendance.edit('${r.id}')">ویرایش</button>
+        ${!r.checkOut && r.status !== 'absent' && r.status !== 'leave' ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-primary" ${SMEvents.attrs('SMAttendance.checkOut', [r.id])}>ثبت خروج</button>` : ''}
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" ${SMEvents.attrs('SMAttendance.edit', [r.id])}>ویرایش</button>
       </div>
     </div>`
   },
@@ -246,7 +269,7 @@ const SMAttendance = {
     if (this._filterPersonId) recs = recs.filter(r => r.personnelId === this._filterPersonId)
     if (q) recs = recs.filter(r => JSON.stringify(r).toLowerCase().includes(q))
 
-    return `${this._personFilterHtml('SMAttendance.setPersonFilter(this.value); SM.navigate(\'attendance\')')}
+    return `${this._personFilterHtml()}
       ${SMUI.moduleSearch('attendance', 'جستجو — نام، تاریخ، یادداشت...')}
       ${recs.length ? `<div class="sm-att-rec-list">${recs.slice(0, 80).map(r => this._recordCard(r)).join('')}</div>` :
         SMUI.empty('fa-user-clock', 'ثبت حضور وجود ندارد', 'از تقویم یا «ثبت دستی» استفاده کنید')}`
@@ -255,13 +278,13 @@ const SMAttendance = {
   _statsHtml() {
     const t = Utils.parseJalaliToday()
     const stats = this._monthStats(t.jy, t.jm, this._filterPersonId || null)
-    const personnel = DB.get('personnel').filter(p => p.status === 'active')
+    const personnel = DB.active('personnel').filter(p => p.status === 'active')
     const perPerson = personnel.map(p => {
       const s = this._monthStats(t.jy, t.jm, p.id)
       return { name: p.name, id: p.id, ...s }
     }).filter(x => x.total > 0).sort((a, b) => b.present - a.present)
 
-    return `${this._personFilterHtml('SMAttendance.setPersonFilter(this.value); SM.navigate(\'attendance\')')}
+    return `${this._personFilterHtml()}
       ${SMUI.statCards([
         { label: 'حاضر این ماه', value: stats.present, color: '#34C759' },
         { label: 'غایب', value: stats.absent, color: '#FF3B30' },
@@ -270,7 +293,7 @@ const SMAttendance = {
       ])}
       <div class="sm-card" style="margin-top:16px"><div class="sm-card-head"><div class="sm-card-title">خلاصه پرسنل — ${Utils.jalaliMonthName(t.jm)}</div></div>
         <div class="sm-card-body">${perPerson.length ? perPerson.map(p => `
-          <div class="sm-att-person-stat" onclick="SMAttendance.setPersonFilter('${p.id}'); SMAttendance.setTab('calendar')">
+          <div class="sm-att-person-stat" ${SMEvents.elAttrs('SMAttendance.openPersonCalendar', [p.id])} role="button" tabindex="0">
             <strong>${SM.esc(p.name)}</strong>
             <span>حاضر ${p.present.toLocaleString('fa-IR')} · غایب ${p.absent.toLocaleString('fa-IR')} · ${Math.floor(p.totalMins / 60).toLocaleString('fa-IR')} ساعت</span>
           </div>`).join('') : SMUI.empty('fa-users', 'این ماه ثبت نشده')}</div></div>`
@@ -278,6 +301,16 @@ const SMAttendance = {
 
   setPersonFilter(id) {
     this._filterPersonId = id || ''
+  },
+
+  onPersonFilterChange(value) {
+    this.setPersonFilter(value)
+    SM.navigate('attendance')
+  },
+
+  openPersonCalendar(id) {
+    this.setPersonFilter(id)
+    this.setTab('calendar')
   },
 
   prevMonth() {
@@ -304,15 +337,8 @@ const SMAttendance = {
     const today = Utils.todayJalali()
     const open = this._forDate(today, person.id).find(r => !r.checkOut && r.status !== 'absent')
     if (open) return SM.toast('ورود امروز قبلاً ثبت شده — خروج را بزنید', 'info')
-    await SecureDB.insert('attendance', {
-      personnelId: person.id,
-      personnelName: person.name,
-      date: today,
-      checkIn: this._nowTime(),
-      status: 'present',
-      source: 'admin',
-      notes: ''
-    })
+    await window.DomainApi.recordAttendance('check_in')
+    await window.ErpRuntime.refresh({ force: true })
     SM.log('attendance_checkin', person.name)
     SM.toast('ورود ثبت شد', 'success')
     this._selectedDate = today
@@ -320,16 +346,21 @@ const SMAttendance = {
   },
 
   async checkOut(id) {
-    const rec = DB.find('attendance', r => r.id === id)
+    const rec = this._records().find(r => r.id === id)
     if (!rec) return
-    await SecureDB.update('attendance', id, { checkOut: this._nowTime(), status: 'completed' })
+    await window.DomainApi.saveAttendance({
+      attendanceId: rec.id, personnelUserId: rec.personnelUserId,
+      checkInAt: rec.checkInAt, checkOutAt: new Date().toISOString(), note: rec.notes || '',
+      expectedVersion: rec.version
+    })
+    await window.ErpRuntime.refresh({ force: true })
     SM.toast('خروج ثبت شد', 'success')
     SM.navigate('attendance')
   },
 
   add(presetDate) {
     const date = presetDate || this._selectedDate || Utils.todayJalali()
-    const personnel = DB.get('personnel').filter(p => p.status !== 'inactive')
+    const personnel = DB.active('personnel').filter(p => p.status !== 'inactive')
     const statusOpts = Object.entries(this.STATUS).map(([k, v]) => ({ value: k, label: v.label }))
     SMUI.modal('ثبت حضور و غیاب', `
       ${SMUI.formField('پرسنل', 'att-person', {
@@ -343,23 +374,19 @@ const SMAttendance = {
       ${SMUI.formField('ساعت خروج', 'att-out', { dir: 'ltr', placeholder: '18:00' })}
       ${SMUI.formField('یادداشت', 'att-notes', { type: 'textarea', placeholder: 'توضیح مدیر...' })}`, {
       width: 480,
-      onSave: () => {
+      onSave: async () => {
         const d = SMUI.readForm(['att-person', 'att-date', 'att-in', 'att-out', 'att-status', 'att-notes'])
         if (!d['att-person']) return SM.toast('پرسنل را انتخاب کنید', 'error')
         const person = personnel.find(p => p.id === d['att-person'])
         const status = d['att-status'] || 'present'
+        if (['absent', 'leave'].includes(status)) return SM.toast('غیبت و مرخصی باید در ماژول سیاست حضور ثبت شود', 'warning')
         const dup = this._forDate(d['att-date'], d['att-person']).length
         if (dup) return SM.toast('برای این پرسنل در این روز قبلاً ثبت شده — ویرایش کنید', 'error')
-        SecureDB.insert('attendance', {
-          personnelId: d['att-person'],
-          personnelName: person?.name,
-          date: Utils.normJalali(d['att-date']) || d['att-date'],
-          checkIn: ['absent', 'leave'].includes(status) ? '' : (d['att-in'] || ''),
-          checkOut: d['att-out'] || '',
-          status: d['att-out'] && status === 'present' ? 'completed' : status,
-          notes: d['att-notes'] || '',
-          source: 'admin'
-        })
+        const checkInAt = this._serverTimestamp(d['att-date'], d['att-in'])
+        const checkOutAt = d['att-out'] ? this._serverTimestamp(d['att-date'], d['att-out']) : null
+        if (!person?.userId || !checkInAt) return SM.toast('حساب ابری پرسنل یا زمان ورود معتبر نیست', 'error')
+        await window.DomainApi.saveAttendance({ personnelUserId: person.userId, checkInAt, checkOutAt, note: d['att-notes'] || '' })
+        await window.ErpRuntime.refresh({ force: true })
         SMUI.closeModal()
         this._selectedDate = Utils.normJalali(d['att-date']) || d['att-date']
         SM.navigate('attendance')
@@ -369,9 +396,9 @@ const SMAttendance = {
   },
 
   edit(id) {
-    const r = DB.find('attendance', x => x.id === id)
+    const r = this._records().find(x => x.id === id)
     if (!r) return
-    const personnel = DB.get('personnel')
+    const personnel = DB.active('personnel')
     const statusOpts = Object.entries(this.STATUS).map(([k, v]) => ({ value: k, label: v.label }))
     SMUI.modal('ویرایش حضور', `
       ${SMUI.formField('پرسنل', 'att-person', { type: 'select', value: r.personnelId || '', options: personnel.map(p => ({ value: p.id, label: p.name })) })}
@@ -381,56 +408,48 @@ const SMAttendance = {
       ${SMUI.formField('ساعت خروج', 'att-out', { value: r.checkOut || '', dir: 'ltr' })}
       ${SMUI.formField('یادداشت', 'att-notes', { type: 'textarea', value: r.notes || '' })}`, {
       width: 480,
-      onSave: () => {
+      onSave: async () => {
         const d = SMUI.readForm(['att-person', 'att-date', 'att-in', 'att-out', 'att-status', 'att-notes'])
         const person = personnel.find(p => p.id === d['att-person'])
         const status = d['att-status'] || 'present'
-        SecureDB.update('attendance', id, {
-          personnelId: d['att-person'],
-          personnelName: person?.name || r.personnelName,
-          date: Utils.normJalali(d['att-date']) || d['att-date'],
-          checkIn: d['att-in'],
-          checkOut: d['att-out'],
-          status: d['att-out'] && status === 'present' ? 'completed' : status,
-          notes: d['att-notes'] || ''
-        })
+        if (['absent', 'leave'].includes(status)) return SM.toast('غیبت و مرخصی باید در ماژول سیاست حضور ثبت شود', 'warning')
+        const checkInAt = this._serverTimestamp(d['att-date'], d['att-in'])
+        const checkOutAt = d['att-out'] ? this._serverTimestamp(d['att-date'], d['att-out']) : null
+        if (!person?.userId || !checkInAt) return SM.toast('حساب ابری پرسنل یا زمان ورود معتبر نیست', 'error')
+        await window.DomainApi.saveAttendance({ attendanceId: id, personnelUserId: person.userId,
+          checkInAt, checkOutAt, note: d['att-notes'] || '', expectedVersion: r.version })
+        await window.ErpRuntime.refresh({ force: true })
         SMUI.closeModal()
         SM.navigate('attendance')
       },
-      onDelete: () => SMH.remove('attendance', id, 'attendance')
+      onDelete: null
     })
   },
 
   /** API for portal & reports */
-  async portalCheckIn(personnelId) {
-    const person = DB.find('personnel', p => p.id === personnelId)
-    if (!person) return { ok: false, error: 'پرسنل یافت نشد' }
-    const today = Utils.todayJalali()
-    const open = this._forDate(today, personnelId).find(r => !r.checkOut && r.status !== 'absent')
-    if (open) return { ok: false, error: 'ورود امروز ثبت شده', record: open }
-    const rec = await SecureDB.insert('attendance', {
-      personnelId,
-      personnelName: person.name,
-      date: today,
-      checkIn: this._nowTime(),
-      status: 'present',
-      source: 'portal',
-      notes: ''
-    })
-    return { ok: true, record: rec }
+  async portalCheckIn(_personnelId) {
+    if (!window.DomainApi || !window.ErpRuntime?.requiresAuthority?.()) {
+      return { ok: false, error: 'ثبت حضور فقط از مسیر سرور مجاز است' }
+    }
+    const result = await window.DomainApi.recordAttendance('check_in')
+    await window.ErpRuntime.refresh({ force: true })
+    return result
   },
 
-  async portalCheckOut(personnelId) {
-    const today = Utils.todayJalali()
-    const open = this._forDate(today, personnelId).find(r => !r.checkOut && r.status !== 'absent')
-    if (!open) return { ok: false, error: 'ورود امروز ثبت نشده' }
-    await SecureDB.update('attendance', open.id, { checkOut: this._nowTime(), status: 'completed' })
-    return { ok: true, record: DB.find('attendance', x => x.id === open.id) }
+  async portalCheckOut(_personnelId) {
+    if (!window.DomainApi || !window.ErpRuntime?.requiresAuthority?.()) {
+      return { ok: false, error: 'ثبت حضور فقط از مسیر سرور مجاز است' }
+    }
+    const open = window.ErpRuntime.state().attendanceEntries.find(row => !row.checkOutAt)
+    if (!open) return { ok: false, error: 'ورود باز یافت نشد' }
+    const result = await window.DomainApi.recordAttendance('check_out', open.version)
+    await window.ErpRuntime.refresh({ force: true })
+    return result
   },
 
   reportSummary(jy, jm) {
     const stats = this._monthStats(jy, jm, null)
-    const personnel = DB.get('personnel').filter(p => p.status === 'active')
+    const personnel = DB.active('personnel').filter(p => p.status === 'active')
     const withRecords = personnel.filter(p => this._forMonth(jy, jm, p.id).length > 0).length
     return {
       ...stats,
