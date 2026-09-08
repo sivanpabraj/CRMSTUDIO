@@ -1,6 +1,6 @@
-# Studio M — پلتفرم مدیریت استودیو
+# CRMSTUDIO — پلتفرم مدیریت سازمانی (ERP)
 
-نسخه **6.0.0** — ERP/CRM استودیو عکاسی و فیلمبرداری (RTL / فارسی)
+نسخه **6.1.0** — سامانه جامع مدیریت سازمانی و ERP استودیو (RTL / فارسی)
 
 ## اجرا
 
@@ -8,15 +8,15 @@
 npm install
 npm run dev      # http://localhost:5173/site.html
 npm run build    # خروجی در dist/
-npm run test     # 42+ unit tests
+npm run test     # unit tests
 npm run lint     # ESLint (zero warnings policy)
 ```
 
 ### Docker
 
 ```bash
-docker build -t studio-m .
-docker run -p 8080:80 studio-m
+docker build -t crmstudio .
+docker run -p 8080:80 crmstudio
 ```
 
 مستندات: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) · [docs/SMS_DEFERRED.md](docs/SMS_DEFERRED.md) (بدون SMS تا فردا)

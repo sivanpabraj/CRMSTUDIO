@@ -54,7 +54,7 @@ const Admin = {
             <h2>ورود لازم است</h2>
             <p>برای پنل کلاسیک ابتدا وارد حساب مدیر شوید.</p>
             <a class="btn btn-primary" href="index.html?next=${encodeURIComponent('admin.html?classic=1')}">ورود</a>
-            <a class="btn btn-ghost" href="studio-m/">رفتن به Studio M Pro (اصلی)</a>
+            <a class="btn btn-ghost" href="studio-m/">رفتن به CRMSTUDIO ERP (اصلی)</a>
           </div>
         </div>`
     } else {
@@ -127,7 +127,7 @@ const Admin = {
     app.innerHTML = `
       ${classic ? `<div class="admin-deprecation-banner" role="status">
         <i class="fas fa-triangle-exclamation"></i>
-        <span>پنل کلاسیک منسوخ شده — <a href="studio-m/">Studio M Pro</a> نسخه اصلی است. فقط برای CRM/عکس‌خانه/قرارداد کلاسیک از <code>?classic=1</code> استفاده کنید.</span>
+        <span>پنل کلاسیک منسوخ شده — <a href="studio-m/">CRMSTUDIO ERP</a> نسخه اصلی است. فقط برای CRM/عکس‌خانه/قرارداد کلاسیک از <code>?classic=1</code> استفاده کنید.</span>
       </div>` : ''}
       <div class="admin-layout">
         <aside class="sidebar admin-sidebar" id="admin-sidebar">

@@ -130,7 +130,7 @@
             </button>
           </div>
           <div class="sm-launcher-body">
-            <h2 id="sm-launcher-title" class="sr-only">همه بخش‌های Studio M</h2>
+            <h2 id="sm-launcher-title" class="sr-only">همه بخش‌های CRMSTUDIO</h2>
             ${groups.length ? `<div class="sm-launcher-groups">${groups.map(group => `
               <section class="sm-launcher-group" aria-labelledby="sm-launcher-group-${group.id}">
                 <h3 class="sm-launcher-group-title" id="sm-launcher-group-${group.id}">

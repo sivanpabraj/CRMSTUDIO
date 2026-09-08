@@ -13,7 +13,7 @@ const AdminSections = {
 
   renderPlaceholder(container, title) {
     container.innerHTML = `<div class="admin-card"><div class="admin-card-body" style="text-align:center;padding:48px">
-      <p style="color:var(--clr-text-muted)">بخش <strong>${Utils.escapeHtml(title)}</strong> — از <a href="studio-m/">Studio M Pro</a> استفاده کنید.</p>
+      <p style="color:var(--clr-text-muted)">بخش <strong>${Utils.escapeHtml(title)}</strong> — از <a href="studio-m/">CRMSTUDIO ERP</a> استفاده کنید.</p>
     </div></div>`
   },
 

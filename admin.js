@@ -166,7 +166,7 @@ const AdminTools = {
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
             <button class="btn btn-primary" onclick="AdminTools.saveSettings()"><i class="fas fa-save"></i> ذخیره</button>
             <button class="btn btn-ghost" onclick="AdminTools.exportBackup()"><i class="fas fa-download"></i> پشتیبان</button>
-            <button class="btn btn-ghost" onclick="window.location.href='studio-m/'"><i class="fas fa-rocket"></i> Studio M Pro</button>
+            <button class="btn btn-ghost" onclick="window.location.href='studio-m/'"><i class="fas fa-rocket"></i> CRMSTUDIO ERP</button>
           </div>
         </div>
       </div>`

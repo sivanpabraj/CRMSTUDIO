@@ -1,4 +1,4 @@
-# Studio M — production static bundle (nginx)
+# CRMSTUDIO — production static bundle (nginx)
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
