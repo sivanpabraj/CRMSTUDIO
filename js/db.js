@@ -22,7 +22,13 @@ function createDefaultData() {
       joinCode: '', slug: '', setupCompleted: false, tagline: '',
       appBaseUrl: '', externalSiteUrl: '', siteLinks: {},
       autoBackup: false, backupInterval: 'weekly', lastBackup: '',
-      licenseTier: 'trial', licenseExpiresAt: '', licenseKey: ''
+      licenseTier: 'trial', licenseExpiresAt: '', licenseKey: '',
+      smsProvider: 'melipayamak',
+      smsApiKey: '09e58c2abb4a49188d3a1f5c4a53390f',
+      smsLineNumber: '50004001004893',
+      smsProxyUrl: '',
+      smsUsername: '',
+      smsMorningReminders: true
     },
     contracts: [],
     transactions: [],

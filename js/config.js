@@ -30,6 +30,14 @@ const AppConfig = {
   INITIAL_ADMIN_PHONE: '09121000000',
   INITIAL_ADMIN_PASSWORD: '12345678',
 
+  DEFAULT_SMS: {
+    provider: 'melipayamak',
+    apiKey: '09e58c2abb4a49188d3a1f5c4a53390f',
+    lineNumber: '50004001004893',
+    proxyUrl: '',
+    username: ''
+  },
+
   isLocalDev() {
     try {
       const h = location.hostname

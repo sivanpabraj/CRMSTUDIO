@@ -1,12 +1,13 @@
 const SmsProvider = {
   getStudioConfig() {
     const info = DB.get('studioInfo') || {}
+    const def = (typeof AppConfig !== 'undefined' && AppConfig.DEFAULT_SMS) || {}
     return {
-      provider: info.smsProvider || '',
-      apiKey: info.smsApiKey || '',
-      username: info.smsUsername || '',
-      lineNumber: info.smsLineNumber || '',
-      proxyUrl: info.smsProxyUrl || ''
+      provider: info.smsProvider || def.provider || 'melipayamak',
+      apiKey: info.smsApiKey || def.apiKey || '09e58c2abb4a49188d3a1f5c4a53390f',
+      username: info.smsUsername || def.username || '',
+      lineNumber: info.smsLineNumber || def.lineNumber || '50004001004893',
+      proxyUrl: info.smsProxyUrl || def.proxyUrl || ''
     }
   },
 
