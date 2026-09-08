@@ -291,26 +291,50 @@ const SMSettings = {
 
   _smsTab(info) {
     const configured = typeof SmsProvider !== 'undefined' && SmsProvider.isConfigured()
-    return `<div class="sm-card"><div class="sm-card-head"><div class="sm-card-title">تنظیمات پیامک (SMS)</div>
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveSms()"><i class="fas fa-save"></i> ذخیره</button>
+    const user = SM.currentUser()
+    const defaultTestPhone = user?.phone || '09'
+    return `<div class="sm-card"><div class="sm-card-head"><div class="sm-card-title">تنظیمات پنل پیامک (SMS)</div>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveSms()"><i class="fas fa-save"></i> ذخیره تنظیمات</button>
       </div>
       <div class="sm-card-body">
-        <p style="font-size:.85rem;color:var(--sm-text-muted);margin-bottom:14px">برای production از <strong>URL پراکسی</strong> (Edge Function) استفاده کنید — کلید API در سرور بماند.</p>
-        ${SMUI.badge(configured ? 'API متصل' : 'در انتظار API', configured ? 'success' : 'warning')}
-        ${SMUI.formField('URL پراکسی SMS (توصیه production)', 'set-sms-proxy', { value: info.smsProxyUrl || '', dir: 'ltr', placeholder: 'https://xxx.supabase.co/functions/v1/send-sms' })}
-        ${SMUI.formField('ارائه‌دهنده (dev/local)', 'set-sms-provider', { type: 'select', value: info.smsProvider || '', options: [
+        <p style="font-size:.85rem;color:var(--sm-text-muted);margin-bottom:14px">
+          برای ارسال پیامک اطلاع‌رسانی، تایید قرارداد و کدهای ورود. در صورت ارسال مستقیم از ملی‌پیامک، فیلد <strong>«URL پراکسی» را خالی بگذارید</strong>.
+        </p>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+          ${SMUI.badge(configured ? 'وضعیت اتصال: متصل' : 'وضعیت اتصال: نیاز به تکمیل اطلاعات', configured ? 'success' : 'warning')}
+          ${info.smsProvider ? `<span style="font-size:.82rem;color:var(--sm-text-muted)">سامانه: <strong>${SM.esc(info.smsProvider === 'melipayamak' ? 'ملی پیامک' : info.smsProvider)}</strong></span>` : ''}
+          ${info.smsLineNumber ? `<span style="font-size:.82rem;color:var(--sm-text-muted)">خط: <code dir="ltr">${SM.esc(info.smsLineNumber)}</code></span>` : ''}
+        </div>
+
+        ${SMUI.formField('ارائه‌دهنده پیامک', 'set-sms-provider', { type: 'select', value: info.smsProvider || 'melipayamak', options: [
           { value: '', label: '— انتخاب —' },
-          { value: 'melipayamak', label: 'ملی پیامک' },
+          { value: 'melipayamak', label: 'ملی پیامک (پیش‌فرض)' },
           { value: 'kavenegar', label: 'کاوه‌نگار' },
           { value: 'smsir', label: 'SMS.ir' },
           { value: 'farazsms', label: 'فراز SMS' }
         ]})}
-        ${SMUI.formField('نام کاربری (اختیاری — اگر توکن کنسول دارید خالی بگذارید)', 'set-sms-user', { value: info.smsUsername || '', dir: 'ltr', placeholder: 'username پنل' })}
-        ${SMUI.formField('توکن کنسول / رمز وب‌سرویس', 'set-sms-key', { value: info.smsApiKey || '', dir: 'ltr', placeholder: 'UUID کنسول یا رمز API' })}
-        ${SMUI.formField('شماره خط / فرستنده', 'set-sms-line', { value: info.smsLineNumber || '', dir: 'ltr', placeholder: 'مثلاً 5000...' })}
-        <label class="sm-check-row" style="margin-top:14px"><input type="checkbox" id="set-sms-morning" ${info.smsMorningReminders !== false ? 'checked' : ''}/> یادآوری صبحگاهی تقویم (پیامک رویدادهای امروز)</label>
-        <div class="sm-settings-note" style="margin-top:16px">
-          <i class="fas fa-info-circle"></i> بخش «سطح / لایسنس SMS» فعلاً غیرفعال است — تنظیمات بالا کافی است.
+        ${SMUI.formField('توکن کنسول / کلید API (API Key)', 'set-sms-key', { value: info.smsApiKey || '', dir: 'ltr', placeholder: 'مثلاً: 09e58c2abb4a49188d3a1f5c4a53390f' })}
+        ${SMUI.formField('شماره خط اختصاصی فرستنده', 'set-sms-line', { value: info.smsLineNumber || '', dir: 'ltr', placeholder: 'مثلاً: 50004001004893' })}
+        ${SMUI.formField('نام کاربری پنل (اختیاری — برای توکن کنسول خالی بگذارید)', 'set-sms-user', { value: info.smsUsername || '', dir: 'ltr', placeholder: 'username پنل' })}
+        ${SMUI.formField('URL پراکسی SMS (اختیاری — برای ارسال مستقیم خالی بگذارید)', 'set-sms-proxy', { value: info.smsProxyUrl || '', dir: 'ltr', placeholder: 'https://xxx.supabase.co/functions/v1/send-sms' })}
+
+        <label class="sm-check-row" style="margin-top:14px">
+          <input type="checkbox" id="set-sms-morning" ${info.smsMorningReminders !== false ? 'checked' : ''}/>
+          ارسال خودکار یادآوری صبحگاهی تقویم به شماره مدیر
+        </label>
+
+        <div style="margin-top:24px;padding:16px;background:var(--sm-bg-hover, rgba(255,255,255,0.03));border:1px solid var(--sm-border);border-radius:12px">
+          <div style="font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <i class="fas fa-paper-plane" style="color:var(--sm-primary)"></i> تست زنده ارسال پیامک
+          </div>
+          <p style="font-size:.8rem;color:var(--sm-text-muted);margin-bottom:12px">
+            شماره موبایل را وارد کنید و روی دکمه تست کلیک نمایید تا یک پیامک تستی به موبایلتان ارسال شود:
+          </p>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="tel" id="test-sms-phone" class="sm-input" style="max-width:240px" dir="ltr" placeholder="09xxxxxxxxx" value="${SM.esc(defaultTestPhone)}"/>
+            <button type="button" id="btn-test-sms" class="sm-btn sm-btn-primary sm-btn-sm" onclick="SMSettings.testSms()"><i class="fas fa-paper-plane"></i> ارسال پیامک آزمایشی</button>
+          </div>
+          <div id="test-sms-result" style="margin-top:12px;font-size:.85rem;display:none;padding:10px 14px;border-radius:8px"></div>
         </div>
       </div></div>`
   },
@@ -831,6 +855,89 @@ const SMSettings = {
     SM.navigate('settings')
   },
 
+  async testSms() {
+    const btn = document.getElementById('btn-test-sms')
+    const resEl = document.getElementById('test-sms-result')
+    const phoneInput = document.getElementById('test-sms-phone')?.value?.trim()
+    const phone = typeof Utils !== 'undefined' && Utils.normalizePhone ? Utils.normalizePhone(phoneInput) : phoneInput
+
+    if (!phone || !/^09\d{9}$/.test(phone)) {
+      SM.toast('لطفاً شماره موبایل معتبر ۱۱ رقمی (مثل 0912...) وارد کنید', 'warning')
+      return
+    }
+
+    const proxyUrl = document.getElementById('set-sms-proxy')?.value?.trim() || ''
+    const provider = document.getElementById('set-sms-provider')?.value?.trim() || ''
+    const username = document.getElementById('set-sms-user')?.value?.trim() || ''
+    const apiKey = document.getElementById('set-sms-key')?.value?.trim() || ''
+    const lineNumber = document.getElementById('set-sms-line')?.value?.trim() || ''
+
+    if (!provider && !proxyUrl) {
+      SM.toast('لطفاً ارائه‌دهنده پیامک را مشخص کنید', 'warning')
+      return
+    }
+
+    await SecureDB.merge('studioInfo', {
+      smsProxyUrl: proxyUrl,
+      smsProvider: provider,
+      smsUsername: username,
+      smsApiKey: apiKey,
+      smsLineNumber: lineNumber
+    })
+
+    if (btn) {
+      btn.disabled = true
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال ارسال...'
+    }
+    if (resEl) {
+      resEl.style.display = 'block'
+      resEl.style.background = 'rgba(255,255,255,0.05)'
+      resEl.style.border = '1px solid var(--sm-border)'
+      resEl.style.color = 'var(--sm-text)'
+      resEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال ارسال پیامک به ' + SM.esc(phone) + '...'
+    }
+
+    try {
+      const testMsg = 'تست سامانه CRMSTUDIO ERP: اتصال به پنل پیامک با موفقیت انجام شد.'
+      const res = await SmsProvider.sendStudio(phone, testMsg)
+      if (res && res.ok) {
+        SM.toast('پیامک تستی با موفقیت ارسال شد!', 'success')
+        if (resEl) {
+          resEl.style.display = 'block'
+          resEl.style.background = 'rgba(16, 185, 129, 0.15)'
+          resEl.style.border = '1px solid #10b981'
+          resEl.style.color = '#10b981'
+          resEl.innerHTML = '<i class="fas fa-check-circle"></i> <strong>ارسال موفق:</strong> پیامک آزمایشی با موفقیت به شماره ' + SM.esc(phone) + ' فرستاده شد.'
+        }
+      } else {
+        const errMsg = res?.error || 'خطا در ارسال پیامک'
+        SM.toast(errMsg, 'error')
+        if (resEl) {
+          resEl.style.display = 'block'
+          resEl.style.background = 'rgba(239, 68, 68, 0.15)'
+          resEl.style.border = '1px solid #ef4444'
+          resEl.style.color = '#ef4444'
+          resEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <strong>خطا:</strong> ' + SM.esc(errMsg)
+        }
+      }
+    } catch (err) {
+      const msg = String(err?.message || err)
+      SM.toast(msg, 'error')
+      if (resEl) {
+        resEl.style.display = 'block'
+        resEl.style.background = 'rgba(239, 68, 68, 0.15)'
+        resEl.style.border = '1px solid #ef4444'
+        resEl.style.color = '#ef4444'
+        resEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + SM.esc(msg)
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> ارسال پیامک آزمایشی'
+      }
+    }
+  },
+
   async saveBackupSettings() {
     await SecureDB.merge('studioInfo', {
       autoBackup: !!document.getElementById('set-autobackup')?.checked,
@@ -887,6 +994,7 @@ SMModules.settings = {
   render(el) { SMSettings.render(el) },
   saveStudio() { SMSettings.saveStudio() },
   saveSms() { SMSettings.saveSms() },
+  testSms() { SMSettings.testSms() },
   backup() { SMSettings.backupNow() },
   restore(input) { SMSettings.restore(input) }
 }
