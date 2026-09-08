@@ -72,9 +72,9 @@ const Access = {
     if (this.isSystemAdmin(user) || this.isStudioManager(user)) return 'studio-m/'
     if (this.isManagement(user)) return 'studio-m/'
     if (this.isStaffOnly(user) || Auth.userHasPermission?.('view_own_projects')) {
-      return 'index.html?view=portal'
+      return 'studio-m/'
     }
-    return 'index.html?view=portal'
+    return 'studio-m/'
   },
 
   canManageUsers(user) {

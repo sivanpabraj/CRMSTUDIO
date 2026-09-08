@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!SM.guard()) return
 
     SM.initPrefs()
-    document.title = `Studio M Pro — ${SM.studio().name || 'Studio M'}`
+    document.title = `Studio ERP — ${SM.studio().name || 'Studio ERP'}`
     SM.renderShell()
 
     if (typeof SMOnboarding !== 'undefined' && SMOnboarding.needs()) {
@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!Auth.isLoggedIn()) SM.guard()
       }, 300000)
     }
-    SM.log('app_open', 'Studio M Pro')
+    SM.log('app_open', 'Studio ERP')
     if (typeof SMModules.calendar?.runMorningReminders === 'function') {
       SMModules.calendar.runMorningReminders().catch(() => {})
     }

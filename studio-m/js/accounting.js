@@ -381,7 +381,7 @@ const SMAccounting = {
     const html = `
       <div id="sm-receipt-doc" class="sm-receipt-doc" dir="rtl">
         <div class="sm-receipt-head">
-          <strong>${SM.esc(studio.name || 'Studio M')}</strong>
+          <strong>${SM.esc(studio.name || 'Studio ERP')}</strong>
           <span>رسید ${isIn ? 'واریز' : 'برداشت'}</span>
         </div>
         <div class="sm-receipt-amt ${isIn ? 'in' : 'out'}">${isIn ? '+' : '−'} ${SM.fmt(t.amount || 0)} <small>تومان</small></div>
@@ -397,7 +397,7 @@ const SMAccounting = {
           ${inv ? `<tr><td>شماره فاکتور</td><td dir="ltr">${SM.esc(inv.number)}</td></tr>` : ''}
           ${t.notes ? `<tr><td>توضیح</td><td>${SM.esc(t.notes)}</td></tr>` : ''}
         </table>
-        <div class="sm-receipt-foot">Studio M Pro · ${Utils.todayJalali()}</div>
+        <div class="sm-receipt-foot">Studio ERP · ${Utils.todayJalali()}</div>
       </div>`
 
     const wrap = document.createElement('div')

@@ -72,7 +72,7 @@ const UnifiedLogin = {
     if (!resolved) return 'index.html'
     if (resolved.kind === 'manager') return 'studio-m/'
     if (resolved.kind === 'admin') return 'studio-m/'
-    if (resolved.kind === 'staff') return 'index.html?view=portal'
+    if (resolved.kind === 'staff') return 'studio-m/'
     if (resolved.kind === 'customer') return 'customer.html'
     return 'index.html'
   },

@@ -1,5 +1,5 @@
-/* Studio M — Service Worker (offline shell + asset cache) */
-const CACHE = 'studio-m-v23'
+/* Studio ERP — Service Worker (offline shell + asset cache) */
+const CACHE = 'studio-erp-v24'
 
 const ASSETS = [
   './site.html',

@@ -191,7 +191,7 @@ const SMReports = {
             </tbody>
           </table>
         </div>`).join('')}
-      <div class="sm-report-doc-foot">Studio M Pro · گزارش خودکار · ${SM.esc(data.generatedAt)}</div>
+      <div class="sm-report-doc-foot">Studio ERP · گزارش خودکار · ${SM.esc(data.generatedAt)}</div>
     </div>`
   },
 

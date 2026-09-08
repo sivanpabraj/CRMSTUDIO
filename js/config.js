@@ -3,11 +3,11 @@
    ══════════════════════════════════════════════ */
 
 const AppConfig = {
-  APP_NAME: 'Studio M',
-  DEFAULT_STUDIO_NAME: 'Studio M',
-  APP_VERSION: '6.0.0',
-  BUILD_DATE: '2026-07-04',
-  SW_CACHE: 'studio-m-v23',
+  APP_NAME: 'Studio ERP',
+  DEFAULT_STUDIO_NAME: 'Studio ERP',
+  APP_VERSION: '6.1.0',
+  BUILD_DATE: '2026-09-08',
+  SW_CACHE: 'studio-erp-v24',
 
   DB_KEY: 'studio_db_v5',
   DB_VERSION: 20,
