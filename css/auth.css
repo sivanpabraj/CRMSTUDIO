@@ -76,13 +76,25 @@ body.auth-screen .auth-otp-meta {
   grid-template-columns: 1fr;
   gap: 24px;
   align-items: center;
+  margin: 0 auto;
 }
 
 @media (min-width: 768px) {
-  .auth-layout {
+  .auth-layout:has(.auth-brand) {
     grid-template-columns: 1fr 400px;
     gap: 40px;
   }
+}
+
+.auth-layout--single {
+  max-width: 480px !important;
+  grid-template-columns: 1fr !important;
+  margin: 0 auto !important;
+}
+
+.auth-layout--single .auth-card {
+  max-width: 100% !important;
+  width: 100% !important;
 }
 
 /* ── Brand panel (desktop) ── */
