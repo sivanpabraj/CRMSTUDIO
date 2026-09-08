@@ -118,6 +118,8 @@ const SMEquipment = {
         <p style="margin-top:8px"><strong>مدل:</strong> ${SM.esc(e.model || '—')}</p>
         <p style="margin-top:8px"><strong>سریال:</strong> <span dir="ltr">${SM.esc(e.serial || '—')}</span></p>
         <p style="margin-top:8px"><strong>وضعیت:</strong> ${this._statusBadge(e.status || 'available')}</p>
+        ${e.assignedContractId ? `<p style="margin-top:8px"><strong>پروژه تخصیص‌یافته:</strong> <span style="color:var(--sm-accent);font-weight:700;">${SM.esc((DB.find('contracts', c => c.id === e.assignedContractId) || {}).couple || 'قرارداد')}</span></p>` : ''}
+        ${e.assignedPersonnelId ? `<p style="margin-top:8px"><strong>تحویل‌گیرنده / اپراتور:</strong> <span style="color:var(--sm-success);font-weight:700;">${SM.esc((DB.find('personnel', p => p.id === e.assignedPersonnelId) || {}).name || 'پرسنل')}</span></p>` : ''}
         <p style="margin-top:8px"><strong>محل:</strong> ${SM.esc(e.location || '—')}</p>
         ${e.purchaseDate ? `<p style="margin-top:8px"><strong>تاریخ خرید:</strong> ${SM.esc(e.purchaseDate)}</p>` : ''}
         ${e.notes ? `<p style="margin-top:8px"><strong>یادداشت:</strong> ${SM.esc(e.notes)}</p>` : ''}
@@ -130,19 +132,26 @@ const SMEquipment = {
   _form(item) {
     const catOpts = Object.entries(this.CATEGORIES).map(([k, v]) => ({ value: k, label: v.label }))
     const statusOpts = Object.entries(this.STATUS).map(([k, v]) => ({ value: k, label: v.label }))
-    SMUI.modal(item ? 'ویرایش تجهیز' : 'تجهیز جدید', `
+    const contracts = (DB.get('contracts') || []).map(c => ({ value: c.id, label: `${c.code ? c.code + ' · ' : ''}${c.couple || c.title || 'قرارداد'}` }))
+    contracts.unshift({ value: '', label: '— بدون تخصیص (آزاد در انبار) —' })
+    const personnel = (DB.get('personnel') || []).map(p => ({ value: p.id, label: p.name || 'پرسنل' }))
+    personnel.unshift({ value: '', label: '— بدون تحویل‌گیرنده —' })
+
+    SMUI.modal(item ? 'ویرایش تجهیز سازمانی' : 'تجهیز سازمانی جدید', `
       ${SMUI.formField('نام تجهیز', 'eq-name', { value: item?.name || '', placeholder: 'مثلاً Sony A7IV' })}
       ${SMUI.formField('دسته', 'eq-cat', { type: 'select', value: this._normCat(item?.category), options: catOpts })}
       ${SMUI.formField('برند', 'eq-brand', { value: item?.brand || '' })}
       ${SMUI.formField('مدل', 'eq-model', { value: item?.model || '' })}
       ${SMUI.formField('شماره سریال', 'eq-serial', { value: item?.serial || '', dir: 'ltr' })}
-      ${SMUI.formField('وضعیت', 'eq-status', { type: 'select', value: item?.status || 'available', options: statusOpts })}
+      ${SMUI.formField('وضعیت انبارداری ERP', 'eq-status', { type: 'select', value: item?.status || 'available', options: statusOpts })}
+      ${SMUI.formField('تخصیص به پروژه / قرارداد', 'eq-contract', { type: 'select', value: item?.assignedContractId || '', options: contracts })}
+      ${SMUI.formField('تحویل به مسئول تجهیزات (پرسنل)', 'eq-personnel', { type: 'select', value: item?.assignedPersonnelId || '', options: personnel })}
       ${SMUI.formField('محل نگهداری', 'eq-loc', { value: item?.location || '', placeholder: 'مثلاً اتاق تدوین، قفسه ۲' })}
       ${SMUI.formField('تاریخ خرید', 'eq-pdate', { value: item?.purchaseDate || '' })}
       ${SMUI.formField('یادداشت', 'eq-notes', { type: 'textarea', value: item?.notes || '' })}`, {
       width: 480,
       onSave: async () => {
-        const d = SMUI.readForm(['eq-name', 'eq-cat', 'eq-brand', 'eq-model', 'eq-serial', 'eq-status', 'eq-loc', 'eq-pdate', 'eq-notes'])
+        const d = SMUI.readForm(['eq-name', 'eq-cat', 'eq-brand', 'eq-model', 'eq-serial', 'eq-status', 'eq-contract', 'eq-personnel', 'eq-loc', 'eq-pdate', 'eq-notes'])
         if (!d['eq-name']) return SM.toast('نام تجهیز الزامی است', 'error')
         const data = {
           name: d['eq-name'],
@@ -151,6 +160,8 @@ const SMEquipment = {
           model: d['eq-model'],
           serial: d['eq-serial'],
           status: d['eq-status'],
+          assignedContractId: d['eq-contract'] || '',
+          assignedPersonnelId: d['eq-personnel'] || '',
           location: d['eq-loc'],
           purchaseDate: d['eq-pdate'],
           notes: d['eq-notes']

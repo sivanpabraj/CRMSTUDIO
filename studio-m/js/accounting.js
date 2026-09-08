@@ -175,9 +175,10 @@ const SMAccounting = {
         { label: 'چک فعال', value: SM.fmt(cheques.filter(c => c.status !== 'passed' && c.status !== 'cancelled').length), icon: 'fa-money-check', color: 'var(--sm-warning)' }
       ])}
       ${SMUI.tabs([
-        { id: 'banks', fa: 'بانک', en: 'Banks', icon: 'fa-building-columns', onclick: "SMAccounting.setTab('banks')" },
-        { id: 'ledger', fa: 'رفت‌وبرگشت', en: 'Ledger', icon: 'fa-book', onclick: "SMAccounting.setTab('ledger')" },
-        { id: 'cheques', fa: 'چک', en: 'Cheques', icon: 'fa-money-check-alt', onclick: "SMAccounting.setTab('cheques')" }
+        { id: 'banks', fa: 'بانک و صندوق', en: 'Banks', icon: 'fa-building-columns', onclick: "SMAccounting.setTab('banks')" },
+        { id: 'ledger', fa: 'دفتر روزنامه', en: 'Ledger', icon: 'fa-book', onclick: "SMAccounting.setTab('ledger')" },
+        { id: 'cheques', fa: 'اسناد و چک‌ها', en: 'Cheques', icon: 'fa-money-check-alt', onclick: "SMAccounting.setTab('cheques')" },
+        { id: 'balance', fa: 'تراز مالی ERP', en: 'Balance', icon: 'fa-scale-balanced', onclick: "SMAccounting.setTab('balance')" }
       ], this._tab)}
       <div class="sm-acc-body">${this._renderTab(q)}</div>`
   },
@@ -211,7 +212,98 @@ const SMAccounting = {
   _renderTab(q) {
     if (this._tab === 'banks') return this._banksView(q)
     if (this._tab === 'cheques') return this._chequesView(q)
+    if (this._tab === 'balance') return this._balanceView(q)
     return this._ledgerView(q)
+  },
+
+  _balanceView(q) {
+    const tx = DB.get('transactions') || []
+    const contracts = DB.get('contracts') || []
+    const cheques = DB.get('cheques') || []
+    const banks = DB.get('banks') || []
+
+    const bankTotal = banks.reduce((s, b) => s + (b.balance || 0), 0)
+    const deposits = tx.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0)
+    const withdrawals = tx.filter(t => t.type === 'withdrawal').reduce((s, t) => s + (t.amount || 0), 0)
+    const pendingChqIn = cheques.filter(c => c.type === 'incoming' && c.status === 'pending').reduce((s, c) => s + (c.amount || 0), 0)
+    const pendingChqOut = cheques.filter(c => c.type === 'outgoing' && c.status === 'pending').reduce((s, c) => s + (c.amount || 0), 0)
+
+    const contractReceivables = contracts.reduce((s, c) => {
+      const total = Number(c.totalPrice || c.price || 0)
+      const prepay = Number(c.prepayment || 0)
+      const paid = Number(c.paidAmount || prepay)
+      return s + Math.max(0, total - paid)
+    }, 0)
+
+    const totalAssets = bankTotal + pendingChqIn + contractReceivables
+    const totalLiabilities = pendingChqOut
+    const netEquity = totalAssets - totalLiabilities
+
+    return `
+      <div class="sm-acc-balance-sheet">
+        <div class="sm-card" style="margin-bottom:16px;background:var(--sm-card-bg);border:1px solid var(--sm-border);border-radius:16px;padding:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div style="font-weight:700;font-size:1.1rem;display:flex;align-items:center;gap:8px;"><i class="fas fa-scale-balanced" style="color:var(--sm-accent);"></i> تراز مالی و دارایی‌های استودیو (ERP Balance Sheet)</div>
+            <div style="font-size:0.85rem;color:var(--sm-text-muted);">${Utils.todayJalali()}</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:16px;">
+            <div style="padding:14px;background:rgba(52,199,89,0.08);border:1px solid rgba(52,199,89,0.2);border-radius:12px;">
+              <span style="font-size:0.8rem;color:var(--sm-text-muted);">کل دارایی‌های جاری (نقد + اسناد دریافتنی)</span>
+              <div style="font-size:1.25rem;font-weight:800;color:var(--sm-success);margin-top:4px;">${SM.fmt(totalAssets)} <small>تومان</small></div>
+            </div>
+            <div style="padding:14px;background:rgba(255,59,48,0.08);border:1px solid rgba(255,59,48,0.2);border-radius:12px;">
+              <span style="font-size:0.8rem;color:var(--sm-text-muted);">بدهی‌ها و تعهدات (چک‌های صادره در انتظار)</span>
+              <div style="font-size:1.25rem;font-weight:800;color:var(--sm-danger);margin-top:4px;">${SM.fmt(totalLiabilities)} <small>تومان</small></div>
+            </div>
+            <div style="padding:14px;background:rgba(0,113,227,0.08);border:1px solid rgba(0,113,227,0.2);border-radius:12px;">
+              <span style="font-size:0.8rem;color:var(--sm-text-muted);">خالص ارزش ویژه سازمانی استودیو (Equity)</span>
+              <div style="font-size:1.25rem;font-weight:800;color:var(--sm-accent);margin-top:4px;">${SM.fmt(netEquity)} <small>تومان</small></div>
+            </div>
+          </div>
+        </div>
+        <table class="sm-table" style="width:100%;background:var(--sm-card-bg);border:1px solid var(--sm-border);border-radius:14px;border-collapse:collapse;overflow:hidden;">
+          <thead>
+            <tr style="background:var(--sm-bg-hover);text-align:right;">
+              <th style="padding:12px 16px;">سرفصل مالی کل (ERP Account Category)</th>
+              <th style="padding:12px 16px;">ماهیت</th>
+              <th style="padding:12px 16px;">وضعیت حسابداری</th>
+              <th style="padding:12px 16px;text-align:left;">مبلغ (تومان)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);"><i class="fas fa-building-columns" style="margin-left:6px;color:var(--sm-accent);"></i> موجودی نقد و بانک‌ها</td>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);"><span class="sm-badge sm-badge-success">بدهکار (دارایی)</span></td>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);">${banks.length} حساب ثبت‌شده</td>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);text-align:left;font-weight:700;">${SM.fmt(bankTotal)}</td>
+            </tr>
+            <tr>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);"><i class="fas fa-file-invoice-dollar" style="margin-left:6px;color:var(--sm-warning);"></i> مطالبات قراردادها (حساب دریافتنی مشتریان)</td>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);"><span class="sm-badge sm-badge-info">بدهکار (مطالبات)</span></td>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);">${contracts.length} پرونده قرارداد</td>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);text-align:left;font-weight:700;">${SM.fmt(contractReceivables)}</td>
+            </tr>
+            <tr>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);"><i class="fas fa-money-check" style="margin-left:6px;color:var(--sm-success);"></i> اسناد دریافتنی سررسید نشده (چک‌های مشتری)</td>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);"><span class="sm-badge sm-badge-success">دارایی اسنادی</span></td>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);">${cheques.filter(c => c.type === 'incoming' && c.status === 'pending').length} فقره چک</td>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);text-align:left;font-weight:700;">${SM.fmt(pendingChqIn)}</td>
+            </tr>
+            <tr>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);"><i class="fas fa-money-check-alt" style="margin-left:6px;color:var(--sm-danger);"></i> اسناد پرداختنی سررسید نشده (چک‌های پرداختی)</td>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);"><span class="sm-badge sm-badge-danger">بستانکار (تعهدات)</span></td>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);">${cheques.filter(c => c.type === 'outgoing' && c.status === 'pending').length} فقره چک</td>
+              <td style="padding:12px 16px;border-bottom:1px solid var(--sm-border);text-align:left;font-weight:700;color:var(--sm-danger);">${SM.fmt(pendingChqOut)}</td>
+            </tr>
+            <tr style="background:var(--sm-bg-hover);font-weight:800;">
+              <td style="padding:14px 16px;">مجموع خالص نقدینگی و سود انباشته</td>
+              <td style="padding:14px 16px;">تراز نهایی</td>
+              <td style="padding:14px 16px;">گردش دوره مالی</td>
+              <td style="padding:14px 16px;text-align:left;color:var(--sm-accent);">${SM.fmt(deposits - withdrawals)} تومان</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`
   },
 
   _banksView(q) {

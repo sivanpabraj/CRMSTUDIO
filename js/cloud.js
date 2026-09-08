@@ -50,7 +50,8 @@ const Cloud = {
   formatAuthError(message) {
     const m = String(message || '')
     if (m.includes('requested path is invalid')) {
-      return 'Site URL در Supabase هنوز xxx.supabase.co است. Dashboard → Authentication → URL Configuration → Site URL = http://localhost:5173/studio-m/auth-callback.html'
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173'
+      return `Site URL در Supabase هنوز تنظیم نشده است. به Dashboard → Authentication → URL Configuration رفته و Site URL را برابر با ${origin}/studio-m/auth-callback.html بگذارید.`
     }
     if (m.includes('email_address_invalid')) {
       return 'فرمت ایمیل auth نامعتبر است — اپ را رفرش کنید و دوباره ثبت‌نام کنید'
