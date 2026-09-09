@@ -108,7 +108,7 @@ const SMOnboarding = {
       await SecureDB.update('users', user.id, {
         name,
         profileCompleted: true,
-        mustChangePassword: keepPw
+        mustChangePassword: false
       })
       await SecureDB.merge('studioInfo', patch)
       DB.syncPersonnelFromUser(DB.find('users', u => u.id === user.id))
