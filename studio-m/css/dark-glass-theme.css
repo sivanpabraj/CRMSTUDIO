@@ -216,7 +216,11 @@ body[data-theme="dark-glass"] .sm-ops-stat {
   -webkit-backdrop-filter: blur(18px) saturate(135%);
 }
 body[data-theme="dark-glass"] .sm-ops-follow,
+body[data-theme="dark-glass"] .sm-ops-slot,
 body[data-theme="dark-glass"] .sm-ops-chip,
-body[data-theme="dark-glass"] .sm-ops-perf-track {
+body[data-theme="dark-glass"] .sm-ops-perf-track,
+body[data-theme="dark-glass"] .sm-ops-finance {
   background: rgba(255,255,255,.035);
 }
+body[data-theme="dark-glass"] .sm-ops-act { background: rgba(255,255,255,.08); color: inherit; }
+body[data-theme="dark-glass"] .sm-ops-empty-mark { background: rgba(216,183,116,.16); }
