@@ -1,9 +1,8 @@
-/* Studio M — حسابداری: خزانه · کارت بانکی · رفت‌وبرگشت · چک · PDF */
+/* Studio M — حسابداری: بانک · رفت‌وبرگشت · چک · فاکتور · PDF */
 
 const SMAccounting = {
-  _tab: 'overview',
+  _tab: 'banks',
   _flowFilter: 'all',
-  _selectedBankId: null,
 
   MONTHS: ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'],
 
@@ -46,10 +45,6 @@ const SMAccounting = {
     other: 'سایر'
   },
 
-  _math() {
-    return (typeof SMAccMath !== 'undefined' && SMAccMath) || (typeof window !== 'undefined' && window.SMAccMath) || null
-  },
-
   setTab(tab) {
     this._tab = tab
     SM.navigate('accounting')
@@ -57,11 +52,6 @@ const SMAccounting = {
 
   setFlowFilter(f) {
     this._flowFilter = f
-    SM.navigate('accounting')
-  },
-
-  selectBank(id) {
-    this._selectedBankId = this._selectedBankId === id ? null : id
     SM.navigate('accounting')
   },
 
@@ -81,36 +71,15 @@ const SMAccounting = {
   },
 
   _maskCard(num) {
-    const m = this._math()
-    if (m?.maskCard) return m.maskCard(num)
     const s = String(num || '').replace(/\s/g, '')
     if (s.length < 8) return s || '—'
     return `${s.slice(0, 4)} •••• •••• ${s.slice(-4)}`
   },
 
   _fmtSheba(iban) {
-    const m = this._math()
-    if (m?.fmtSheba) return m.fmtSheba(iban)
     const s = String(iban || '').replace(/\s/g, '').toUpperCase()
     if (!s) return '—'
     return s.replace(/(.{4})/g, '$1 ').trim()
-  },
-
-  _cardOf(b) {
-    return this._math()?.cardOf(b) || b?.card || b?.cardNumber || ''
-  },
-
-  _shebaOf(b) {
-    return this._math()?.shebaOf(b) || b?.iban || b?.shaba || ''
-  },
-
-  _accountOf(b) {
-    return this._math()?.accountOf(b) || b?.account || b?.accountNumber || ''
-  },
-
-  _effectiveBankId(banks) {
-    if (this._selectedBankId && banks.some(b => b.id === this._selectedBankId)) return this._selectedBankId
-    return banks[0]?.id || null
   },
 
   _txSummary(t) {
@@ -191,14 +160,24 @@ const SMAccounting = {
 
   render(el) {
     const q = SM.getModuleSearch('accounting')
+    const allTx = DB.get('transactions')
+    const income = allTx.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0)
+    const expense = allTx.filter(t => t.type === 'withdrawal').reduce((s, t) => s + (t.amount || 0), 0)
+    const cheques = DB.get('cheques') || []
+
     el.innerHTML = `
-      ${SMUI.sectionHead('حسابداری', 'خزانه استودیو · کارت بانکی · گردش تولید', this._headActions())}
+      ${SMUI.sectionHead('حسابداری', 'بانک · رفت‌وبرگشت · چک', this._headActions())}
       ${SMUI.moduleSearch('accounting', 'جستجو — بانک، مبلغ، مشتری، پرسنل...')}
+      ${SMUI.statCards([
+        { label: 'واریز کل', value: SM.fmt(income), icon: 'fa-arrow-down', color: 'var(--sm-success)' },
+        { label: 'برداشت کل', value: SM.fmt(expense), icon: 'fa-arrow-up', color: 'var(--sm-danger)' },
+        { label: 'مانده', value: SM.fmt(income - expense), icon: 'fa-scale-balanced', color: 'var(--sm-accent)' },
+        { label: 'چک فعال', value: SM.fmt(cheques.filter(c => c.status !== 'passed' && c.status !== 'cancelled').length), icon: 'fa-money-check', color: 'var(--sm-warning)' }
+      ])}
       ${SMUI.tabs([
-        { id: 'overview', label: 'نمای کلی', icon: 'fa-wallet', onclick: "SMAccounting.setTab('overview')" },
-        { id: 'banks', label: 'حساب‌ها', icon: 'fa-building-columns', onclick: "SMAccounting.setTab('banks')" },
-        { id: 'ledger', label: 'رفت‌وبرگشت', icon: 'fa-right-left', onclick: "SMAccounting.setTab('ledger')" },
-        { id: 'cheques', label: 'چک', icon: 'fa-money-check-alt', onclick: "SMAccounting.setTab('cheques')" }
+        { id: 'banks', fa: 'بانک', en: 'Banks', icon: 'fa-building-columns', onclick: "SMAccounting.setTab('banks')" },
+        { id: 'ledger', fa: 'رفت‌وبرگشت', en: 'Ledger', icon: 'fa-book', onclick: "SMAccounting.setTab('ledger')" },
+        { id: 'cheques', fa: 'چک', en: 'Cheques', icon: 'fa-money-check-alt', onclick: "SMAccounting.setTab('cheques')" }
       ], this._tab)}
       <div class="sm-acc-body">${this._renderTab(q)}</div>`
   },
@@ -206,7 +185,7 @@ const SMAccounting = {
   _headActions() {
     const flow = `<button type="button" class="sm-btn sm-btn-primary" onclick="SMAccounting.openFlowMenu()"><i class="fas fa-right-left"></i> واریز و برداشت</button>`
     let extra = ''
-    if (this._tab === 'banks' || this._tab === 'overview') {
+    if (this._tab === 'banks') {
       extra = `<button type="button" class="sm-btn sm-btn-ghost" onclick="SMAccounting.addBank()"><i class="fas fa-plus"></i> افزودن بانک</button>`
     } else if (this._tab === 'cheques') {
       extra = `<button type="button" class="sm-btn sm-btn-ghost" onclick="SMAccounting.addCheque()"><i class="fas fa-plus"></i> ثبت چک</button>`
@@ -232,150 +211,14 @@ const SMAccounting = {
   _renderTab(q) {
     if (this._tab === 'banks') return this._banksView(q)
     if (this._tab === 'cheques') return this._chequesView(q)
-    if (this._tab === 'ledger') return this._ledgerView(q)
-    return this._overviewView(q)
-  },
-
-  _overviewView(q) {
-    const math = this._math()
-    const banks = DB.get('banks') || []
-    const allTx = DB.get('transactions') || []
-    const cheques = DB.get('cheques') || []
-    const today = Utils.todayJalali()
-    const key = math ? math.monthKey(today) : String(today || '').slice(0, 7)
-    const month = math ? math.monthTotals(allTx, key) : { deposit: 0, withdrawal: 0 }
-    const totalBal = math ? math.bankBalanceSum(banks) : banks.reduce((s, b) => s + (+b.balance || 0), 0)
-    const flow = math ? math.cashflow12(allTx, today) : []
-    const mix = math ? math.expenseMix(allTx) : { total: 0, items: [] }
-    const activeId = this._effectiveBankId(banks)
-    const openCheques = cheques.filter(c => c.status !== 'passed' && c.status !== 'cancelled').length
-
-    let tx = allTx.slice().reverse()
-    if (activeId) tx = tx.filter(t => t.bankId === activeId)
-    if (q) {
-      tx = tx.filter(t => {
-        const c = t.contractId ? DB.find('contracts', x => x.id === t.contractId) : null
-        return [t.date, t.type, t.desc, t.amount, t.client, t.purpose, this._bankName(t.bankId), this._personName(t.personnelId), c && this._couple(c)].join(' ').toLowerCase().includes(q)
-      })
-    }
-    tx = tx.slice(0, 8)
-
-    const mixVisible = mix.items.filter(i => i.amount > 0)
-    const mixBar = mixVisible.length
-      ? mixVisible.map(i => `<span class="sm-vault-mix-seg" style="flex:${Math.max(i.pct, 2)};background:${i.color}" title="${SM.esc(i.label)}"></span>`).join('')
-      : '<span class="sm-vault-mix-seg is-empty"></span>'
-
-    return `
-      <section class="sm-vault" aria-label="خزانه مالی استودیو">
-        <div class="sm-vault-kpis">
-          <article class="sm-vault-kpi">
-            <span>موجودی کل</span>
-            <strong>${SM.fmt(totalBal)}</strong>
-            <small>تومان · مجموع حساب‌ها</small>
-          </article>
-          <article class="sm-vault-kpi is-in">
-            <span>واریز این ماه</span>
-            <strong>${SM.fmt(month.deposit)}</strong>
-            <small>تومان · ${SM.esc(key)}</small>
-          </article>
-          <article class="sm-vault-kpi is-out">
-            <span>برداشت این ماه</span>
-            <strong>${SM.fmt(month.withdrawal)}</strong>
-            <small>تومان · چک فعال ${SM.fmt(openCheques)}</small>
-          </article>
-        </div>
-
-        <div class="sm-vault-block">
-          <div class="sm-vault-block-head">
-            <h3>کارت‌های من</h3>
-            <span>شماره کارت پوشیده است — فقط موجودی و شبا</span>
-          </div>
-          ${banks.length ? `<div class="sm-vault-deck" role="list">${banks.map(b => this._physCard(b, b.id === activeId)).join('')}</div>` : `
-            <div class="sm-vault-empty">
-              ${SMUI.empty('fa-building-columns', 'هنوز حساب بانکی ثبت نشده', 'برای دیدن کارت فیزیکی، بانک را اضافه کنید')}
-              <button type="button" class="sm-btn sm-btn-primary" onclick="SMAccounting.addBank()"><i class="fas fa-plus"></i> اولین بانک</button>
-            </div>`}
-        </div>
-
-        <div class="sm-vault-split">
-          <div class="sm-vault-panel">
-            <div class="sm-vault-block-head">
-              <h3>گردش ۱۲ ماه</h3>
-              <span>واریز طلایی · برداشت آبی</span>
-            </div>
-            <div class="sm-vault-cf" role="img" aria-label="نمودار گردش دوازده ماه شمسی">
-              ${flow.map(r => `
-                <div class="sm-vault-cf-col" title="${SM.esc(r.label)}: واریز ${SM.fmt(r.deposit)} · برداشت ${SM.fmt(r.withdrawal)}">
-                  <div class="sm-vault-cf-track">
-                    <span class="sm-vault-cf-bar is-in" style="height:${Math.max(r.depositPct, r.deposit ? 4 : 0)}%"></span>
-                    <span class="sm-vault-cf-bar is-out" style="height:${Math.max(r.withdrawalPct, r.withdrawal ? 4 : 0)}%"></span>
-                  </div>
-                  <small>${SM.esc(r.label)}</small>
-                </div>`).join('')}
-            </div>
-          </div>
-          <div class="sm-vault-panel">
-            <div class="sm-vault-block-head">
-              <h3>ترکیب برداشت</h3>
-              <span>حقوق، چاپ، تجهیزات، اجاره</span>
-            </div>
-            <div class="sm-vault-mix-bar" aria-hidden="true">${mixBar}</div>
-            <ul class="sm-vault-mix-list">
-              ${(mixVisible.length ? mixVisible : mix.items).map(i => `
-                <li>
-                  <i style="background:${i.color}"></i>
-                  <span>${SM.esc(i.label)}</span>
-                  <strong>${SM.fmt(i.amount)} <small>${i.pct}٪</small></strong>
-                </li>`).join('')}
-            </ul>
-          </div>
-        </div>
-
-        <div class="sm-vault-panel sm-vault-history">
-          <div class="sm-vault-block-head">
-            <h3>گردش حساب</h3>
-            <button type="button" class="sm-vault-link" onclick="SMAccounting.setTab('ledger')">همه تراکنش‌ها</button>
-          </div>
-          <div class="sm-acc-tx-list sm-vault-tx">
-            ${tx.length ? tx.map(t => this._txRow(t)).join('') : SMUI.empty('fa-book', q ? 'تراکنشی یافت نشد' : 'تراکنشی برای این حساب ثبت نشده')}
-          </div>
-        </div>
-      </section>`
-  },
-
-  _physCard(b, selected) {
-    const pan = this._cardOf(b)
-    const sheba = this._fmtSheba(this._shebaOf(b))
-    const holder = b.holder || b.name || 'صاحب حساب'
-    const bank = b.bank || b.name || 'حساب بانکی'
-    const cls = selected ? 'is-gold' : 'is-navy'
-    return `<button type="button" class="sm-vault-card ${cls}" role="listitem" aria-pressed="${selected ? 'true' : 'false'}"
-      onclick="SMAccounting.selectBank('${b.id}')">
-      <div class="sm-vault-card-top">
-        <span class="sm-vault-chip" aria-hidden="true"></span>
-        <span class="sm-vault-nfc" aria-hidden="true"><i class="fas fa-wifi"></i></span>
-      </div>
-      <div class="sm-vault-pan" dir="ltr">${SM.esc(pan ? this._maskCard(pan) : 'بدون شماره کارت')}</div>
-      <div class="sm-vault-sheba" dir="ltr">${SM.esc(sheba)}</div>
-      <div class="sm-vault-card-foot">
-        <div>
-          <small>${SM.esc(bank)}</small>
-          <strong>${SM.esc(holder)}</strong>
-        </div>
-        <div class="sm-vault-card-bal">
-          <small>موجودی</small>
-          <strong>${SM.fmt(b.balance || 0)}</strong>
-        </div>
-      </div>
-      <span class="sm-vault-brand">Studio M</span>
-    </button>`
+    return this._ledgerView(q)
   },
 
   _banksView(q) {
     let banks = DB.get('banks')
     if (q) {
       banks = banks.filter(b =>
-        [b.name, b.bank, this._accountOf(b), this._cardOf(b), this._shebaOf(b), b.holder, b.balance].join(' ').toLowerCase().includes(q)
+        [b.name, b.bank, b.account, b.card, b.iban, b.holder, b.balance].join(' ').toLowerCase().includes(q)
       )
     }
     if (!banks.length) {
@@ -386,7 +229,7 @@ const SMAccounting = {
   },
 
   _bankCard(b, i) {
-    const color = b.color || this.BANK_COLORS[i % this.BANK_COLORS.length]
+    const color = this.BANK_COLORS[i % this.BANK_COLORS.length]
     return `<div class="sm-acc-bank" style="--bank-color:${color}">
       <div class="sm-acc-bank-top">
         <div class="sm-acc-bank-icon"><i class="fas fa-building-columns"></i></div>
@@ -398,9 +241,9 @@ const SMAccounting = {
       </div>
       <div class="sm-acc-bank-balance">${SM.fmt(b.balance || 0)} <small>تومان</small></div>
       <div class="sm-acc-bank-fields">
-        <div class="sm-acc-bank-field"><span>شماره کارت</span><code dir="ltr">${SM.esc(this._cardOf(b) ? this._maskCard(this._cardOf(b)) : '—')}</code></div>
-        <div class="sm-acc-bank-field"><span>شماره حساب</span><code dir="ltr">${SM.esc(this._accountOf(b) || '—')}</code></div>
-        <div class="sm-acc-bank-field sm-acc-bank-field--full"><span>شماره شبا</span><code dir="ltr">${SM.esc(this._fmtSheba(this._shebaOf(b)))}</code></div>
+        <div class="sm-acc-bank-field"><span>شماره کارت</span><code dir="ltr">${SM.esc(b.card ? this._maskCard(b.card) : '—')}</code></div>
+        <div class="sm-acc-bank-field"><span>شماره حساب</span><code dir="ltr">${SM.esc(b.account || '—')}</code></div>
+        <div class="sm-acc-bank-field sm-acc-bank-field--full"><span>شماره شبا</span><code dir="ltr">${SM.esc(this._fmtSheba(b.iban))}</code></div>
       </div>
     </div>`
   },
@@ -560,7 +403,7 @@ const SMAccounting = {
     const wrap = document.createElement('div')
     wrap.innerHTML = html
     document.body.appendChild(wrap)
-    const receiptEl = document.getElementById('sm-receipt-doc')
+    const el = document.getElementById('sm-receipt-doc')
     const fname = `رسید-${isIn ? 'واریز' : 'برداشت'}-${(t.date || '').replace(/\//g, '')}-${t.amount}.pdf`
 
     const done = () => { wrap.remove() }
@@ -572,7 +415,7 @@ const SMAccounting = {
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true },
         jsPDF: { unit: 'mm', format: 'a5', orientation: 'portrait' }
-      }).from(receiptEl).save().then(done).catch(() => { window.print(); done() })
+      }).from(el).save().then(done).catch(() => { window.print(); done() })
     } else {
       const w = window.open('', '_blank')
       if (w) {
@@ -599,9 +442,9 @@ const SMAccounting = {
       ${SMUI.formField('عنوان حساب', 'ab-title', { value: item?.name || '', placeholder: 'مثلاً: حساب اصلی استودیو' })}
       ${SMUI.formField('نام بانک', 'ab-bank', { value: item?.bank || '', placeholder: 'ملت، ملی، پاسارگاد...' })}
       ${SMUI.formField('نام صاحب حساب', 'ab-holder', { value: item?.holder || '' })}
-      ${SMUI.formField('شماره کارت', 'ab-card', { value: this._cardOf(item) || '', dir: 'ltr', placeholder: '6037…' })}
-      ${SMUI.formField('شماره حساب', 'ab-account', { value: this._accountOf(item) || '', dir: 'ltr' })}
-      ${SMUI.formField('شماره شبا', 'ab-iban', { value: this._shebaOf(item) || '', dir: 'ltr', placeholder: 'IR…' })}
+      ${SMUI.formField('شماره کارت', 'ab-card', { value: item?.card || '', dir: 'ltr', placeholder: '6037…' })}
+      ${SMUI.formField('شماره حساب', 'ab-account', { value: item?.account || '', dir: 'ltr' })}
+      ${SMUI.formField('شماره شبا', 'ab-iban', { value: item?.iban || '', dir: 'ltr', placeholder: 'IR…' })}
       ${SMUI.formField('موجودی فعلی (تومان)', 'ab-balance', { type: 'number', value: item?.balance ?? '', dir: 'ltr' })}`, {
       onSave: async () => {
         const d = SMUI.readForm(['ab-title', 'ab-bank', 'ab-holder', 'ab-card', 'ab-account', 'ab-iban', 'ab-balance'])
@@ -657,7 +500,7 @@ const SMAccounting = {
     const personnel = DB.get('personnel').filter(p => p.status !== 'inactive')
     const cats = isIn ? this.DEPOSIT_CATS : this.WITHDRAWAL_CATS
     const bankOpts = [{ value: '', label: '— انتخاب حساب بانکی —' }, ...banks.map(b => ({
-      value: b.id, label: `${b.name || b.bank} — ${this._accountOf(b) || this._maskCard(this._cardOf(b)) || ''}`
+      value: b.id, label: `${b.name || b.bank} — ${b.account || this._maskCard(b.card) || ''}`
     }))]
     const contractOpts = [{ value: '', label: '— انتخاب قرارداد —' }, ...contracts.map(c => ({
       value: c.id, label: `${this._couple(c)} (${c.contractNum || c.id})`
@@ -675,7 +518,7 @@ const SMAccounting = {
       ${SMUI.formField('مبلغ (تومان)', 'tx-amt', { type: 'number', value: item?.amount || '', dir: 'ltr' })}
       ${SMUI.formField('تاریخ', 'tx-date', { value: item?.date || Utils.todayJalali() })}
       ${SMUI.formField('ماه / دوره', 'tx-month', { type: 'select', value: item?.periodMonth || '', options: [{ value: '', label: '—' }, ...monthOpts] })}
-      ${SMUI.formField(isIn ? 'واریز به حساب' : 'برداشت از حساب', 'tx-bank', { type: 'select', value: item?.bankId || this._effectiveBankId(banks) || '', options: bankOpts })}
+      ${SMUI.formField(isIn ? 'واریز به حساب' : 'برداشت از حساب', 'tx-bank', { type: 'select', value: item?.bankId || '', options: bankOpts })}
       ${SMUI.formField('طرف / منبع', 'tx-source', { type: 'select', value: src, options: srcOpts })}
       <div id="tx-customer-fields"${src !== 'customer' ? ' style="display:none"' : ''}>
         ${SMUI.formField('قرارداد', 'tx-contract', { type: 'select', value: item?.contractId || '', options: contractOpts })}
@@ -863,8 +706,7 @@ SMModules.accounting = {
   addTx() { SMAccounting.openFlowMenu() },
   editTx(id) { SMAccounting.editTx(id) },
   addCheque() { SMAccounting.addCheque() },
-  editCheque(id) { SMAccounting.editCheque(id) },
-  selectBank(id) { SMAccounting.selectBank(id) }
+  editCheque(id) { SMAccounting.editCheque(id) }
 }
 
 window.SMAccounting = SMAccounting
