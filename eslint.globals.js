@@ -117,6 +117,7 @@ export const browserGlobals = {
   SMDashboard: "readonly",
   SMSettings: "readonly",
   SMAccounting: "readonly",
+  SMAccMath: "readonly",
   SMEmployees: "readonly",
   SMAttendance: "readonly",
   SMPayroll: "readonly",

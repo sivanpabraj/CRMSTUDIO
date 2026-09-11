@@ -191,7 +191,7 @@ const SM = {
       contracts: ['قراردادها', ''],
       packages: ['پکیج قیمت', ''],
       invoices: ['فاکتور', ''],
-      accounting: ['حسابداری', ''],
+      accounting: ['حسابداری', 'خزانه · کارت · گردش'],
       expenses: ['هزینه‌ها', ''],
       reports: ['گزارش‌ها', ''],
       employees: ['پرسنل', ''],
