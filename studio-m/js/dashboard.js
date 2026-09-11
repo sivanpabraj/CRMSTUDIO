@@ -864,11 +864,15 @@ const SMDashboard = {
   },
 
   assignTeam(contractId) {
-    const contract = DB.find('contracts', item => item.id === contractId)
-    if (!contract) return
+    const contract = (DB.get('contracts') || []).find(item => item.id === contractId)
+    if (!contract) {
+      SM.toast('قرارداد پیدا نشد', 'error')
+      return
+    }
     const photo = contract.photographerId || contract.staffAssignments?.photographer?.id || ''
     const video = contract.videographerId || contract.staffAssignments?.['vid-clip']?.id || contract.staffAssignments?.videographer?.id || ''
-    const options = [{ value: '', label: '— انتخاب —' }, ...SMH.personnelOptions()]
+    const people = (DB.get('personnel') || []).filter(person => person.status !== 'inactive')
+    const options = [{ value: '', label: '— انتخاب —' }, ...people.map(person => ({ value: person.id, label: person.name || 'همکار' }))]
     SMUI.modal(`آفیش — ${this._coupleName(contract)}`, `
       ${SMUI.formField('ساعت مراسم', 'ops-time', { value: contract.eventTime || '18:00', dir: 'ltr' })}
       ${SMUI.formField('عکاس', 'ops-photo', { type: 'select', value: photo, options })}

@@ -15,7 +15,12 @@ function dashboardWith(data = {}, roles = ['studio_manager']) {
   }
   const context = {
     localStorage: { getItem: () => null, setItem: () => {} },
-    DB: { get: name => collections[name] || [], set: () => {}, find: () => null, filter: () => [] },
+    DB: {
+      get: name => collections[name] || [],
+      set: () => {},
+      find: (name, predicate) => (collections[name] || []).find(predicate) || null,
+      filter: () => []
+    },
     Utils: {
       parseJalaliToday: () => ({ jy: 1405, jm: 5 }),
       jalaliMonthName: month => `ماه ${month}`,
@@ -27,7 +32,11 @@ function dashboardWith(data = {}, roles = ['studio_manager']) {
       navigate: () => {}, isModuleDisabled: () => false, getModuleSearch: () => ''
     },
     Access: { isSystemAdmin: () => false, isStudioManager: user => user.roles.includes('studio_manager') },
-    SMUI: { badge: text => text, empty: () => '', moduleSearch: () => '' },
+    SMUI: {
+      badge: text => text, empty: () => '', moduleSearch: () => '',
+      formField: () => '',
+      modal: title => { context.lastModal = title }
+    },
     window: {}
   }
   vm.runInNewContext(source, context)
@@ -202,5 +211,14 @@ describe('STE100 executive dashboard', () => {
     expect(hidden.todayEvents).toHaveLength(0)
     expect(hidden.followups).toHaveLength(0)
     expect(hidden.allTodayCount).toBe(1)
+  })
+
+  it('opens the team assignment modal from a contract id without SMH', () => {
+    const dashboard = dashboardWith({
+      contracts: [{ id: 'c9', groom: 'علی', bride: 'بیتا', eventDate: '1405/05/25', status: 'active' }],
+      personnel: [{ id: 'p1', name: 'امیر', role: 'عکاس', status: 'active' }]
+    })
+    dashboard.assignTeam('c9')
+    expect(dashboard).toBeTruthy()
   })
 })
