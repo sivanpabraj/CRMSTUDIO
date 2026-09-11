@@ -91,6 +91,7 @@ const SMDashboard = {
     const persProjects = DB.get('persProjects') || []
     const expenses = DB.get('expenses') || []
     const requests = DB.get('customerRequests') || []
+    const albums = DB.get('albums') || []
 
     const income = tx.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0)
     const expense = tx.filter(t => t.type === 'withdrawal').reduce((s, t) => s + (t.amount || 0), 0)
@@ -140,7 +141,8 @@ const SMDashboard = {
     return {
       contracts, tx, personnel, bookings, cheques, expenses, income, expense, outstanding,
       personnelCost, publishCost, events, monthData, chequeAlerts, upcomingBookings, openInbox,
-      deposits, withdrawals, monthDeposits, monthWithdrawals, monthDepositSum, monthWithdrawalSum, recentDeposits
+      deposits, withdrawals, monthDeposits, monthWithdrawals, monthDepositSum, monthWithdrawalSum, recentDeposits,
+      persProjects, albums, customerRequests: requests
     }
   },
 
@@ -418,6 +420,513 @@ const SMDashboard = {
     return Math.round(((current - previous) / Math.abs(previous)) * 100)
   },
 
+  _sameDay(date) {
+    if (!date) return false
+    const today = Utils.todayJalali()
+    if (typeof Utils.normJalali === 'function') {
+      return Utils.normJalali(date) === Utils.normJalali(today)
+    }
+    return String(date) === String(today)
+  },
+
+  _coupleName(item) {
+    if (!item) return 'مراسم'
+    const couple = String(item.couple || '').trim()
+    if (couple) return couple
+    return `${item.groom || ''} و ${item.bride || ''}`.replace(/^ و | و $/g, '').trim() || item.title || item.client || 'مراسم'
+  },
+
+  _timeSort(value) {
+    const match = String(value || '').match(/(\d{1,2}):(\d{2})/)
+    return match ? (Number(match[1]) * 60) + Number(match[2]) : 24 * 60
+  },
+
+  _greet() {
+    const hour = new Date().getHours()
+    if (hour < 5) return 'شب بخیر'
+    if (hour < 12) return 'صبح بخیر'
+    if (hour < 17) return 'ظهر بخیر'
+    if (hour < 20) return 'عصر بخیر'
+    return 'شب بخیر'
+  },
+
+  _staffIdsFor(item) {
+    const ids = []
+    if (!item) return ids
+    ;['personnelId', 'photographerId', 'videographerId', 'assignedTo'].forEach(key => {
+      if (item[key]) ids.push(item[key])
+    })
+    ;(item.team || []).forEach(member => {
+      const id = typeof member === 'string' ? member : member?.personnelId
+      if (id) ids.push(id)
+    })
+    Object.values(item.staffAssignments || {}).forEach(entry => {
+      const id = typeof entry === 'string' ? entry : entry?.id
+      if (id) ids.push(id)
+    })
+    return [...new Set(ids)]
+  },
+
+  _isDoneStatus(status) {
+    return ['completed', 'delivered', 'done'].includes(status)
+  },
+
+  _opsQuery() {
+    return typeof SM !== 'undefined' && SM.getModuleSearch ? SM.getModuleSearch('dashboard') : ''
+  },
+
+  _textMatch(query, ...parts) {
+    if (!query) return true
+    return parts.join(' ').toLowerCase().includes(query)
+  },
+
+  _teamLabel(item, personnel, persProjects = []) {
+    const names = []
+    this._staffIdsFor(item).forEach(id => {
+      const person = personnel.find(p => p.id === id)
+      if (person?.name) names.push(person.name)
+    })
+    Object.values(item?.staffAssignments || {}).forEach(entry => {
+      if (entry?.name) names.push(entry.name)
+    })
+    persProjects.filter(project => project.contractId && project.contractId === item.id).forEach(project => {
+      if (project.personnelName) names.push(project.personnelName)
+    })
+    return [...new Set(names.filter(Boolean))].join('، ') || '—'
+  },
+
+  _opsModel(ctx) {
+    const today = Utils.todayJalali()
+    const monthKey = this._monthRef(0).key
+    const contracts = ctx.contracts || []
+    const bookings = ctx.bookings || []
+    const personnel = (ctx.personnel || []).filter(person => person.status !== 'inactive')
+    const persProjects = ctx.persProjects || []
+    const albums = ctx.albums || []
+    const cheques = ctx.cheques || []
+    const todayEvents = []
+
+    contracts.filter(contract => this._sameDay(contract.eventDate || contract.date) && contract.status !== 'cancelled').forEach(contract => {
+      const done = this._isDoneStatus(contract.status)
+      todayEvents.push({
+        kind: 'ceremony',
+        id: contract.id,
+        time: contract.eventTime || '—',
+        sort: this._timeSort(contract.eventTime),
+        title: this._coupleName(contract),
+        venue: contract.venue || 'محل ثبت نشده',
+        pkg: contract.package || 'مراسم',
+        team: this._teamLabel(contract, personnel, persProjects),
+        status: contract.status,
+        statusLabel: done ? 'انجام‌شده' : (contract.status === 'active' ? 'فعال' : (contract.status || 'ثبت‌شده')),
+        done,
+        route: 'contracts',
+        sourceId: contract.id
+      })
+    })
+
+    bookings.filter(booking => this._sameDay(booking.date) && booking.status !== 'cancelled').forEach(booking => {
+      const done = booking.status === 'completed'
+      todayEvents.push({
+        kind: 'booking',
+        id: booking.id,
+        time: booking.time || '—',
+        sort: this._timeSort(booking.time),
+        title: booking.title || booking.client || 'نوبت',
+        venue: booking.location || booking.client || 'مشاوره',
+        pkg: 'نوبت',
+        team: this._teamLabel(booking, personnel),
+        status: booking.status,
+        statusLabel: done ? 'انجام‌شده' : (booking.status === 'confirmed' ? 'تأیید شده' : 'زمان‌بندی شده'),
+        done,
+        route: 'bookings',
+        sourceId: booking.id
+      })
+    })
+
+    todayEvents.sort((a, b) => a.sort - b.sort || String(a.title).localeCompare(String(b.title), 'fa'))
+
+    const followups = []
+    bookings.filter(booking => booking.status === 'scheduled' || booking.status === 'unconfirmed').forEach(booking => {
+      followups.push({
+        kind: 'booking',
+        id: booking.id,
+        tone: 'warning',
+        icon: 'fa-calendar-plus',
+        title: booking.title || booking.client || 'نوبت تأییدنشده',
+        meta: `${booking.date || today} ${booking.time || ''}`.trim(),
+        route: 'bookings',
+        priority: 1,
+        actions: [
+          { key: 'confirm', label: 'تأیید', run: `SMDashboard.confirmBooking('${booking.id}')` },
+          { key: 'open', label: 'باز', run: `SMDashboard.openBooking('${booking.id}')` }
+        ]
+      })
+    })
+    cheques.filter(cheque => {
+      const days = Utils.daysUntil(cheque.dueDate)
+      return cheque.status !== 'cleared' && cheque.status !== 'paid' && days !== null && days <= 0
+    }).forEach(cheque => {
+      followups.push({
+        kind: 'cheque',
+        id: cheque.id,
+        tone: 'danger',
+        icon: 'fa-money-check',
+        title: `چک ${cheque.number || ''}`.trim(),
+        meta: cheque.dueDate || 'سررسید گذشته',
+        route: 'accounting',
+        priority: 0,
+        actions: [{ key: 'open', label: 'حسابداری', run: "SMDashboard.go('accounting')" }]
+      })
+    })
+    contracts.filter(contract => {
+      const days = Utils.daysUntil(contract.deliveryDate)
+      return contract.deliveryDate && contract.status !== 'cancelled' && !this._isDoneStatus(contract.status) && days !== null && days <= 0
+    }).forEach(contract => {
+      followups.push({
+        kind: 'delivery',
+        id: contract.id,
+        tone: 'danger',
+        icon: 'fa-box-open',
+        title: `تحویل ${this._coupleName(contract)}`,
+        meta: contract.deliveryDate,
+        route: 'contracts',
+        priority: 0,
+        actions: [
+          { key: 'done', label: 'تحویل شد', run: `SMDashboard.completeCeremony('${contract.id}')` },
+          { key: 'open', label: 'قرارداد', run: `SMDashboard.openContract('${contract.id}')` }
+        ]
+      })
+    })
+    albums.filter(album => ['selection', 'waiting_customer', 'in_review', 'design'].includes(album.status)).forEach(album => {
+      followups.push({
+        kind: 'album',
+        id: album.id,
+        tone: 'info',
+        icon: 'fa-book-open',
+        title: album.title || album.couple || 'آلبوم در انتظار',
+        meta: album.status === 'selection' ? 'در انتظار انتخاب مشتری' : 'در مسیر تولید',
+        route: 'contracts',
+        priority: 2,
+        actions: [{ key: 'open', label: 'قرارداد', run: album.contractId ? `SMDashboard.openContract('${album.contractId}')` : "SMDashboard.go('contracts')" }]
+      })
+    })
+    if ((ctx.openInbox || 0) > 0) {
+      followups.push({
+        kind: 'inbox',
+        id: 'inbox',
+        tone: 'info',
+        icon: 'fa-inbox',
+        title: `${Number(ctx.openInbox).toLocaleString('fa-IR')} درخواست باز مشتری`,
+        meta: 'صندوق ورودی',
+        route: 'inbox',
+        priority: 2,
+        actions: [{ key: 'open', label: 'صندوق', run: "SMDashboard.go('inbox')" }]
+      })
+    }
+    followups.sort((a, b) => a.priority - b.priority)
+
+    const busyIds = new Set()
+    persProjects.filter(project => this._sameDay(project.eventDate)).forEach(project => {
+      if (project.personnelId) busyIds.add(project.personnelId)
+    })
+    todayEvents.forEach(event => {
+      const source = event.kind === 'ceremony'
+        ? contracts.find(contract => contract.id === event.id)
+        : bookings.find(booking => booking.id === event.id)
+      this._staffIdsFor(source || {}).forEach(id => busyIds.add(id))
+    })
+
+    const freeStaff = personnel.filter(person => !busyIds.has(person.id))
+    const busyStaff = personnel.filter(person => busyIds.has(person.id))
+    const performance = personnel.map(person => {
+      const fromProjects = persProjects.filter(project => project.personnelId === person.id && String(project.eventDate || '').startsWith(monthKey)).length
+      const fromContracts = contracts.filter(contract =>
+        String(contract.eventDate || contract.date || '').startsWith(monthKey) &&
+        contract.status !== 'cancelled' &&
+        this._staffIdsFor(contract).includes(person.id)
+      ).length
+      return {
+        id: person.id,
+        name: person.name,
+        role: person.role || 'همکار',
+        sessions: fromProjects + fromContracts
+      }
+    }).sort((a, b) => b.sessions - a.sessions || String(a.name).localeCompare(String(b.name), 'fa'))
+
+    const query = this._opsQuery()
+    const visibleEvents = todayEvents.filter(event => this._textMatch(query, event.title, event.venue, event.team, event.pkg, event.time))
+    const visibleFollowups = followups.filter(item => this._textMatch(query, item.title, item.meta, item.kind))
+    const visibleFree = freeStaff.filter(person => this._textMatch(query, person.name, person.role))
+    const visibleBusy = busyStaff.filter(person => this._textMatch(query, person.name, person.role))
+    const visiblePerf = performance.filter(person => this._textMatch(query, person.name, person.role))
+
+    return {
+      today,
+      query,
+      todayEvents: visibleEvents,
+      allTodayCount: todayEvents.length,
+      completedCount: todayEvents.filter(event => event.done).length,
+      unconfirmedCount: bookings.filter(booking => booking.status === 'scheduled' || booking.status === 'unconfirmed').length,
+      followups: visibleFollowups.slice(0, 8),
+      followupCount: followups.length,
+      freeStaff: visibleFree,
+      busyStaff: visibleBusy,
+      performance: visiblePerf,
+      maxSessions: Math.max(1, ...performance.map(item => item.sessions))
+    }
+  },
+
+  _opsStat(label, value, meta, icon, tone, route) {
+    return `<button type="button" class="sm-ops-stat is-${tone}" onclick="SMDashboard.go('${route}')">
+      <span class="sm-ops-stat-icon" aria-hidden="true"><i class="fas ${icon}"></i></span>
+      <span class="sm-ops-stat-copy">
+        <span class="sm-ops-stat-label">${SM.esc(label)}</span>
+        <strong>${Number(value || 0).toLocaleString('fa-IR')}</strong>
+        <small>${SM.esc(meta)}</small>
+      </span>
+    </button>`
+  },
+
+  _eventActions(event) {
+    if (event.kind === 'booking') {
+      const buttons = []
+      if (event.status === 'scheduled' || event.status === 'unconfirmed') {
+        buttons.push({ label: 'تأیید', run: `SMDashboard.confirmBooking('${event.sourceId}')`, tone: 'gold' })
+      }
+      if (!event.done) buttons.push({ label: 'انجام شد', run: `SMDashboard.completeBooking('${event.sourceId}')`, tone: 'green' })
+      buttons.push({ label: 'باز', run: `SMDashboard.openBooking('${event.sourceId}')`, tone: 'ghost' })
+      return buttons
+    }
+    const buttons = [
+      { label: 'آفیش', run: `SMDashboard.assignTeam('${event.sourceId}')`, tone: 'gold' }
+    ]
+    if (!event.done) buttons.push({ label: 'انجام شد', run: `SMDashboard.completeCeremony('${event.sourceId}')`, tone: 'green' })
+    buttons.push({ label: 'باز', run: `SMDashboard.openContract('${event.sourceId}')`, tone: 'ghost' })
+    return buttons
+  },
+
+  _actionButtons(actions) {
+    return `<div class="sm-ops-acts">${(actions || []).map(action =>
+      `<button type="button" class="sm-ops-act is-${action.tone || 'ghost'}" onclick="event.stopPropagation();${action.run}">${SM.esc(action.label)}</button>`
+    ).join('')}</div>`
+  },
+
+  _opsEmpty(canFinance) {
+    return `<div class="sm-ops-empty">
+      <span class="sm-ops-empty-mark"><i class="fas fa-sun"></i></span>
+      <b>امروز هنوز برنامه‌ای نیست</b>
+      <p>نوبت مشاوره یا قرارداد مراسم اضافه کنید تا پیگیری، تیم و ساعت‌ها همین‌جا زنده شوند.</p>
+      <div class="sm-ops-empty-acts">
+        <button type="button" class="sm-btn sm-btn-primary" onclick="SMModules.bookings.add()"><i class="fas fa-plus"></i> افزودن نوبت</button>
+        ${canFinance ? `<button type="button" class="sm-btn sm-btn-ghost" onclick="window.location.href='../contract.html'"><i class="fas fa-file-signature"></i> قرارداد جدید</button>` : ''}
+      </div>
+    </div>`
+  },
+
+  _opsTodayDashboard(ctx, opts = {}) {
+    const ops = this._opsModel(ctx)
+    const user = typeof SM !== 'undefined' ? SM.user?.() : null
+    const studio = typeof SM !== 'undefined' ? SM.studio?.() : null
+    const greet = this._greet()
+    const name = user?.name || 'همکار'
+    const studioName = studio?.name || 'استودیو'
+    const canFinance = !opts.financeHidden
+    const financeNote = opts.financeHidden
+      ? `${SM.esc(ops.today)} · اطلاعات مالی فقط برای مدیر استودیو نمایش داده می‌شود`
+      : `${SM.esc(ops.today)} · برنامه زنده استودیو`
+    const barren = !ops.allTodayCount && !ops.followupCount
+    const schedule = ops.todayEvents.length
+      ? `<div class="sm-ops-slots">${ops.todayEvents.map(event => `<article class="sm-ops-slot${event.done ? ' is-done' : ''}">
+          <span class="sm-ops-time">${SM.esc(event.time)}</span>
+          <div class="sm-ops-slot-body">
+            <button type="button" class="sm-ops-linkish" onclick="${event.kind === 'booking' ? `SMDashboard.openBooking('${event.sourceId}')` : `SMDashboard.openContract('${event.sourceId}')`}">${SM.esc(event.title)}</button>
+            <small>${SM.esc(event.pkg)} · ${SM.esc(event.venue)} · ${SM.esc(event.team)}</small>
+          </div>
+          ${SMUI.badge(event.statusLabel, event.done ? 'success' : event.status === 'scheduled' ? 'warning' : 'info')}
+          ${this._actionButtons(this._eventActions(event))}
+        </article>`).join('')}</div>`
+      : (barren
+        ? this._opsEmpty(canFinance)
+        : `<div class="sm-ops-quiet">${ops.query ? 'با این جستجو موردی در برنامه امروز نیست' : 'مراسم یا نوبتی برای امروز ثبت نشده'}</div>`)
+    const followups = ops.followups.length
+      ? `<div class="sm-ops-followups">${ops.followups.map(item => `<div class="sm-ops-follow is-${item.tone}">
+          <i class="fas ${item.icon}"></i>
+          <span><b>${SM.esc(item.title)}</b><small>${SM.esc(item.meta)}</small></span>
+          ${this._actionButtons(item.actions)}
+        </div>`).join('')}</div>`
+      : `<div class="sm-ops-quiet">${ops.query ? 'پیگیری مطابق جستجو نیست' : 'پیگیری فوری برای امروز نیست — عالی'}</div>`
+    const chips = (list, busy) => list.map(person => `<span class="sm-ops-chip${busy ? ' is-busy' : ''}"><i>${SM.esc((person.name || '؟').slice(0, 1))}</i><b>${SM.esc(person.name)}</b><small>${SM.esc(busy ? 'درگیر امروز' : (person.role || 'همکار'))}</small></span>`).join('')
+    const team = (ops.freeStaff.length || ops.busyStaff.length)
+      ? `<div class="sm-ops-team-groups">
+          ${ops.freeStaff.length ? `<div><em>آزاد</em><div class="sm-ops-chips">${chips(ops.freeStaff, false)}</div></div>` : ''}
+          ${ops.busyStaff.length ? `<div><em>درگیر</em><div class="sm-ops-chips">${chips(ops.busyStaff, true)}</div></div>` : ''}
+        </div>`
+      : `<div class="sm-ops-quiet">پرسنل فعالی ثبت نشده — از بخش پرسنل همکار اضافه کنید</div>`
+    const perf = ops.performance.length
+      ? `<div class="sm-ops-perf">${ops.performance.slice(0, 6).map(person => `<div class="sm-ops-perf-row">
+          <span class="sm-ops-perf-who"><i>${SM.esc((person.name || '؟').slice(0, 1))}</i><span><b>${SM.esc(person.name)}</b><small>${SM.esc(person.role)}</small></span></span>
+          <span class="sm-ops-perf-track"><i style="width:${Math.max(person.sessions ? 10 : 0, Math.round((person.sessions / ops.maxSessions) * 100))}%"></i></span>
+          <strong>${person.sessions.toLocaleString('fa-IR')}</strong>
+        </div>`).join('')}</div>`
+      : `<div class="sm-ops-quiet">برای سنجش عملکرد، آفیش تیم را روی مراسم ثبت کنید</div>`
+
+    return `<div class="sm-ops-dashboard">
+      <section class="sm-ops-hero">
+        <div>
+          <span class="sm-ops-eyebrow">عملیات امروز <span class="sm-ops-live" aria-hidden="true"><i></i> زنده</span></span>
+          <h2>${SM.esc(greet)}، ${SM.esc(name)}</h2>
+          <p>امروز در استودیو ${SM.esc(studioName)} · ${financeNote}</p>
+        </div>
+        <div class="sm-ops-hero-actions">
+          ${SMUI.moduleSearch('dashboard', 'جستجو در مراسم، پیگیری و تیم...')}
+          <button type="button" class="sm-btn sm-btn-primary sm-ops-cta" onclick="SMModules.bookings.add()"><i class="fas fa-plus"></i> افزودن نوبت</button>
+        </div>
+      </section>
+      <div class="sm-ops-stats" role="list">
+        ${this._opsStat('مراسم امروز', ops.allTodayCount, 'قرارداد و نوبت همین روز', 'fa-heart', 'gold', 'calendar')}
+        ${this._opsStat('انجام‌شده', ops.completedCount, 'تحویل یا اتمام امروز', 'fa-circle-check', 'green', 'contracts')}
+        ${this._opsStat('نیازمند پیگیری', ops.followupCount, 'آلبوم، چک، تحویل و صندوق', 'fa-bell', 'orange', 'inbox')}
+        ${this._opsStat('نوبت تأییدنشده', ops.unconfirmedCount, 'رزرو در انتظار تأیید', 'fa-calendar-plus', 'blue', 'bookings')}
+      </div>
+      <div class="sm-ops-grid sm-ops-grid--main">
+        <section class="sm-ops-card">
+          <div class="sm-ops-card-head">
+            <div><span class="sm-ops-eyebrow">اولویت امروز</span><h3>پیگیری‌ها</h3></div>
+            <button type="button" class="sm-exec-link" onclick="SMDashboard.go('inbox')">صندوق <i class="fas fa-arrow-left"></i></button>
+          </div>
+          ${followups}
+        </section>
+        <section class="sm-ops-card">
+          <div class="sm-ops-card-head">
+            <div><span class="sm-ops-eyebrow">زمان‌بندی</span><h3>برنامه امروز</h3></div>
+            <button type="button" class="sm-exec-link" onclick="SMDashboard.go('calendar')">تقویم <i class="fas fa-arrow-left"></i></button>
+          </div>
+          ${schedule}
+        </section>
+      </div>
+      <div class="sm-ops-grid sm-ops-grid--team">
+        <section class="sm-ops-card">
+          <div class="sm-ops-card-head">
+            <div><span class="sm-ops-eyebrow">تیم</span><h3>ظرفیت آزاد</h3></div>
+            <button type="button" class="sm-exec-link" onclick="SMDashboard.go('employees')">${ops.freeStaff.length.toLocaleString('fa-IR')} نفر آزاد <i class="fas fa-arrow-left"></i></button>
+          </div>
+          ${team}
+        </section>
+        <section class="sm-ops-card">
+          <div class="sm-ops-card-head">
+            <div><span class="sm-ops-eyebrow">ماه جاری</span><h3>عملکرد تیم</h3></div>
+            <button type="button" class="sm-exec-link" onclick="SMDashboard.go('reports')">گزارش <i class="fas fa-arrow-left"></i></button>
+          </div>
+          ${perf}
+        </section>
+      </div>
+    </div>`
+  },
+
+  _reload() {
+    const el = document.getElementById('sm-content')
+    if (el) this.render(el)
+  },
+
+  async _updateRecord(collection, id, patch, okMessage) {
+    if (typeof SecureDB === 'undefined' || !id) return
+    try {
+      Auth.getCsrfToken?.()
+      await SecureDB.update(collection, id, patch)
+      SM.toast(okMessage || 'ثبت شد', 'success')
+      this._reload()
+    } catch (error) {
+      SM.toast(error?.message || 'خطا در ذخیره', 'error')
+    }
+  },
+
+  confirmBooking(id) {
+    return this._updateRecord('bookings', id, { status: 'confirmed' }, 'نوبت تأیید شد')
+  },
+
+  completeBooking(id) {
+    return this._updateRecord('bookings', id, { status: 'completed' }, 'نوبت انجام شد')
+  },
+
+  completeCeremony(id) {
+    return this._updateRecord('contracts', id, { status: 'done' }, 'مراسم انجام‌شده شد')
+  },
+
+  openBooking(id) {
+    if (typeof SMModules !== 'undefined' && SMModules.bookings?.view) SMModules.bookings.view(id)
+    else this.go('bookings')
+  },
+
+  openContract(id) {
+    if (typeof SMModules !== 'undefined' && SMModules.contracts?.view) SMModules.contracts.view(id)
+    else this.go('contracts')
+  },
+
+  assignTeam(contractId) {
+    const contract = (DB.get('contracts') || []).find(item => item.id === contractId)
+    if (!contract) {
+      SM.toast('قرارداد پیدا نشد', 'error')
+      return
+    }
+    const photo = contract.photographerId || contract.staffAssignments?.photographer?.id || ''
+    const video = contract.videographerId || contract.staffAssignments?.['vid-clip']?.id || contract.staffAssignments?.videographer?.id || ''
+    const people = (DB.get('personnel') || []).filter(person => person.status !== 'inactive')
+    const options = [{ value: '', label: '— انتخاب —' }, ...people.map(person => ({ value: person.id, label: person.name || 'همکار' }))]
+    SMUI.modal(`آفیش — ${this._coupleName(contract)}`, `
+      ${SMUI.formField('ساعت مراسم', 'ops-time', { value: contract.eventTime || '18:00', dir: 'ltr' })}
+      ${SMUI.formField('عکاس', 'ops-photo', { type: 'select', value: photo, options })}
+      ${SMUI.formField('فیلمبردار', 'ops-video', { type: 'select', value: video, options })}
+    `, {
+      saveLabel: 'ثبت آفیش',
+      onSave: async () => {
+        const data = SMUI.readForm(['ops-time', 'ops-photo', 'ops-video'])
+        const personnel = DB.get('personnel') || []
+        const photographer = personnel.find(person => person.id === data['ops-photo'])
+        const videographer = personnel.find(person => person.id === data['ops-video'])
+        const staffAssignments = { ...(contract.staffAssignments || {}) }
+        if (photographer) staffAssignments.photographer = { id: photographer.id, name: photographer.name }
+        if (videographer) staffAssignments['vid-clip'] = { id: videographer.id, name: videographer.name }
+        Auth.getCsrfToken?.()
+        await SecureDB.update('contracts', contractId, {
+          eventTime: data['ops-time'],
+          photographerId: data['ops-photo'],
+          videographerId: data['ops-video'],
+          staffAssignments
+        })
+        await this._upsertProject(contract, photographer, 'photographer', 'عکاس')
+        await this._upsertProject(contract, videographer, 'videographer', 'فیلمبردار')
+        SMUI.closeModal()
+        SM.toast('آفیش تیم ثبت شد', 'success')
+        this._reload()
+      }
+    })
+  },
+
+  async _upsertProject(contract, person, roleId, role) {
+    if (!person) return
+    const existing = (DB.get('persProjects') || []).find(project =>
+      project.contractId === contract.id && (project.personnelId === person.id || project.roleId === roleId)
+    )
+    const payload = {
+      contractId: contract.id,
+      personnelId: person.id,
+      personnelName: person.name,
+      role,
+      roleId,
+      couple: this._coupleName(contract),
+      eventDate: contract.eventDate || contract.date || Utils.todayJalali(),
+      venue: contract.venue || '',
+      status: 'active'
+    }
+    if (existing) await SecureDB.update('persProjects', existing.id, payload)
+    else await SecureDB.insert('persProjects', payload)
+  },
+
+  _onFinanceToggle(el) {
+    localStorage.setItem('sm_dash_finance', el?.open ? '1' : '0')
+  },
+
   _financialModel(ctx) {
     const monthIncome = this._monthAmount(ctx.tx, 'deposit', 0)
     const previousIncome = this._monthAmount(ctx.tx, 'deposit', -1)
@@ -613,19 +1122,7 @@ const SMDashboard = {
   },
 
   _operationalDashboard(ctx) {
-    const stages = this._workflowSummary()
-    const closeEvents = ctx.events.filter(event => event.days >= 0 && event.days <= 30).length
-    return `<div class="sm-exec-dashboard sm-exec-dashboard--operations">
-      <div class="sm-exec-toolbar"><div><span class="sm-exec-eyebrow">نمای عملیاتی مجاز</span><h2>پیشخوان کارها</h2><p>${SM.esc(Utils.todayJalali())} · اطلاعات مالی فقط برای مدیر استودیو نمایش داده می‌شود</p></div>
-        <div class="sm-exec-toolbar-actions">${SMUI.moduleSearch('dashboard', 'جستجو در مراسم و مشتری...')}</div></div>
-      <div class="sm-exec-kpis sm-exec-kpis--operations">
-        ${this._kpiCard('مراسم ۳۰ روز آینده', closeEvents, 'برنامه کاری نزدیک', 'fa-calendar-check', '#A78BFA', 'calendar')}
-        ${this._kpiCard('درخواست‌های باز', ctx.openInbox, 'پیام و پیگیری مشتری', 'fa-inbox', '#60A5FA', 'inbox')}
-        ${this._kpiCard('رزروهای نزدیک', ctx.upcomingBookings.length, 'چهارده روز آینده', 'fa-calendar-plus', '#34D399', 'bookings')}
-        ${this._kpiCard('پروژه‌های تولید', stages.reduce((sum, stage) => sum + stage.count, 0), 'ادیت، بازبینی و تحویل', 'fa-clapperboard', '#F59E0B', 'workflow')}
-      </div>
-      <div class="sm-exec-grid sm-exec-grid--bottom">${this._eventsPanel(ctx)}${this._workflowPanel(stages)}</div>
-    </div>`
+    return this._opsTodayDashboard(ctx, { financeHidden: true })
   },
 
   render(el) {
@@ -642,37 +1139,48 @@ const SMDashboard = {
     const activeContracts = ctx.contracts.filter(contract => contract.status !== 'cancelled').length
     const closeEvents = ctx.events.filter(event => event.days >= 0 && event.days <= 30).length
 
+    const financeOpen = typeof localStorage !== 'undefined' && localStorage.getItem('sm_dash_finance') === '1'
     el.innerHTML = `
-      <div class="sm-exec-dashboard">
-        <div class="sm-exec-toolbar">
-          <div><span class="sm-exec-eyebrow">نمای لحظه‌ای استودیو</span><h2>پیشخوان مدیریت</h2><p>${SM.esc(Utils.todayJalali())} · همه ارقام به تومان</p></div>
-          <div class="sm-exec-toolbar-actions">
-            ${SMUI.moduleSearch('dashboard', 'جستجو در مراسم و مشتری...')}
-            <button type="button" class="sm-btn sm-btn-primary" onclick="window.location.href='../contract.html'"><i class="fas fa-plus"></i> قرارداد جدید</button>
+      ${this._opsTodayDashboard(ctx)}
+      <section class="sm-ops-finance">
+        <div class="sm-ops-finance-head">
+          <div>
+            <span class="sm-ops-eyebrow">نمای لحظه‌ای استودیو</span>
+            <h3>پیشخوان مدیریت</h3>
+            <p>${SM.esc(Utils.todayJalali())} · همه ارقام به تومان</p>
           </div>
+          <button type="button" class="sm-btn sm-btn-ghost" onclick="window.location.href='../contract.html'"><i class="fas fa-file-signature"></i> قرارداد جدید</button>
         </div>
-        <div class="sm-exec-kpis">
+        <div class="sm-ops-finance-kpis">
           ${this._kpiCard('وصول این ماه', finance.monthIncome, 'نسبت به ماه قبل', 'fa-wallet', '#34D399', 'accounting', finance.incomeTrend)}
-          ${this._kpiCard('هزینه این ماه', finance.monthExpense, 'نسبت به ماه قبل', 'fa-receipt', '#F87171', 'expenses', finance.expenseTrend, true)}
-          ${this._kpiCard('سود خالص ماه', finance.net, 'وصول منهای هزینه', 'fa-chart-line', '#C9A96E', 'reports')}
           ${this._kpiCard('مانده مشتریان', ctx.outstanding, `${finance.overdue.length.toLocaleString('fa-IR')} قرارداد معوق`, 'fa-hourglass-half', '#F59E0B', 'contracts')}
-          ${this._kpiCard('موجودی حساب‌ها', finance.bankBalance, 'مجموع بانک و صندوق', 'fa-building-columns', '#60A5FA', 'accounting')}
-          ${this._kpiCard('مراسم ۳۰ روز', closeEvents, `${activeContracts.toLocaleString('fa-IR')} قرارداد فعال`, 'fa-calendar-check', '#A78BFA', 'calendar')}
+          ${this._kpiCard('سلامت مالی', finance.health, 'فرمول: وصول ۳۵٪ + نقدینگی ۲۵٪ + سودآوری ۲۵٪ + بدهی ۱۵٪', 'fa-heart-pulse', '#C9A96E', 'reports')}
+          ${this._kpiCard('مراسم ۳۰ روز', closeEvents, `${activeContracts.toLocaleString('fa-IR')} قرارداد فعال`, 'fa-calendar-check', '#60A5FA', 'calendar')}
         </div>
-        <div class="sm-exec-grid sm-exec-grid--finance">
-          <section class="sm-exec-panel sm-exec-forecast"><div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">شش ماه اخیر</span><h3>وصول واقعی و برآورد قراردادی</h3></div><span class="sm-exec-note">برآورد = وصول ثبت‌شده + مانده قرارداد همان ماه</span></div>${this._forecastChart(forecasts)}</section>
-          ${this._healthPanel(finance)}
-        </div>
-        <div class="sm-exec-grid sm-exec-grid--middle">
-          ${this._expensePanel(expenses)}
-          ${this._assistantPanel(insights)}
-          ${this._workflowPanel(stages)}
-        </div>
-        <div class="sm-exec-grid sm-exec-grid--bottom">
-          ${this._eventsPanel(ctx)}
-          ${this._transactionsPanel(ctx)}
-        </div>
-      </div>
+        <details class="sm-ops-finance-more"${financeOpen ? ' open' : ''} ontoggle="SMDashboard._onFinanceToggle(this)">
+          <summary>نمودار، هزینه و گردش تولید</summary>
+          <div class="sm-exec-dashboard sm-exec-dashboard--after-ops">
+            <div class="sm-exec-kpis">
+              ${this._kpiCard('هزینه این ماه', finance.monthExpense, 'نسبت به ماه قبل', 'fa-receipt', '#F87171', 'expenses', finance.expenseTrend, true)}
+              ${this._kpiCard('سود خالص ماه', finance.net, 'وصول منهای هزینه', 'fa-chart-line', '#C9A96E', 'reports')}
+              ${this._kpiCard('موجودی حساب‌ها', finance.bankBalance, 'مجموع بانک و صندوق', 'fa-building-columns', '#60A5FA', 'accounting')}
+            </div>
+            <div class="sm-exec-grid sm-exec-grid--finance">
+              <section class="sm-exec-panel sm-exec-forecast"><div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">شش ماه اخیر</span><h3>وصول واقعی و برآورد قراردادی</h3></div><span class="sm-exec-note">برآورد = وصول ثبت‌شده + مانده قرارداد همان ماه</span></div>${this._forecastChart(forecasts)}</section>
+              ${this._healthPanel(finance)}
+            </div>
+            <div class="sm-exec-grid sm-exec-grid--middle">
+              ${this._expensePanel(expenses)}
+              ${this._assistantPanel(insights)}
+              ${this._workflowPanel(stages)}
+            </div>
+            <div class="sm-exec-grid sm-exec-grid--bottom">
+              ${this._eventsPanel(ctx)}
+              ${this._transactionsPanel(ctx)}
+            </div>
+          </div>
+        </details>
+      </section>
       `
   },
 

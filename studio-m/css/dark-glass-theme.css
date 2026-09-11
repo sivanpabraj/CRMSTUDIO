@@ -194,5 +194,33 @@ body[data-theme="dark-glass"] .sm-health-ring::before { background: #0d151e; }
 
 @supports not (backdrop-filter: blur(1px)) {
   body[data-theme="dark-glass"] .sm-exec-panel,
-  body[data-theme="dark-glass"] .sm-exec-kpi { background: #0d151e; }
+  body[data-theme="dark-glass"] .sm-exec-kpi,
+  body[data-theme="dark-glass"] .sm-ops-card,
+  body[data-theme="dark-glass"] .sm-ops-stat,
+  body[data-theme="dark-glass"] .sm-ops-hero { background: #0d151e; }
 }
+
+body[data-theme="dark-glass"] .sm-ops-dashboard {
+  --ops-card: rgba(11, 18, 26, .72);
+  --ops-gold: #d8b774;
+  --ops-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 18px 42px rgba(0,0,0,.2);
+}
+body[data-theme="dark-glass"] .sm-ops-hero,
+body[data-theme="dark-glass"] .sm-ops-card,
+body[data-theme="dark-glass"] .sm-ops-stat {
+  border-color: rgba(255, 255, 255, .09);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.035), rgba(255,255,255,.012)),
+    rgba(9, 15, 22, .76);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+}
+body[data-theme="dark-glass"] .sm-ops-follow,
+body[data-theme="dark-glass"] .sm-ops-slot,
+body[data-theme="dark-glass"] .sm-ops-chip,
+body[data-theme="dark-glass"] .sm-ops-perf-track,
+body[data-theme="dark-glass"] .sm-ops-finance {
+  background: rgba(255,255,255,.035);
+}
+body[data-theme="dark-glass"] .sm-ops-act { background: rgba(255,255,255,.08); color: inherit; }
+body[data-theme="dark-glass"] .sm-ops-empty-mark { background: rgba(216,183,116,.16); }

@@ -21,6 +21,7 @@ SMModules.dashboard = {
 const BOOKING_STATUS = {
   scheduled: 'زمان‌بندی شده',
   confirmed: 'تأیید شده',
+  completed: 'انجام‌شده',
   cancelled: 'لغو شده'
 }
 
@@ -35,7 +36,7 @@ SMModules.bookings = {
         ['عنوان', 'تاریخ', 'ساعت', 'مشتری', 'وضعیت', SM.t('actions')],
         bookings.map(b => `<tr>
           <td>${SM.esc(b.title)}</td><td>${SM.esc(b.date)}</td><td>${SM.esc(b.time || '—')}</td>
-          <td>${SM.esc(b.client || '—')}</td><td>${SMUI.badge(this._statusLabel(b.status), b.status === 'confirmed' ? 'success' : b.status === 'cancelled' ? 'danger' : 'warning')}</td>
+          <td>${SM.esc(b.client || '—')}</td><td>${SMUI.badge(this._statusLabel(b.status), b.status === 'completed' || b.status === 'confirmed' ? 'success' : b.status === 'cancelled' ? 'danger' : 'warning')}</td>
           ${SMUI.tableActionsCell(`SMModules.bookings.view('${b.id}')`, `SMModules.bookings.edit('${b.id}')`)}
         </tr>`)
       )}`
@@ -61,15 +62,17 @@ SMModules.bookings = {
       ${SMUI.formField('تاریخ', 'bk-date', { value: item?.date || Utils.todayJalali() })}
       ${SMUI.formField('ساعت', 'bk-time', { value: item?.time || '14:00', dir: 'ltr' })}
       ${SMUI.formField('مشتری', 'bk-client', { value: item?.client || '' })}
+      ${SMUI.formField('مسئول', 'bk-assigned', { type: 'select', value: item?.assignedTo || '', options: [{ value: '', label: '— بدون آفیش —' }, ...SMH.personnelOptions(item?.assignedTo)] })}
       ${SMUI.formField('وضعیت', 'bk-status', { type: 'select', value: item?.status || 'scheduled', options: [
         { value: 'scheduled', label: 'زمان‌بندی شده' },
         { value: 'confirmed', label: 'تأیید شده' },
+        { value: 'completed', label: 'انجام‌شده' },
         { value: 'cancelled', label: 'لغو شده' }
       ]})}`, {
       onSave: async () => {
-        const d = SMUI.readForm(['bk-title', 'bk-date', 'bk-time', 'bk-client', 'bk-status'])
+        const d = SMUI.readForm(['bk-title', 'bk-date', 'bk-time', 'bk-client', 'bk-assigned', 'bk-status'])
         if (!d['bk-title']) return SM.toast(SM.t('error'), 'error')
-        const data = { title: d['bk-title'], date: d['bk-date'], time: d['bk-time'], client: d['bk-client'], status: d['bk-status'] }
+        const data = { title: d['bk-title'], date: d['bk-date'], time: d['bk-time'], client: d['bk-client'], assignedTo: d['bk-assigned'], status: d['bk-status'] }
         if (item) await SecureDB.update('bookings', item.id, data)
         else await SecureDB.insert('bookings', data)
         SMH.refresh('bookings')

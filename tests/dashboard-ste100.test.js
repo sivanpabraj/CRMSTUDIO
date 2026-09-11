@@ -11,20 +11,32 @@ function dashboardWith(data = {}, roles = ['studio_manager']) {
   const collections = {
     contracts: [], transactions: [], personnel: [], bookings: [], cheques: [],
     persProjects: [], expenses: [], customerRequests: [], banks: [], workflows: [],
-    appointments: [], ...data
+    appointments: [], albums: [], ...data
   }
   const context = {
     localStorage: { getItem: () => null, setItem: () => {} },
-    DB: { get: name => collections[name] || [], set: () => {}, find: () => null, filter: () => [] },
+    DB: {
+      get: name => collections[name] || [],
+      set: () => {},
+      find: (name, predicate) => (collections[name] || []).find(predicate) || null,
+      filter: () => []
+    },
     Utils: {
       parseJalaliToday: () => ({ jy: 1405, jm: 5 }),
       jalaliMonthName: month => `ماه ${month}`,
       daysUntil: date => date === '1405/04/01' ? -30 : 5,
       todayJalali: () => '1405/05/25'
     },
-    SM: { fmt: String, esc: String, studio: () => ({}), user: () => ({ roles }), navigate: () => {}, isModuleDisabled: () => false },
+    SM: {
+      fmt: String, esc: String, studio: () => ({}), user: () => ({ roles, name: 'مدیر استودیو' }),
+      navigate: () => {}, isModuleDisabled: () => false, getModuleSearch: () => ''
+    },
     Access: { isSystemAdmin: () => false, isStudioManager: user => user.roles.includes('studio_manager') },
-    SMUI: { badge: text => text, empty: () => '', moduleSearch: () => '' },
+    SMUI: {
+      badge: text => text, empty: () => '', moduleSearch: () => '',
+      formField: () => '',
+      modal: title => { context.lastModal = title }
+    },
     window: {}
   }
   vm.runInNewContext(source, context)
@@ -80,6 +92,12 @@ describe('STE100 executive dashboard', () => {
     expect(source).toContain('گردش تولید')
     expect(source).toContain('_canViewFinance')
     expect(source).toContain('اطلاعات مالی فقط برای مدیر استودیو')
+    expect(source).toContain('_opsModel')
+    expect(source).toContain('افزودن نوبت')
+    expect(source).toContain('ظرفیت آزاد')
+    expect(source).toContain('confirmBooking')
+    expect(source).toContain('assignTeam')
+    expect(source).toContain('امروز هنوز برنامه‌ای نیست')
     expect(source).toContain('aria-label=')
     expect(css).toContain('@media (max-width: 440px)')
     expect(css).toContain('@media (prefers-reduced-motion: reduce)')
@@ -93,5 +111,114 @@ describe('STE100 executive dashboard', () => {
     expect(dashboardWith({}, ['studio_manager'])._canViewFinance()).toBe(true)
     expect(dashboardWith({}, ['office_secretary'])._canViewFinance()).toBe(false)
     expect(dashboardWith({}, ['editor_clip'])._canViewFinance()).toBe(false)
+  })
+
+  it('builds today ops from ceremonies, bookings, free staff and follow-ups', () => {
+    const dashboard = dashboardWith()
+    const model = dashboard._opsModel({
+      contracts: [
+        { id: 'c1', groom: 'علی', bride: 'بیتا', eventDate: '1405/05/25', venue: 'تالار رویال', status: 'active', eventTime: '18:00' },
+        { id: 'c2', groom: 'حسن', bride: 'مینا', eventDate: '1405/05/25', status: 'completed', eventTime: '12:00', deliveryDate: '1405/04/01' }
+      ],
+      bookings: [
+        { id: 'b1', title: 'مشاوره آلبوم', client: 'سارا', date: '1405/05/25', time: '10:00', status: 'scheduled' },
+        { id: 'b2', title: 'لغو شده', date: '1405/05/25', status: 'cancelled' }
+      ],
+      personnel: [
+        { id: 'p1', name: 'امیر', role: 'عکاس', status: 'active' },
+        { id: 'p2', name: 'رضا', role: 'تدوین', status: 'active' }
+      ],
+      persProjects: [
+        { personnelId: 'p1', personnelName: 'امیر', eventDate: '1405/05/25', contractId: 'c1' }
+      ],
+      cheques: [{ number: '۱۲۳', dueDate: '1405/04/01', status: 'pending', amount: 100 }],
+      albums: [{ status: 'selection', couple: 'آوا و نیما', title: 'آلبوم چرم' }],
+      openInbox: 2,
+      events: [],
+      upcomingBookings: []
+    })
+    expect(model.todayEvents).toHaveLength(3)
+    expect(model.completedCount).toBe(1)
+    expect(model.unconfirmedCount).toBe(1)
+    expect(model.freeStaff.map(person => person.id)).toEqual(['p2'])
+    expect(model.busyStaff.map(person => person.id)).toEqual(['p1'])
+    expect(model.followupCount).toBeGreaterThanOrEqual(3)
+    expect(model.performance.find(person => person.id === 'p1').sessions).toBeGreaterThan(0)
+  })
+
+  it('renders the today ops shell for staff and keeps finance below for managers', () => {
+    const staffEl = { innerHTML: '' }
+    dashboardWith({
+      contracts: [{ id: 'c1', groom: 'علی', bride: 'بیتا', eventDate: '1405/05/25', venue: 'تالار', status: 'active' }],
+      personnel: [{ id: 'p1', name: 'امیر', role: 'عکاس', status: 'active' }]
+    }, ['office_secretary']).render(staffEl)
+    expect(staffEl.innerHTML).toContain('افزودن نوبت')
+    expect(staffEl.innerHTML).toContain('امروز در استودیو')
+    expect(staffEl.innerHTML).toContain('اطلاعات مالی فقط برای مدیر استودیو')
+    expect(staffEl.innerHTML).not.toContain('وصول این ماه')
+
+    const managerEl = { innerHTML: '' }
+    dashboardWith({}, ['studio_manager']).render(managerEl)
+    expect(managerEl.innerHTML).toContain('افزودن نوبت')
+    expect(managerEl.innerHTML).toContain('وصول این ماه')
+    expect(managerEl.innerHTML).toContain('وصول واقعی و برآورد قراردادی')
+    expect(managerEl.innerHTML).toContain('نمودار، هزینه و گردش تولید')
+    expect(managerEl.innerHTML).toContain('امروز هنوز برنامه‌ای نیست')
+  })
+
+  it('counts done contracts and staffAssignments as busy team', () => {
+    const dashboard = dashboardWith()
+    const model = dashboard._opsModel({
+      contracts: [{
+        id: 'c1', groom: 'علی', bride: 'بیتا', eventDate: '1405/05/25', status: 'done',
+        staffAssignments: { photographer: { id: 'p1', name: 'امیر' } }
+      }],
+      bookings: [],
+      personnel: [
+        { id: 'p1', name: 'امیر', role: 'عکاس', status: 'active' },
+        { id: 'p2', name: 'رضا', role: 'تدوین', status: 'active' }
+      ],
+      persProjects: [],
+      cheques: [],
+      albums: [],
+      openInbox: 0,
+      events: [],
+      upcomingBookings: []
+    })
+    expect(model.completedCount).toBe(1)
+    expect(model.busyStaff.map(person => person.id)).toEqual(['p1'])
+    expect(model.todayEvents[0].team).toContain('امیر')
+    expect(model.followups.some(item => item.actions?.some(action => action.key === 'confirm'))).toBe(false)
+  })
+
+  it('gives unconfirmed bookings a confirm action and honors dashboard search', () => {
+    const dashboard = dashboardWith()
+    const ctx = {
+      contracts: [],
+      bookings: [{ id: 'b1', title: 'مشاوره آلبوم', client: 'سارا', date: '1405/05/25', time: '10:00', status: 'scheduled' }],
+      personnel: [],
+      persProjects: [],
+      cheques: [],
+      albums: [],
+      openInbox: 0,
+      events: [],
+      upcomingBookings: []
+    }
+    const open = dashboard._opsModel(ctx)
+    expect(open.followups[0].actions.some(action => action.key === 'confirm')).toBe(true)
+    dashboard._opsQuery = () => 'نیما'
+    const hidden = dashboard._opsModel(ctx)
+    expect(hidden.todayEvents).toHaveLength(0)
+    expect(hidden.followups).toHaveLength(0)
+    expect(hidden.allTodayCount).toBe(1)
+  })
+
+  it('opens the team assignment modal from a contract id without SMH', () => {
+    const dashboard = dashboardWith({
+      contracts: [{ id: 'c9', groom: 'علی', bride: 'بیتا', eventDate: '1405/05/25', status: 'active' }],
+      personnel: [{ id: 'p1', name: 'امیر', role: 'عکاس', status: 'active' }]
+    })
+    dashboard.assignTeam('c9')
+    expect(dashboard).toBeTruthy()
   })
 })

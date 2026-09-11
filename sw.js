@@ -1,5 +1,11 @@
 /* Studio M — Service Worker (offline shell + asset cache) */
-const CACHE = 'studio-m-v23'
+const CACHE = 'studio-m-v24'
+
+function cacheCopy(request, response) {
+  if (!response || !response.ok || response.type !== 'basic') return
+  const copy = response.clone()
+  caches.open(CACHE).then(cache => cache.put(request, copy)).catch(() => {})
+}
 
 const ASSETS = [
   './site.html',
@@ -40,16 +46,12 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     networkFirst
       ? fetch(e.request).then(res => {
-        if (res.ok && res.type === 'basic') {
-          caches.open(CACHE).then(cache => cache.put(e.request, res.clone()))
-        }
+        cacheCopy(e.request, res)
         return res
       }).catch(() => caches.match(e.request))
       : caches.match(e.request).then(cached => {
         const fetchPromise = fetch(e.request).then(res => {
-          if (res.ok && res.type === 'basic') {
-            caches.open(CACHE).then(cache => cache.put(e.request, res.clone()))
-          }
+          cacheCopy(e.request, res)
           return res
         }).catch(() => cached)
         return cached || fetchPromise
