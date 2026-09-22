@@ -4,7 +4,9 @@
   // Resolve path when inside /studio-m/ subdir
   const swPath = location.pathname.includes('/studio-m/') ? '../sw.js' : 'sw.js';
 
-  navigator.serviceWorker.register(swPath).catch(() => {
+  navigator.serviceWorker.register(swPath).then((reg) => {
+    if (reg && reg.update) reg.update();
+  }).catch(() => {
     /* silent: PWA is optional */
   });
 })();

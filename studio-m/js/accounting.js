@@ -216,7 +216,7 @@ const SMAccounting = {
     return this._ledgerView(q)
   },
 
-  _balanceView(q) {
+  _balanceView(_q) {
     const tx = DB.get('transactions') || []
     const contracts = DB.get('contracts') || []
     const cheques = DB.get('cheques') || []

@@ -70,14 +70,14 @@
           <div class="fg"><label>کد ملی <span class="req">*</span></label><input id="groom-nid" class="fi digit-field" type="text" inputmode="numeric" placeholder="۰۰۱۲۳۴۵۶۷۸" maxlength="10"/></div>
           <div class="fg"><label>شماره تماس <span class="req">*</span></label><input id="groom-phone" class="fi digit-field" type="tel" inputmode="numeric" placeholder="۰۹۱۲۱۲۳۴۵۶۷" maxlength="11" oninput="onVerifyPhoneChange('groom')"/></div>
           <div class="verify-box" id="verify-groom">
-            <div class="verify-head"><i class="fas fa-shield-halved"></i> استعلام و تأیید شماره</div>
-            <p class="verify-hint">کد تأیید به همین شماره پیامک می‌شود. با وارد کردن کد، داماد مالکیت شماره و این قرارداد را تأیید می‌کند.</p>
+            <div class="verify-head"><i class="fas fa-shield-halved"></i> استعلام و تأیید شماره <span style="font-size:0.8em;opacity:0.8;font-weight:normal">(اختیاری)</span></div>
+            <p class="verify-hint">تأیید پیامکی اختیاری است و برای بستن قرارداد الزامی نیست.</p>
             <button type="button" class="btn-verify-send" onclick="sendVerifySms('groom')"><i class="fas fa-paper-plane"></i> ارسال کد پیامکی</button>
             <div class="verify-input-row">
               <input id="verify-input-groom" class="fi digit-field verify-code-input" type="text" inputmode="numeric" placeholder="کد دریافتی از پیامک" maxlength="6"/>
               <button type="button" class="btn-verify-confirm" onclick="confirmVerify('groom')">تأیید</button>
             </div>
-            <div class="verify-status pending" id="status-groom">در انتظار استعلام</div>
+            <div class="verify-status pending" id="status-groom">اختیاری — نیازی به ارسال کد نیست</div>
           </div>
           <div class="fg"><label>آدرس</label><input id="groom-addr" class="fi" type="text" placeholder="شهر — خیابان..."/></div>
         </div>
@@ -88,14 +88,14 @@
           <div class="fg"><label>کد ملی</label><input id="bride-nid" class="fi digit-field" type="text" inputmode="numeric" placeholder="۰۰۱۲۳۴۵۶۷۸" maxlength="10"/></div>
           <div class="fg"><label>شماره تماس</label><input id="bride-phone" class="fi digit-field" type="tel" inputmode="numeric" placeholder="۰۹۱۲۱۲۳۴۵۶۷" maxlength="11" oninput="onVerifyPhoneChange('bride')"/></div>
           <div class="verify-box" id="verify-bride">
-            <div class="verify-head"><i class="fas fa-shield-halved"></i> استعلام و تأیید شماره</div>
-            <p class="verify-hint">کد تأیید به همین شماره پیامک می‌شود. با وارد کردن کد، عروس مالکیت شماره و این قرارداد را تأیید می‌کند.</p>
+            <div class="verify-head"><i class="fas fa-shield-halved"></i> استعلام و تأیید شماره <span style="font-size:0.8em;opacity:0.8;font-weight:normal">(اختیاری)</span></div>
+            <p class="verify-hint">تأیید پیامکی اختیاری است و برای بستن قرارداد الزامی نیست.</p>
             <button type="button" class="btn-verify-send" onclick="sendVerifySms('bride')"><i class="fas fa-paper-plane"></i> ارسال کد پیامکی</button>
             <div class="verify-input-row">
               <input id="verify-input-bride" class="fi digit-field verify-code-input" type="text" inputmode="numeric" placeholder="کد دریافتی از پیامک" maxlength="6"/>
               <button type="button" class="btn-verify-confirm" onclick="confirmVerify('bride')">تأیید</button>
             </div>
-            <div class="verify-status pending" id="status-bride">در انتظار استعلام</div>
+            <div class="verify-status pending" id="status-bride">اختیاری — نیازی به ارسال کد نیست</div>
           </div>
           <div class="fg"><label>آدرس</label><input id="bride-addr" class="fi" type="text" placeholder="شهر — خیابان..."/></div>
         </div>
@@ -140,7 +140,7 @@
       <div class="section-sep"></div>
 
       <h3 class="block-title">📦 انتخاب پکیج قیمت</h3>
-      <p class="block-desc">پکیج از Studio M بارگذاری می‌شود — با یک کلیک قیمت‌ها و گزینه‌ها پر می‌شوند. بعداً می‌توانید دستی هم اضافه کنید.</p>
+      <p class="block-desc">پکیج از CRMSTUDIO بارگذاری می‌شود — با یک کلیک قیمت‌ها و گزینه‌ها پر می‌شوند. بعداً می‌توانید دستی هم اضافه کنید.</p>
       <div id="contract-pkg-picker" class="contract-pkg-picker"></div>
       <div id="contract-pkg-selected" class="contract-pkg-selected" hidden></div>
 
@@ -458,6 +458,7 @@
 <script src="js/auth.js" defer></script>
 <script src="js/page-nav.js" defer></script>
 <script src="js/bootstrap.js" defer></script>
+<script type="module" src="js/server-sync.js"></script>
 <script src="contract.js" defer></script>
 <script src="js/sw-register.js"></script>
 <script defer>

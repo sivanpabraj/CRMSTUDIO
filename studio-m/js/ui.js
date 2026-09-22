@@ -7,24 +7,35 @@ const SMUI = {
     overlay.innerHTML = `
       <div class="sm-modal" style="${width ? `max-width:${width}px` : ''}" role="dialog" aria-modal="true">
         <div class="sm-modal-head">
-          <button type="button" class="sm-btn-icon sm-modal-back" onclick="SMUI._modalBack()" title="${SM.t('back')}"><i class="fas fa-arrow-right"></i></button>
           <div class="sm-modal-title">${SM.esc(title)}</div>
-          <button type="button" class="sm-btn-icon" onclick="SMUI.closeModal()" title="${SM.t('close')}"><i class="fas fa-times"></i></button>
+          <button type="button" class="sm-btn-icon sm-modal-close" onclick="SMUI.closeModal()" title="بستن (X)"><i class="fas fa-times"></i></button>
         </div>
         <div class="sm-modal-body">${bodyHtml}</div>
         ${onSave ? `<div class="sm-modal-foot sm-modal-foot-split">
           ${onDelete ? `<button type="button" class="sm-btn sm-btn-danger" id="sm-modal-delete"><i class="fas fa-trash"></i> ${SM.t('delete')}</button>` : '<span></span>'}
           <div class="sm-modal-foot-actions">
-            <button type="button" class="sm-btn sm-btn-ghost" onclick="SMUI._modalBack()"><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
-            <button type="button" class="sm-btn sm-btn-primary" id="sm-modal-save">${SM.esc(saveLabel || SM.t('save'))}</button>
+            <button type="button" class="sm-btn sm-btn-ghost" onclick="SMUI._modalBack()"><i class="fas fa-times"></i> انصراف</button>
+            <button type="button" class="sm-btn sm-btn-primary" id="sm-modal-save"><i class="fas fa-check"></i> ${SM.esc(saveLabel || SM.t('save'))}</button>
           </div>
-        </div>` : `<div class="sm-modal-foot">
-          <button type="button" class="sm-btn sm-btn-ghost" onclick="SMUI._modalBack()"><i class="fas fa-arrow-right"></i> ${SM.t('back')}</button>
+        </div>` : `<div class="sm-modal-foot" style="display:flex;justify-content:flex-end;">
+          <button type="button" class="sm-btn sm-btn-ghost" onclick="SMUI._modalBack()"><i class="fas fa-times"></i> بستن</button>
         </div>`}
       </div>`
     root.innerHTML = ''
     root.appendChild(overlay)
-    overlay.addEventListener('click', e => { if (e.target === overlay) SMUI.closeModal() })
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try { navigator.vibrate([35, 25, 35]) } catch { /* ignore */ }
+        }
+        const modalEl = overlay.querySelector('.sm-modal')
+        if (modalEl) {
+          modalEl.classList.remove('sm-modal-shake')
+          void modalEl.offsetWidth
+          modalEl.classList.add('sm-modal-shake')
+        }
+      }
+    })
     document.getElementById('sm-modal-save')?.addEventListener('click', async () => {
       if (!onSave) return
       const btn = document.getElementById('sm-modal-save')

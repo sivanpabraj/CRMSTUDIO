@@ -9,29 +9,33 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
-  transition: opacity 0.4s ease;
+  background: rgba(15, 15, 26, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: opacity 0.3s ease;
 }
 #talar-loader.talar-loader-out { opacity: 0; pointer-events: none; }
 .talar-loader-inner { text-align: center; padding: 24px; }
-.talar-loader-ring {
-  font-size: 48px;
-  animation: talarPulse 1.2s ease-in-out infinite;
-  margin-bottom: 16px;
+.talar-loader-spinner {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 16px;
+  border: 3.5px solid rgba(255, 255, 255, 0.12);
+  border-top-color: #0071E3;
+  border-right-color: #0071E3;
+  border-radius: 50%;
+  animation: talarSpin 0.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
-.talar-loader-title { font-size: 22px; font-weight: 800; color: #fff; font-family: Vazirmatn, sans-serif; }
-.talar-loader-sub { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 8px; font-family: Vazirmatn, sans-serif; }
-.talar-loader-bar {
-  width: 200px; height: 3px; background: rgba(255,255,255,0.1);
-  border-radius: 3px; margin: 20px auto 0; overflow: hidden;
+@keyframes talarSpin {
+  to { transform: rotate(360deg); }
 }
-.talar-loader-fill {
-  height: 100%; width: 40%; background: #C9A96E;
-  border-radius: 3px;
-  animation: talarBar 1s ease-in-out infinite;
+.talar-loader-sub {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: Vazirmatn, sans-serif;
+  letter-spacing: -0.2px;
 }
-@keyframes talarPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-@keyframes talarBar { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
 
 .talar-changelog-overlay {
   position: fixed; inset: 0; z-index: 99998;

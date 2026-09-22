@@ -58,6 +58,7 @@ export const browserGlobals = {
   PageNav: "readonly",
   GlassTheme: "readonly",
   PasswordSecurity: "readonly",
+  ServerSync: "readonly",
   Studio: "readonly",
   Bootstrap: "readonly",
   Cloud: "readonly",

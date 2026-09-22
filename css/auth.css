@@ -48,7 +48,7 @@ body.auth-screen .auth-otp-meta {
   box-sizing: border-box;
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .auth-ambient,
@@ -649,20 +649,32 @@ body.auth-screen .glass-rail {
 .auth-sitemap-item:hover { border-color: rgba(201,169,110,.35); background: rgba(201,169,110,.08); color: #fff; }
 
 /* ── Unified login (minimal) ── */
-.auth-page--unified { padding: 32px 16px; }
+.auth-page--unified { padding: 40px 16px; min-height: 100vh; }
 .auth-unified-wrap {
   width: 100%;
-  max-width: 400px;
-  margin: 0 auto;
+  max-width: 430px;
+  margin: auto;
   position: relative;
   z-index: 1;
 }
-.auth-unified-card { max-width: none; margin: 0; padding: 44px 36px 32px; }
-.auth-unified-head { text-align: center; margin-bottom: 24px; }
+.auth-unified-card {
+  max-width: none;
+  margin: 0;
+  padding: 30px 28px 24px;
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+.auth-unified-card .auth-form { gap: 11px; }
+.auth-unified-card .auth-field { gap: 4px; }
+.auth-unified-card .auth-input-wrap input { height: 40px; font-size: 13.5px; }
+.auth-unified-card .pw-strength-checks { display: none; }
+.auth-unified-card .pw-strength { margin: 2px 0 4px; padding: 6px 12px; }
+.auth-unified-head { text-align: center; margin-bottom: 14px; }
 .auth-unified-logo {
-  width: 64px; height: 64px; margin: 0 auto 14px;
-  border-radius: 18px; display: flex; align-items: center; justify-content: center;
-  font-size: 26px; color: var(--glass-accent, #F59E0B);
+  width: 54px; height: 54px; margin: 0 auto 10px;
+  border-radius: 16px; display: flex; align-items: center; justify-content: center;
+  font-size: 24px; color: var(--glass-accent, #F59E0B);
   background: var(--glass-accent-soft, rgba(245,158,11,0.15));
   border: 1px solid color-mix(in srgb, var(--glass-accent, #F59E0B) 25%, transparent);
   overflow: hidden;

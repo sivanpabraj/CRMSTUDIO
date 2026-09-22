@@ -338,6 +338,7 @@ const PortalDashboard = {
     overlay.id = 'portal-project-modal'
     overlay.innerHTML = `
       <div class="portal-modal" onclick="event.stopPropagation()">
+        <button type="button" class="portal-modal-close" onclick="PortalDashboard.closeModal()" title="بستن (X)">✕</button>
         <h3>${Utils.escapeHtml(p.couple)}</h3>
         <div class="portal-modal-sub">${RolesHelper.emoji(p.roleId)} ${Utils.escapeHtml(p.role)} — ${p.eventDate || ''}</div>
         ${issues.length ? `<div class="issue-box">${issues.map(i => `⚠️ ${Utils.escapeHtml(i.description)}`).join('<br>')}</div>` : ''}
@@ -351,7 +352,20 @@ const PortalDashboard = {
         <button class="portal-btn portal-btn-success" onclick="PortalDashboard.saveStatus('${projectId}')">💾 ذخیره وضعیت</button>
         <button class="portal-btn portal-btn-ghost" onclick="PortalDashboard.closeModal()">بستن</button>
       </div>`
-    overlay.onclick = () => this.closeModal()
+    overlay.onclick = e => {
+      if (e.target === overlay) {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try { navigator.vibrate([35, 25, 35]) } catch { /* ignore */ }
+        }
+        const modalEl = overlay.querySelector('.portal-modal')
+        if (modalEl) {
+          modalEl.classList.remove('portal-modal-shake')
+          void modalEl.offsetWidth
+          modalEl.classList.add('portal-modal-shake')
+          setTimeout(() => modalEl.classList.remove('portal-modal-shake'), 400)
+        }
+      }
+    }
     document.body.appendChild(overlay)
     this._selectedStatus = p.status
   },

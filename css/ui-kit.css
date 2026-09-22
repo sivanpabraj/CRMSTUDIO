@@ -13,6 +13,7 @@
   animation: uiFadeIn 0.18s ease;
 }
 .ui-dialog {
+  position: relative;
   width: min(100%, 420px);
   background: var(--clr-surface, rgba(28, 28, 48, 0.96));
   border: 1px solid var(--clr-border, rgba(255, 255, 255, 0.12));
@@ -22,10 +23,42 @@
   color: var(--clr-text, #fff);
   font-family: inherit;
 }
+.ui-dialog-close {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+.ui-dialog-close:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+}
+@keyframes uiDialogShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+.ui-dialog-shake {
+  animation: uiDialogShake 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
 .ui-dialog-title {
   font-size: 1.05rem;
   font-weight: 800;
   margin: 0 0 8px;
+  padding-left: 36px;
 }
 .ui-dialog-message {
   font-size: 0.92rem;

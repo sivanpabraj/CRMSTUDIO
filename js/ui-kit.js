@@ -3,6 +3,18 @@
    ══════════════════════════════════════════════ */
 
 const UiKit = {
+  _triggerShake(dialogEl) {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate([35, 25, 35]) } catch { /* ignore */ }
+    }
+    if (dialogEl) {
+      dialogEl.classList.remove('ui-dialog-shake')
+      void dialogEl.offsetWidth
+      dialogEl.classList.add('ui-dialog-shake')
+      setTimeout(() => dialogEl.classList.remove('ui-dialog-shake'), 400)
+    }
+  },
+
   confirm(message, opts = {}) {
     const {
       title = 'تأیید',
@@ -17,6 +29,7 @@ const UiKit = {
       overlay.setAttribute('aria-modal', 'true')
       overlay.innerHTML = `
         <div class="ui-dialog" dir="rtl">
+          <button type="button" class="ui-dialog-close" data-act="cancel" title="بستن (X)">✕</button>
           <h3 class="ui-dialog-title">${Utils.escapeHtml(title)}</h3>
           <p class="ui-dialog-message">${Utils.escapeHtml(message)}</p>
           <div class="ui-dialog-actions">
@@ -30,9 +43,15 @@ const UiKit = {
         resolve(val)
       }
       const onKey = e => { if (e.key === 'Escape') close(false) }
-      overlay.querySelector('[data-act="cancel"]').onclick = () => close(false)
+      overlay.querySelectorAll('[data-act="cancel"]').forEach(btn => {
+        btn.onclick = () => close(false)
+      })
       overlay.querySelector('[data-act="ok"]').onclick = () => close(true)
-      overlay.addEventListener('click', e => { if (e.target === overlay) close(false) })
+      overlay.addEventListener('click', e => {
+        if (e.target === overlay) {
+          UiKit._triggerShake(overlay.querySelector('.ui-dialog'))
+        }
+      })
       document.addEventListener('keydown', onKey)
       document.body.appendChild(overlay)
       overlay.querySelector('[data-act="ok"]')?.focus()
@@ -73,6 +92,7 @@ const UiKit = {
 
       overlay.innerHTML = `
         <div class="ui-dialog" dir="rtl">
+          <button type="button" class="ui-dialog-close" data-act="cancel" title="بستن (X)">✕</button>
           <h3 class="ui-dialog-title">${Utils.escapeHtml(title)}</h3>
           <form class="ui-dialog-form">${fieldsHtml}
             <div class="ui-dialog-actions">
@@ -88,8 +108,14 @@ const UiKit = {
         resolve(val)
       }
       const onKey = e => { if (e.key === 'Escape') close(null) }
-      overlay.querySelector('[data-act="cancel"]').onclick = () => close(null)
-      overlay.addEventListener('click', e => { if (e.target === overlay) close(null) })
+      overlay.querySelectorAll('[data-act="cancel"]').forEach(btn => {
+        btn.onclick = () => close(null)
+      })
+      overlay.addEventListener('click', e => {
+        if (e.target === overlay) {
+          UiKit._triggerShake(overlay.querySelector('.ui-dialog'))
+        }
+      })
       document.addEventListener('keydown', onKey)
 
       overlay.querySelector('form').addEventListener('submit', e => {

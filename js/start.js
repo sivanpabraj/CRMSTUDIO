@@ -10,7 +10,23 @@ const StartPortal = {
     })
   },
 
-  init() {
+  async init() {
+    if (!this._hasActiveManager()) {
+      try {
+        if (typeof ServerSync !== 'undefined' && ServerSync.pull) {
+          await ServerSync.pull({ initial: true })
+        } else {
+          const res = await fetch('/api/sync/pull?rev=0', { cache: 'no-store' })
+          if (res.ok) {
+            const j = await res.json()
+            if (j.data && typeof DB !== 'undefined' && DB.importJSON) {
+              await DB.importJSON(JSON.stringify(j.data))
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
     if (this._hasActiveManager()) {
       window.location.replace('index.html')
       return
@@ -51,7 +67,13 @@ const StartPortal = {
               ${PasswordSecurity.meterHtml('start')}
               <div class="auth-error" id="st-error"></div>
               <button type="button" class="auth-btn auth-btn-primary" onclick="StartPortal.submit()"><i class="fas fa-rocket"></i> ساخت استودیو</button>
-              <p class="pw-hint"><a href="site.html">← بازگشت به صفحه اصلی</a></p>
+              
+              <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);text-align:center">
+                <p style="margin:0 0 8px;font-size:13px;color:rgba(255,255,255,0.7)">
+                  قبلاً حساب ساخته‌اید؟ <a href="index.html" style="font-weight:800;color:var(--glass-accent,#F59E0B);text-decoration:none"><i class="fas fa-sign-in-alt"></i> ورود به سیستم</a>
+                </p>
+                <p class="pw-hint" style="margin:0"><a href="site.html">← صفحه اصلی</a></p>
+              </div>
             </div>
           </div>
         </div>

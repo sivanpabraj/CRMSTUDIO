@@ -9,10 +9,8 @@ const Bootstrap = {
     el.id = 'talar-loader'
     el.innerHTML = `
       <div class="talar-loader-inner">
-        <div class="talar-loader-ring">📸</div>
-        <div class="talar-loader-title">${AppConfig.APP_NAME}</div>
-        <div class="talar-loader-sub">نسخه ${AppConfig.APP_VERSION} — در حال بارگذاری...</div>
-        <div class="talar-loader-bar"><div class="talar-loader-fill"></div></div>
+        <div class="talar-loader-spinner"></div>
+        <div class="talar-loader-sub">در حال بارگذاری...</div>
       </div>`
     document.body.prepend(el)
   },
@@ -62,6 +60,28 @@ const Bootstrap = {
     try {
       this._bindGlobalErrorHandler()
       if (typeof DB !== 'undefined' && DB.ready) await DB.ready
+      // همگام‌سازی سریع با سرور مرکزی (در صورت در دسترس بودن)
+      if (typeof window !== 'undefined') {
+        try {
+          const syncPull = (async () => {
+            if (typeof ServerSync !== 'undefined' && ServerSync.pull) {
+              await ServerSync.pull({ initial: true })
+            } else {
+              const res = await fetch('/api/sync/pull?rev=0', { cache: 'no-store' })
+              if (res.ok) {
+                const j = await res.json()
+                if (j.data && typeof DB !== 'undefined' && DB.importJSON) {
+                  await DB.importJSON(JSON.stringify(j.data))
+                }
+              }
+            }
+          })()
+          await Promise.race([
+            syncPull,
+            new Promise(resolve => setTimeout(resolve, 2000))
+          ])
+        } catch { /* offline / network failure */ }
+      }
       if (typeof Auth !== 'undefined' && Auth.verifySessionSignature) {
         try { await Auth.verifySessionSignature() } catch { /* */ }
       }

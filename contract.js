@@ -89,14 +89,6 @@ function validateStep(s) {
     if (!gv('bride-name')) { toast('نام عروس الزامی است', 'error'); return false }
     if (!gv('event-date')) { toast('تاریخ مراسم را وارد کنید', 'error'); return false }
     if (!gv('groom-phone')) { toast('شماره تماس داماد الزامی است', 'error'); return false }
-    if (!isVerifyValid('groom')) {
-      toast('شماره داماد باید با پیامک تأیید شود', 'error')
-      return false
-    }
-    if (gv('bride-phone') && !isVerifyValid('bride')) {
-      toast('شماره عروس باید با پیامک تأیید شود', 'error')
-      return false
-    }
   }
   return true
 }
@@ -222,7 +214,7 @@ function updateVerifyUi(role) {
     statusEl.className = 'verify-status ' + (v.verified ? 'ok' : v.sentAt ? 'sent' : 'pending')
     if (v.verified) statusEl.textContent = `✓ تأیید شد — ${v.verifiedAt || ''}`
     else if (v.sentAt) statusEl.textContent = 'کد پیامک شد — کد را وارد و تأیید کنید'
-    else statusEl.textContent = 'در انتظار استعلام — ابتدا کد پیامکی را ارسال کنید'
+    else statusEl.textContent = 'اختیاری — نیازی به ارسال کد برای ثبت قرارداد نیست'
   }
   if (box) box.classList.toggle('verified', !!v.verified)
 }
@@ -263,9 +255,9 @@ async function sendVerifySms(role) {
   if (!SmsProvider.isConfigured()) {
     if (typeof Auth !== 'undefined') Auth.recordOtpSend(rateKey)
     if (isDemoOtpMode()) {
-      toast(`پیامک تنظیم نشده — کد تست ${meta.label}: ${code}`, 'info')
+      toast(`پنل پیامک متصل نیست — کد تست ${meta.label}: ${code}`, 'info')
     } else {
-      toast('پیامک تنظیم نشده — ابتدا SMS را در تنظیمات فعال کنید', 'error')
+      toast('پنل پیامک هنوز متصل نشده است — تأیید پیامکی اختیاری است و می‌توانید قرارداد را مستقیم ثبت کنید.', 'info')
     }
     return
   }
@@ -945,13 +937,10 @@ async function finalizeContract() {
   for (const role of ['groom', 'bride']) {
     const phone = getVerifyPhone(role)
     if (!phone) continue
-    if (!isVerifyValid(role)) {
-      toast(`شماره ${VERIFY_ROLES[role].label} باید با پیامک تأیید شود`, 'error')
-      return gotoStep(1)
-    }
-    if (!(await verifyContractProof(role, phone))) {
-      toast('اعتبارسنجی پیامکی نامعتبر است — دوباره تأیید کنید', 'error')
-      return gotoStep(1)
+    if (isVerifyValid(role)) {
+      if (!(await verifyContractProof(role, phone))) {
+        toast(`اعتبارسنجی پیامکی ${VERIFY_ROLES[role].label} نامعتبر است`, 'warning')
+      }
     }
   }
 

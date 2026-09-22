@@ -157,7 +157,7 @@ const Admin = {
             ${this._sidebarItem('settings', 'fa-sliders', 'تنظیمات', 'var(--clr-success)')}
             ${this._sidebarItem('logs', 'fa-clock-rotate-left', 'لاگ', 'var(--clr-danger)')}
             ${isStudio || isSys ? `<div class="sidebar-item sidebar-item--portal" onclick="window.location.href='studio-m/'">
-              <span class="sidebar-item-icon"><i class="fas fa-rocket"></i></span><span>Studio M Pro (اصلی)</span>
+              <span class="sidebar-item-icon"><i class="fas fa-rocket"></i></span><span>CRMSTUDIO ERP (اصلی)</span>
             </div>` : ''}
           </nav>
           <div class="sidebar-footer sidebar-foot">

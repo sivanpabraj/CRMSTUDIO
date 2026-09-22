@@ -14,7 +14,7 @@ const AdminMessaging = {
       </div>
 
       ${!smsOk ? `<div class="admin-card" style="margin-bottom:16px;border-color:rgba(245,158,11,.4)">
-        <div class="admin-card-body" style="font-size:.9rem">پنل SMS در Studio M تنظیم نشده — پیام‌ها در لاگ «در صف» ثبت می‌شوند.</div>
+        <div class="admin-card-body" style="font-size:.9rem">پنل SMS در CRMSTUDIO تنظیم نشده — پیام‌ها در لاگ «در صف» ثبت می‌شوند.</div>
       </div>` : ''}
 
       <div class="admin-card" style="margin-bottom:16px">
@@ -85,7 +85,7 @@ const AdminMessaging = {
       Utils.toast(res?.ok ? 'ارسال شد' : (res?.error || 'خطا'), res?.ok ? 'success' : 'error')
     } else if (typeof MessagingShared !== 'undefined') {
       MessagingShared.logOutbound({ channel: 'sms', to, message: body, templateName: 'شخصی — دستی', status: 'queued' })
-      Utils.toast('در لاگ ثبت شد — SMS را در Studio M وصل کنید', 'info')
+      Utils.toast('در لاگ ثبت شد — SMS را در CRMSTUDIO وصل کنید', 'info')
     }
     Admin.showSection('messaging')
   }

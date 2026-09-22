@@ -8,8 +8,15 @@ const SessionSign = {
     try {
       let s = sessionStorage.getItem(this.SECRET_KEY)
       if (!s) {
-        s = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-          .map(b => b.toString(16).padStart(2, '0')).join('')
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+          try {
+            s = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+              .map(b => b.toString(16).padStart(2, '0')).join('')
+          } catch { /* fallback */ }
+        }
+        if (!s) {
+          s = Array.from({ length: 32 }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join('')
+        }
         sessionStorage.setItem(this.SECRET_KEY, s)
       }
       return s
@@ -19,16 +26,24 @@ const SessionSign = {
   },
 
   async _hmac(data, secret) {
-    const enc = new TextEncoder()
-    const key = await crypto.subtle.importKey(
-      'raw',
-      enc.encode(secret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    )
-    const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data))
-    return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')
+    if (typeof crypto !== 'undefined' && crypto.subtle?.importKey && crypto.subtle?.sign) {
+      try {
+        const enc = new TextEncoder()
+        const key = await crypto.subtle.importKey(
+          'raw',
+          enc.encode(secret),
+          { name: 'HMAC', hash: 'SHA-256' },
+          false,
+          ['sign']
+        )
+        const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data))
+        return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')
+      } catch { /* fallback */ }
+    }
+    if (typeof Utils !== 'undefined' && Utils.jsHmac) {
+      return Utils.jsHmac(secret, data)
+    }
+    return ''
   },
 
   _payload(session) {
