@@ -20,40 +20,8 @@ const Portal = {
       this.state.authTab = 'login'
     }
 
-    if (params.get('wipe') === 'confirm' && typeof FactoryReset !== 'undefined') {
-      if (AppConfig.isLocalDev() && Auth.isLoggedIn() && Auth.isAdmin()) {
-        const pw = prompt('رمز مدیر برای تأیید بازنشانی کامل:')
-        if (!pw) {
-          Utils.toast?.('لغو شد', 'info')
-          params.delete('wipe')
-          history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : ''))
-          return
-        }
-        const v = await Auth.verifyCurrentPassword(pw)
-        if (!v.ok) {
-          Utils.toast?.(v.error || 'رمز اشتباه', 'error')
-          params.delete('wipe')
-          history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : ''))
-          return
-        }
-        await FactoryReset.wipeForTesting()
-        window.location.replace('index.html?fresh=1')
-        return
-      }
-      Utils.toast?.('بازنشانی از URL فقط در محیط توسعه و با ورود مدیر مجاز است', 'error')
-      params.delete('wipe')
-      history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : ''))
-    }
-
-    // CustomerSession.get is async — must await (Promise is always truthy)
-    if (typeof CustomerSession !== 'undefined' && CustomerSession.get) {
-      try {
-        const custSession = await CustomerSession.get()
-        if (custSession) { window.location.href = 'customer.html'; return }
-      } catch { /* ignore corrupt session */ }
-    }
-
-    if (Auth.isLoggedIn()) {
+    const isExplicitRegister = tabParam === 'register' || location.hash === '#register'
+    if (Auth.isLoggedIn() && !isExplicitRegister) {
       const next = params.get('next')
       const safeNext = Utils.safeRedirectPath?.(next)
       if (safeNext) { window.location.href = safeNext; return }
@@ -141,7 +109,7 @@ const Portal = {
       <div class="auth-page auth-page--unified">
         <canvas class="auth-ambient" data-auth-ambient aria-hidden="true"></canvas>
         <div class="auth-ambient-fallback" aria-hidden="true"></div>
-        <div class="auth-unified-wrap">
+        <div class="auth-unified-wrap ${authTab === 'register' ? 'auth-unified-wrap--wide' : ''}">
           <div class="auth-card glass-panel auth-unified-card">
             <div class="auth-unified-head">
               <div class="auth-unified-logo">${this._logoHtml(studio)}</div>
@@ -239,60 +207,68 @@ const Portal = {
   _registerStep() {
     return `
       <div class="auth-form">
-        <div class="auth-field">
-          <label class="auth-label" for="reg-studio-name">نام استودیو / آتلیه</label>
-          <div class="auth-input-wrap">
-            <i class="fas fa-store"></i>
-            <input type="text" id="reg-studio-name" placeholder="مثلاً استودیو ماندگار" autofocus/>
+        <div class="auth-grid-2col">
+          <div class="auth-field">
+            <label class="auth-label" for="reg-studio-name">نام استودیو / آتلیه</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-store"></i>
+              <input type="text" id="reg-studio-name" placeholder="مثلاً استودیو ماندگار" autofocus/>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-manager-name">نام و نام خانوادگی مدیر</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-user-tie"></i>
+              <input type="text" id="reg-manager-name" placeholder="مثلاً علی محمدی"/>
+            </div>
           </div>
         </div>
-        <div class="auth-field">
-          <label class="auth-label" for="reg-manager-name">نام و نام خانوادگی مدیر</label>
-          <div class="auth-input-wrap">
-            <i class="fas fa-user-tie"></i>
-            <input type="text" id="reg-manager-name" placeholder="مثلاً علی محمدی"/>
+
+        <div class="auth-grid-2col">
+          <div class="auth-field">
+            <label class="auth-label" for="reg-phone">شماره همراه مدیر (جهت ورود)</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-mobile-alt"></i>
+              <input type="tel" id="reg-phone" class="ltr" dir="ltr" inputmode="numeric" placeholder="09121234567"/>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-email">ایمیل / جیمیل <small style="opacity:0.65">(جهت بکاپ)</small></label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-envelope"></i>
+              <input type="email" id="reg-email" class="ltr" dir="ltr" placeholder="name@gmail.com"/>
+            </div>
           </div>
         </div>
-        <div class="auth-field">
-          <label class="auth-label" for="reg-phone">شماره همراه مدیر (جهت ورود و پیامک)</label>
-          <div class="auth-input-wrap">
-            <i class="fas fa-mobile-alt"></i>
-            <input type="tel" id="reg-phone" class="ltr" dir="ltr" inputmode="numeric" placeholder="09121234567"/>
+
+        <div class="auth-grid-2col">
+          <div class="auth-field">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <label class="auth-label" for="reg-password" style="margin:0">رمز عبور مدیر</label>
+              <button type="button" onclick="Portal.togglePasswordVisibility('reg-password', 'reg-pw-eye-icon')" title="نمایش رمز" style="background:none;border:none;color:rgba(255,255,255,0.65);cursor:pointer;font-size:13px;padding:2px 6px">
+                <i class="fas fa-eye" id="reg-pw-eye-icon"></i>
+              </button>
+            </div>
+            <div class="auth-input-wrap">
+              <i class="fas fa-lock"></i>
+              <input type="password" id="reg-password" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="حداقل ۶ کاراکتر"/>
+            </div>
           </div>
-        </div>
-        <div class="auth-field">
-          <label class="auth-label" for="reg-email">ایمیل / جیمیل استودیو <small style="opacity:0.65;font-weight:normal">(جهت بکاپ و اعلانات)</small></label>
-          <div class="auth-input-wrap">
-            <i class="fas fa-envelope"></i>
-            <input type="email" id="reg-email" class="ltr" dir="ltr" placeholder="example@gmail.com"/>
-          </div>
-        </div>
-        <div class="auth-field">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <label class="auth-label" for="reg-password" style="margin:0">رمز عبور مدیر (انگلیسی، حداقل ۸ کاراکتر)</label>
-            <button type="button" onclick="Portal.togglePasswordVisibility('reg-password', 'reg-pw-eye-icon')" title="نمایش/پنهان‌سازی رمز" style="background:none;border:none;color:rgba(255,255,255,0.65);cursor:pointer;font-size:13px;padding:2px 6px">
-              <i class="fas fa-eye" id="reg-pw-eye-icon"></i>
-            </button>
-          </div>
-          <div class="auth-input-wrap">
-            <i class="fas fa-lock"></i>
-            <input type="password" id="reg-password" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="رمز عبور جدید"/>
-          </div>
-        </div>
-        <div class="auth-field">
-          <label class="auth-label" for="reg-password-confirm">تکرار رمز عبور</label>
-          <div class="auth-input-wrap">
-            <i class="fas fa-shield-alt"></i>
-            <input type="password" id="reg-password-confirm" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="تکرار رمز عبور"/>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-password-confirm">تکرار رمز عبور</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-shield-alt"></i>
+              <input type="password" id="reg-password-confirm" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="تکرار رمز عبور"/>
+            </div>
           </div>
         </div>
         ${typeof PasswordSecurity !== 'undefined' && PasswordSecurity.meterHtml ? PasswordSecurity.meterHtml('reg') : ''}
         <div class="auth-error" id="reg-error"></div>
-        <button type="button" class="auth-btn auth-btn-primary" id="reg-btn" onclick="Portal.submitRegister()">
+        <button type="button" class="auth-btn auth-btn-primary" id="reg-btn" onclick="Portal.submitRegister()" style="margin-top:6px">
           <i class="fas fa-rocket"></i> ساخت و ثبت استودیو
         </button>
 
-        <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);text-align:center;font-size:13px">
+        <div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);text-align:center;font-size:13px">
           <span style="color:rgba(255,255,255,0.65)">قبلاً استودیو ساخته‌اید؟ </span>
           <a href="javascript:void(0)" onclick="Portal.setAuthTab('login')" style="color:var(--glass-accent, #F59E0B);font-weight:800;text-decoration:none">
             <i class="fas fa-sign-in-alt"></i> ورود به سیستم

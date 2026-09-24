@@ -42,13 +42,16 @@ body.auth-screen .auth-otp-meta {
 .auth-page {
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px 20px;
+  padding: 32px 16px;
   box-sizing: border-box;
   position: relative;
   isolation: isolate;
-  overflow-y: auto;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
 }
 
 .auth-ambient,
@@ -649,13 +652,27 @@ body.auth-screen .glass-rail {
 .auth-sitemap-item:hover { border-color: rgba(201,169,110,.35); background: rgba(201,169,110,.08); color: #fff; }
 
 /* ── Unified login (minimal) ── */
-.auth-page--unified { padding: 40px 16px; min-height: 100vh; }
 .auth-unified-wrap {
   width: 100%;
-  max-width: 430px;
+  max-width: 440px;
   margin: auto;
   position: relative;
   z-index: 1;
+  transition: max-width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.auth-unified-wrap--wide {
+  max-width: 620px;
+}
+.auth-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 580px) {
+  .auth-grid-2col {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
 }
 .auth-unified-card {
   max-width: none;
