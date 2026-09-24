@@ -2246,6 +2246,77 @@ body.sm-sidebar-open { overflow: hidden; }
 .sm-exec-table-wrap tbody tr:last-child td { border-bottom: 0; }
 .sm-exec-table-wrap .is-income { color: var(--sm-success); font-weight: 750; }
 .sm-exec-table-wrap .is-expense { color: var(--sm-danger); font-weight: 750; }
+.sm-exec-grid--full { grid-template-columns: 1fr; }
+
+/* ── Reorderable Dashboard Sections ── */
+.sm-dash-sections-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sm-dash-section {
+  position: relative;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, border-color 0.2s ease;
+}
+
+.sm-dash-section.is-hidden {
+  opacity: 0.35;
+  filter: grayscale(0.5);
+}
+
+.sm-dash-section-ctrls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  margin-bottom: 8px;
+  background: var(--sm-surface-2);
+  border: 1px dashed color-mix(in srgb, var(--sm-accent) 60%, var(--sm-border));
+  border-radius: 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--sm-text);
+  user-select: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+
+.sm-dash-section-ctrls-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sm-dash-section-handle {
+  cursor: grab;
+  color: var(--sm-text-muted);
+  padding: 4px;
+  font-size: 0.95rem;
+}
+.sm-dash-section-handle:active {
+  cursor: grabbing;
+}
+
+.sm-dash-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sm-dash-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sm-dash-section.is-dragging {
+  opacity: 0.45;
+  transform: scale(0.98);
+}
+
+.sm-dash-section.is-drag-over {
+  border-top: 3px solid var(--sm-accent);
+}
 
 @media (max-width: 1380px) {
   .sm-exec-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }

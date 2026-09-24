@@ -201,10 +201,10 @@ const Portal = {
       ${showHint}
       <div class="auth-form">
         <div class="auth-field">
-          <label class="auth-label" for="login-phone">شماره موبایل</label>
+          <label class="auth-label" for="login-identifier">شماره موبایل یا ایمیل</label>
           <div class="auth-input-wrap">
-            <i class="fas fa-mobile-alt"></i>
-            <input type="tel" id="login-phone" class="ltr" dir="ltr" inputmode="numeric" autocomplete="tel" placeholder="09121234567" autofocus/>
+            <i class="fas fa-user-circle"></i>
+            <input type="text" id="login-identifier" class="ltr" dir="ltr" autocomplete="username" placeholder="0912... یا name@gmail.com" autofocus/>
           </div>
         </div>
         ${isPw ? `
@@ -217,7 +217,7 @@ const Portal = {
           </div>
           <div class="auth-input-wrap">
             <i class="fas fa-key"></i>
-            <input type="password" id="login-password" class="ltr" dir="ltr" autocomplete="current-password" placeholder="رمز عبور (انگلیسی)"/>
+            <input type="password" id="login-password" class="ltr" dir="ltr" autocomplete="current-password" placeholder="رمز عبور خود را وارد کنید"/>
           </div>
         </div>` : ''}
         <div class="auth-error" id="login-error"></div>
@@ -226,7 +226,7 @@ const Portal = {
         </button>
 
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);font-size:12px">
-          <button type="button" onclick="Portal.setLoginMethod('${isPw ? 'sms' : 'password'}')" style="background:none;border:none;color:rgba(255,255,255,0.65);cursor:pointer;padding:0;font-family:inherit;font-size:12px;text-decoration:underline">
+          <button type="button" onclick="Portal.setLoginMethod('${isPw ? 'sms' : 'password'}')" style="background:none;border:none;color:rgba(255,255,255,0.75);cursor:pointer;padding:0;font-family:inherit;font-size:12px;text-decoration:underline">
             ${isPw ? '<i class="fas fa-sms"></i> ورود با پیامک یک‌بار مصرف' : '<i class="fas fa-lock"></i> ورود با رمز عبور'}
           </button>
           <a href="javascript:void(0)" onclick="Portal.setAuthTab('register')" style="color:var(--glass-accent, #F59E0B);font-weight:700;text-decoration:none">
@@ -243,7 +243,7 @@ const Portal = {
           <label class="auth-label" for="reg-studio-name">نام استودیو / آتلیه</label>
           <div class="auth-input-wrap">
             <i class="fas fa-store"></i>
-            <input type="text" id="reg-studio-name" placeholder="مثلاً آتلیه ماندگار" autofocus/>
+            <input type="text" id="reg-studio-name" placeholder="مثلاً استودیو ماندگار" autofocus/>
           </div>
         </div>
         <div class="auth-field">
@@ -254,10 +254,17 @@ const Portal = {
           </div>
         </div>
         <div class="auth-field">
-          <label class="auth-label" for="reg-phone">شماره موبایل مدیر</label>
+          <label class="auth-label" for="reg-phone">شماره همراه مدیر (جهت ورود و پیامک)</label>
           <div class="auth-input-wrap">
             <i class="fas fa-mobile-alt"></i>
             <input type="tel" id="reg-phone" class="ltr" dir="ltr" inputmode="numeric" placeholder="09121234567"/>
+          </div>
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="reg-email">ایمیل / جیمیل استودیو <small style="opacity:0.65;font-weight:normal">(جهت بکاپ و اعلانات)</small></label>
+          <div class="auth-input-wrap">
+            <i class="fas fa-envelope"></i>
+            <input type="email" id="reg-email" class="ltr" dir="ltr" placeholder="example@gmail.com"/>
           </div>
         </div>
         <div class="auth-field">
@@ -269,7 +276,14 @@ const Portal = {
           </div>
           <div class="auth-input-wrap">
             <i class="fas fa-lock"></i>
-            <input type="password" id="reg-password" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="رمز عبور مدیر"/>
+            <input type="password" id="reg-password" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="رمز عبور جدید"/>
+          </div>
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="reg-password-confirm">تکرار رمز عبور</label>
+          <div class="auth-input-wrap">
+            <i class="fas fa-shield-alt"></i>
+            <input type="password" id="reg-password-confirm" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="تکرار رمز عبور"/>
           </div>
         </div>
         ${typeof PasswordSecurity !== 'undefined' && PasswordSecurity.meterHtml ? PasswordSecurity.meterHtml('reg') : ''}
@@ -295,13 +309,18 @@ const Portal = {
     const studioName = document.getElementById('reg-studio-name')?.value?.trim()
     const managerName = document.getElementById('reg-manager-name')?.value?.trim()
     const phone = Utils.normalizePhone(document.getElementById('reg-phone')?.value)
+    const rawEmail = (document.getElementById('reg-email')?.value || '').trim()
     const password = Utils.normalizePassword(document.getElementById('reg-password')?.value)
+    const passwordConfirm = Utils.normalizePassword(document.getElementById('reg-password-confirm')?.value)
 
     if (!studioName) { showErr('نام استودیو الزامی است'); return }
     if (!managerName) { showErr('نام مدیر الزامی است'); return }
     if (!Utils.isValidPhone(phone)) { showErr('شماره موبایل نامعتبر است (مثال: 09121234567)'); return }
+    if (rawEmail && !Utils.isValidEmail(rawEmail)) { showErr('ایمیل واردشده نامعتبر است (مثال: name@gmail.com)'); return }
+    const email = rawEmail ? Utils.normalizeEmail(rawEmail) : ''
     const pwErr = Auth.validatePassword(password)
     if (pwErr) { showErr(pwErr); return }
+    if (passwordConfirm && passwordConfirm !== password) { showErr('تکرار رمز عبور با رمز عبور اصلی تطابق ندارد'); return }
 
     const btn = document.getElementById('reg-btn')
     if (btn) {
@@ -318,6 +337,8 @@ const Portal = {
           name: studioName,
           manager: managerName,
           phone,
+          email,
+          backupEmail: email,
           joinCode,
           slug: studioName.replace(/\s+/g, '-').slice(0, 24),
           address: '', social: '', logo: '',
@@ -338,6 +359,7 @@ const Portal = {
         const user = DB.insert('users', {
           name: managerName,
           phone,
+          email,
           password: creds.password,
           salt: creds.salt,
           roles: ['studio_manager'],
@@ -362,7 +384,7 @@ const Portal = {
         }
       }
 
-      const result = await Auth.login(phone, password)
+      const result = await Auth.login(email || phone, password)
       if (result.ok) {
         Utils.toast?.('استودیو با موفقیت ساخته شد. ورود به پنل...', 'success', 2500)
         setTimeout(() => {
@@ -464,13 +486,20 @@ const Portal = {
           if (e.key === 'Enter') document.getElementById('reg-phone')?.focus()
         })
         document.getElementById('reg-phone')?.addEventListener('keydown', e => {
+          if (e.key === 'Enter') document.getElementById('reg-email')?.focus()
+        })
+        document.getElementById('reg-email')?.addEventListener('keydown', e => {
           if (e.key === 'Enter') document.getElementById('reg-password')?.focus()
         })
         document.getElementById('reg-password')?.addEventListener('keydown', e => {
+          if (e.key === 'Enter') document.getElementById('reg-password-confirm')?.focus()
+        })
+        document.getElementById('reg-password-confirm')?.addEventListener('keydown', e => {
           if (e.key === 'Enter') Portal.submitRegister()
         })
       } else {
-        document.getElementById('login-phone')?.addEventListener('keydown', e => {
+        const idInput = document.getElementById('login-identifier') || document.getElementById('login-phone')
+        idInput?.addEventListener('keydown', e => {
           if (e.key === 'Enter') {
             if (this.state.loginMethod === 'password') {
               document.getElementById('login-password')?.focus()
@@ -523,15 +552,24 @@ const Portal = {
 
   async loginPassword() {
     this._clearErr()
-    const phone = Utils.normalizePhone(document.getElementById('login-phone')?.value?.trim())
+    const rawId = (document.getElementById('login-identifier')?.value || document.getElementById('login-phone')?.value || '').trim()
     const password = Utils.normalizePassword(document.getElementById('login-password')?.value)
-    if (!Utils.isValidPhone(phone)) { this._err('شماره موبایل معتبر (مثال: 09121234567) وارد کنید'); return }
+    const isEmail = rawId.includes('@')
+    let identifier
+
+    if (isEmail) {
+      if (!Utils.isValidEmail(rawId)) { this._err('ایمیل واردشده معتبر نیست (مثال: name@gmail.com)'); return }
+      identifier = Utils.normalizeEmail(rawId)
+    } else {
+      identifier = Utils.normalizePhone(rawId)
+      if (!Utils.isValidPhone(identifier)) { this._err('شماره موبایل معتبر (مثال: 09121234567) یا ایمیل وارد کنید'); return }
+    }
     if (!password) { this._err('رمز عبور را وارد کنید'); return }
 
     this._setBtn(true, '')
 
-    let resolved = UnifiedLogin.resolvePhone(phone)
-    if (resolved.kind === 'guest' || !DB.get('users').length) {
+    let resolved = isEmail ? null : UnifiedLogin.resolvePhone(identifier)
+    if (!resolved || resolved.kind === 'guest' || !DB.get('users').length) {
       try {
         if (typeof ServerSync !== 'undefined' && ServerSync.pull) {
           await ServerSync.pull({ initial: true })
@@ -544,25 +582,21 @@ const Portal = {
             }
           }
         }
-        resolved = UnifiedLogin.resolvePhone(phone)
+        resolved = isEmail ? null : UnifiedLogin.resolvePhone(identifier)
       } catch { /* ignore */ }
     }
 
-    if (resolved.kind === 'customer') {
+    if (resolved && resolved.kind === 'customer') {
       this._setBtn(false, '<i class="fas fa-sign-in-alt"></i> ورود به پنل استودیو')
       this._err('حساب‌های مشتریان با پیامک وارد می‌شوند — تب «ورود با پیامک» را انتخاب کنید')
       return
     }
 
-    const result = await UnifiedLogin.loginWithPassword(phone, password)
+    const result = await UnifiedLogin.loginWithPassword(identifier, password)
     this._setBtn(false, '<i class="fas fa-sign-in-alt"></i> ورود به پنل استودیو')
 
     if (!result.ok) {
-      if (resolved.kind === 'guest') {
-        this._err('این شماره در سیستم ثبت نشده است. اگر استودیو جدید هستید، از گزینه «ساخت استودیو» استفاده کنید.')
-      } else {
-        this._err(result.error || 'شماره موبایل یا رمز عبور اشتباه است')
-      }
+      this._err(result.error || 'اطلاعات ورود یا رمز عبور اشتباه است')
       return
     }
 
@@ -579,8 +613,13 @@ const Portal = {
 
   async sendOtp() {
     this._clearErr()
-    const phone = Utils.normalizePhone(document.getElementById('login-phone')?.value?.trim())
-    if (!Utils.isValidPhone(phone)) { this._err('شماره موبایل نامعتبر است'); return }
+    const rawId = (document.getElementById('login-identifier')?.value || document.getElementById('login-phone')?.value || '').trim()
+    if (rawId.includes('@')) {
+      this._err('ورود با کد پیامکی فقط با شماره موبایل امکان‌پذیر است. لطفاً شماره موبایل وارد کنید یا با رمز عبور وارد شوید.')
+      return
+    }
+    const phone = Utils.normalizePhone(rawId)
+    if (!Utils.isValidPhone(phone)) { this._err('شماره موبایل نامعتبر است (مثال: 09121234567)'); return }
 
     this._setBtn(true, '')
     const result = await UnifiedLogin.sendOtp(phone)

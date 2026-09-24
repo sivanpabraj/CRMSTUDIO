@@ -232,19 +232,28 @@ const Auth = {
     Utils.storage.remove(key)
   },
 
-  async login(phone, password) {
+  async login(identifier, password) {
     return SecureDB.runInternalAsync(async () => {
-    phone = Utils.normalizePhone(phone)
+    const rawId = String(identifier || '').trim()
     password = Utils.normalizePassword(password)
+    const isEmail = rawId.includes('@')
+    const phone = isEmail ? '' : Utils.normalizePhone(rawId)
+    const email = isEmail ? rawId.toLowerCase() : ''
+    const lockKey = isEmail ? email : phone
 
-    const locked = this._isLocked(phone)
+    const locked = this._isLocked(lockKey)
     if (locked) {
       return { ok: false, error: `ورود موقتاً قفل شده. ${locked} دقیقه دیگر تلاش کنید`, code: 'locked' }
     }
 
-    let user = DB.find('users', u => Utils.normalizePhone(u.phone) === phone)
+    let user = DB.find('users', u => {
+      if (isEmail) {
+        return (u.email && u.email.toLowerCase() === email) || (u.username && u.username.toLowerCase() === email)
+      }
+      return Utils.normalizePhone(u.phone) === phone
+    })
     if (!user) {
-      return { ok: false, error: 'شماره موبایل در سیستم ثبت نشده است', code: 'not_found' }
+      return { ok: false, error: isEmail ? 'ایمیل در سیستم ثبت نشده است' : 'شماره موبایل در سیستم ثبت نشده است', code: 'not_found' }
     }
     if (user.status === 'pending') {
       return { ok: false, error: 'حساب شما هنوز تأیید نشده. منتظر مدیر باشید.', code: 'pending' }
@@ -262,7 +271,7 @@ const Auth = {
     }
 
     if (!match) {
-      this._recordFailedAttempt(phone)
+      this._recordFailedAttempt(lockKey)
       const isManager = (user.roles || []).some(r => {
         const n = typeof normalizeRole === 'function' ? normalizeRole(r) : r
         return n === 'studio_manager' || n === 'system_admin'
@@ -273,7 +282,7 @@ const Auth = {
       return { ok: false, error: `رمز عبور اشتباه است.${hint}`, code: 'wrong_password' }
     }
 
-    this._clearAttempts(phone)
+    this._clearAttempts(lockKey)
     if (user.isDefaultPassword) {
       DB.update('users', user.id, { mustChangePassword: true })
       await DB.flush()

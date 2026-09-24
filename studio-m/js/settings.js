@@ -361,19 +361,27 @@ const SMSettings = {
             </div>
             <p class="sm-backup-hint">فایل‌ها با نام شمسی ذخیره می‌شوند — نمونه: <code dir="ltr">${SM.esc(sampleName)}</code></p>
           </div>
-          <div class="sm-backup-status">
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--sm-border)">
+            <label class="sm-label"><i class="fas fa-envelope"></i> ایمیل / جیمیل جهت ارسال پشتیبان</label>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+              <input type="email" class="sm-input" id="set-backup-email" dir="ltr" value="${SM.esc(info.backupEmail || info.email || '')}" placeholder="example@gmail.com"/>
+              <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.backupToEmail()"><i class="fab fa-google"></i> ارسال به جیمیل</button>
+            </div>
+          </div>
+          <div class="sm-backup-status" style="margin-top:14px">
             <span>زمان‌بندی: ${SMUI.badge(sched, info.autoBackup ? 'success' : 'muted')}</span>
             <span>آخرین پشتیبان: <strong>${SM.esc(lastDisplay)}</strong>${info.backupLastLabel ? ` (${SM.esc(info.backupLastLabel)})` : ''}</span>
           </div>
         </div>
       </div>
       <div class="sm-card">
-        <div class="sm-card-head"><div class="sm-card-title"><i class="fas fa-database"></i> دستی · بازیابی</div></div>
+        <div class="sm-card-head"><div class="sm-card-title"><i class="fas fa-database"></i> ذخیره و بازیابی دستی</div></div>
         <div class="sm-card-body">
-          <button type="button" class="sm-btn sm-btn-primary sm-btn-block" onclick="SMSettings.backupNow()"><i class="fas fa-cloud-upload-alt"></i> پشتیبان بگیر الان</button>
+          <button type="button" class="sm-btn sm-btn-primary sm-btn-block" onclick="SMSettings.backupNow()"><i class="fas fa-download"></i> دانلود فوری فایل پشتیبان (JSON)</button>
+          <button type="button" class="sm-btn sm-btn-ghost sm-btn-block" style="margin-top:8px" onclick="SMSettings.backupToFolder()"><i class="fas fa-folder-plus"></i> ذخیره مستقیم در پوشه انتخابی سیستم</button>
           <div class="sm-backup-drop" id="sm-backup-drop" onclick="document.getElementById('sm-restore-input').click()">
             <i class="fas fa-folder-open"></i>
-            <strong>باز کردن فایل پشتیبان</strong>
+            <strong>باز کردن و بازیابی فایل پشتیبان</strong>
             <span>کلیک کنید یا فایل JSON را اینجا بکشید و رها کنید</span>
           </div>
           <input type="file" id="sm-restore-input" accept=".json,application/json" hidden onchange="SMSettings.restore(this)"/>
@@ -944,11 +952,42 @@ const SMSettings = {
       backupHourly: !!document.getElementById('set-backup-hourly')?.checked,
       backupDaily: !!document.getElementById('set-backup-daily')?.checked,
       backupAutoDownload: !!document.getElementById('set-backup-download')?.checked,
-      backupPathNote: document.getElementById('set-backup-path')?.value?.trim() || ''
+      backupPathNote: document.getElementById('set-backup-path')?.value?.trim() || '',
+      backupEmail: document.getElementById('set-backup-email')?.value?.trim() || ''
     })
     if (typeof BackupService !== 'undefined') BackupService.restart()
     SM.toast('تنظیمات پشتیبان ذخیره شد', 'success')
     SM.navigate('settings')
+  },
+
+  async backupToFolder() {
+    if (typeof BackupService !== 'undefined' && BackupService.saveToFolderPicker) {
+      const res = await BackupService.saveToFolderPicker('manual')
+      if (res.ok) {
+        SM.toast(res.savedToFile ? `فایل «${res.fileName}» در پوشه انتخابی ذخیره شد` : 'فایل پشتیبان دانلود شد', 'success')
+      } else if (!res.cancelled) {
+        SM.toast(res.error || 'خطا در ذخیره فایل', 'error')
+      }
+    } else {
+      this.backupNow()
+    }
+  },
+
+  async backupToEmail() {
+    const emailInput = document.getElementById('set-backup-email')?.value?.trim()
+    const info = SM.studio()
+    const targetEmail = emailInput || info.backupEmail || info.email || SM.user()?.email || ''
+    if (!targetEmail) {
+      return SM.toast('لطفاً آدرس ایمیل یا جیمیل را در کادر مربوطه وارد کنید', 'error')
+    }
+    if (typeof BackupService !== 'undefined' && BackupService.sendToEmail) {
+      const res = await BackupService.sendToEmail(targetEmail)
+      if (res.ok) {
+        SM.toast(`صفحه ارسال به جیمیل (${res.email}) باز شد و فایل دانلود گردید`, 'success')
+      } else {
+        SM.toast(res.error || 'خطا در ارسال به ایمیل', 'error')
+      }
+    }
   },
 
   async backupNow() {

@@ -50,6 +50,15 @@ const Utils = {
     return /^09\d{9}$/.test(this.normalizePhone(phone))
   },
 
+  isValidEmail(email) {
+    if (!email || typeof email !== 'string') return false
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  },
+
+  normalizeEmail(email) {
+    return typeof email === 'string' ? email.trim().toLowerCase() : ''
+  },
+
   /** مسیر redirect امن — فقط same-origin relative */
   safeRedirectPath(next) {
     const t = String(next || '').trim()

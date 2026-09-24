@@ -340,22 +340,44 @@ const UnifiedLogin = {
     return { ok: true, next: 'redirect', url: finish.url, resolved, user }
   },
 
-  async loginWithPassword(phone, password) {
-    phone = Utils.normalizePhone(phone)
+  resolveUser(user) {
+    if (!user) return { kind: 'guest', label: 'مهمان' }
+    if (typeof Access !== 'undefined') {
+      if (Access.isStudioManager(user) || Access.isSystemAdmin(user)) {
+        return { kind: 'manager', user, label: 'مدیر استودیو' }
+      }
+      if (Access.isManagement(user)) {
+        return { kind: 'admin', user, label: typeof PortalInvite !== 'undefined' ? PortalInvite.portalLabel(user) : 'ادمین' }
+      }
+      return { kind: 'staff', user, label: 'پرسنل' }
+    }
+    return { kind: 'staff', user, label: 'کاربر' }
+  },
+
+  async loginWithPassword(identifier, password) {
+    const rawId = String(identifier || '').trim()
     password = Utils.normalizePassword(password)
-    if (!Utils.isValidPhone(phone)) return { ok: false, error: 'شماره موبایل نامعتبر است' }
+    const isEmail = rawId.includes('@')
+
+    if (isEmail) {
+      if (!Utils.isValidEmail(rawId)) return { ok: false, error: 'ایمیل واردشده نامعتبر است' }
+    } else {
+      const phone = Utils.normalizePhone(rawId)
+      if (!Utils.isValidPhone(phone)) return { ok: false, error: 'شماره موبایل نامعتبر است' }
+    }
     if (!password) return { ok: false, error: 'رمز عبور را وارد کنید' }
 
-    const result = await Auth.login(phone, password)
+    const result = await Auth.login(rawId, password)
     if (!result.ok) return result
 
-    const resolved = this.resolvePhone(phone)
+    const user = Auth.getUser()
+    const resolved = user ? this.resolveUser(user) : this.resolvePhone(rawId)
     if (resolved.kind === 'guest') {
       Auth.logout()
-      return { ok: false, error: 'این شماره در سیستم ثبت نشده. از ورود با پیامک استفاده کنید.' }
+      return { ok: false, error: 'این حساب در سیستم ثبت نشده است.' }
     }
 
-    return { ok: true, user: result.user, url: this.landingUrl(resolved), resolved }
+    return { ok: true, user: user || result.user, url: this.landingUrl(resolved), resolved }
   },
 
   async saveConsultation({ phone, name, date, time, notes }) {

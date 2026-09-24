@@ -103,6 +103,57 @@ const BackupService = {
     this.init()
   },
 
+  async saveToFolderPicker(label = 'manual') {
+    const json = DB.exportJSON()
+    const fileName = typeof Utils !== 'undefined' && Utils.backupFileName
+      ? Utils.backupFileName(label)
+      : `crmstudio-backup-${Date.now()}.json`
+
+    if (typeof window !== 'undefined' && window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{
+            description: 'CRMSTUDIO Database Backup',
+            accept: { 'application/json': ['.json'] }
+          }]
+        })
+        const writable = await handle.createWritable()
+        await writable.write(json)
+        await writable.close()
+        return { ok: true, savedToFile: true, fileName }
+      } catch (err) {
+        if (err.name === 'AbortError') return { ok: false, cancelled: true }
+      }
+    }
+    this._download(json, `${AppConfig.BACKUP_PREFIX}${Date.now()}`, label)
+    return { ok: true, savedToFile: false, fileName }
+  },
+
+  async sendToEmail(targetEmail) {
+    const s = this.settings()
+    const email = targetEmail || s.backupEmail || s.email || ''
+    if (!email) {
+      return { ok: false, error: 'آدرس ایمیل یا جیمیل تنظیم نشده است' }
+    }
+    const json = DB.exportJSON()
+    const fileName = typeof Utils !== 'undefined' && Utils.backupFileName
+      ? Utils.backupFileName('email')
+      : `crmstudio-backup-${Date.now()}.json`
+
+    const prefix = (typeof AppConfig !== 'undefined' && AppConfig.BACKUP_PREFIX) ? AppConfig.BACKUP_PREFIX : 'crmstudio_backup_'
+    this._download(json, `${prefix}${Date.now()}`, 'email')
+
+    const studioName = s.name || 'استودیو'
+    const today = typeof Utils !== 'undefined' ? Utils.todayJalali() : new Date().toLocaleDateString('fa-IR')
+    const subject = `نسخه پشتیبان پایگاه داده ${studioName} — ${today}`
+    const body = `سلام\n\nنسخه پشتیبان پایگاه داده سامانه مدیریت ${studioName} در تاریخ ${today} با نام «${fileName}» صادر گردید.\nفایل پشتیبان به صورت خودکار در سیستم شما دانلود شد؛ لطفاً آن را به این ایمیل پیوست کرده و برای آرشیو امن خود نگه‌داری نمایید.\n\nبا احترام\nسامانه CRMSTUDIO`
+
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    window.open(gmailUrl, '_blank')
+    return { ok: true, email, fileName }
+  },
+
   scheduleLabel(s) {
     s = s || this.settings()
     if (!s.autoBackup) return 'غیرفعال'

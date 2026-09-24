@@ -660,23 +660,41 @@ body.auth-screen .glass-rail {
 .auth-unified-card {
   max-width: none;
   margin: 0;
-  padding: 30px 28px 24px;
+  padding: 34px 30px 26px;
+  background: rgba(13, 21, 38, 0.76) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  border-radius: 26px !important;
   animation: none !important;
   opacity: 1 !important;
   transform: none !important;
 }
-.auth-unified-card .auth-form { gap: 11px; }
-.auth-unified-card .auth-field { gap: 4px; }
-.auth-unified-card .auth-input-wrap input { height: 40px; font-size: 13.5px; }
+.auth-unified-card .auth-form { gap: 12px; }
+.auth-unified-card .auth-field { gap: 5px; }
+.auth-unified-card .auth-input-wrap {
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.auth-unified-card .auth-input-wrap:focus-within {
+  border-color: var(--glass-accent, #0071E3);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.25);
+}
+.auth-unified-card .auth-input-wrap input { height: 42px; font-size: 14px; }
 .auth-unified-card .pw-strength-checks { display: none; }
 .auth-unified-card .pw-strength { margin: 2px 0 4px; padding: 6px 12px; }
-.auth-unified-head { text-align: center; margin-bottom: 14px; }
+.auth-unified-head { text-align: center; margin-bottom: 16px; }
 .auth-unified-logo {
-  width: 54px; height: 54px; margin: 0 auto 10px;
-  border-radius: 16px; display: flex; align-items: center; justify-content: center;
-  font-size: 24px; color: var(--glass-accent, #F59E0B);
+  width: 58px; height: 58px; margin: 0 auto 12px;
+  border-radius: 18px; display: flex; align-items: center; justify-content: center;
+  font-size: 26px; color: var(--glass-accent, #F59E0B);
   background: var(--glass-accent-soft, rgba(245,158,11,0.15));
   border: 1px solid color-mix(in srgb, var(--glass-accent, #F59E0B) 25%, transparent);
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.18);
   overflow: hidden;
 }
 .auth-unified-logo-img { width: 100%; height: 100%; object-fit: cover; }
