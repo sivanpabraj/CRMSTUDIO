@@ -111,11 +111,13 @@ const Bootstrap = {
 
   _waitCloud() {
     if (typeof Cloud !== 'undefined') return Promise.resolve()
+    const hasCloudScript = typeof document !== 'undefined' && !!document.querySelector('script[src*="cloud"]')
+    if (!hasCloudScript) return Promise.resolve()
     return new Promise(resolve => {
       const done = () => resolve()
       if (typeof Cloud !== 'undefined') return done()
       window.addEventListener('cloud-ready', done, { once: true })
-      setTimeout(done, 4000)
+      setTimeout(done, 1500)
     })
   },
 

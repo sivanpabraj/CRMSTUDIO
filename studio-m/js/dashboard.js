@@ -763,9 +763,9 @@ const SMDashboard = {
               ${isHidden ? '<span class="sm-badge sm-badge-muted">مخفی‌شده</span>' : ''}
             </div>
             <div class="sm-dash-section-actions">
-              <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost" onclick="SMDashboard.moveSection('${id}', 'up')" ${isFirst ? 'disabled' : ''} title="انتقال به بالا"><i class="fas fa-arrow-up"></i> بالا</button>
-              <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost" onclick="SMDashboard.moveSection('${id}', 'down')" ${isLast ? 'disabled' : ''} title="انتقال به پایین"><i class="fas fa-arrow-down"></i> پایین</button>
-              <button type="button" class="sm-btn sm-btn-xs ${isHidden ? 'sm-btn-primary' : 'sm-btn-ghost'}" onclick="SMDashboard.toggleSectionVisibility('${id}')" title="${isHidden ? 'نمایش مجدد' : 'مخفی کردن'}">
+              <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost sm-dash-ctrl-btn" onclick="SMDashboard.moveSection('${id}', 'up')" ${isFirst ? 'disabled' : ''} title="انتقال به بالا"><i class="fas fa-arrow-up"></i> بالا</button>
+              <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost sm-dash-ctrl-btn" onclick="SMDashboard.moveSection('${id}', 'down')" ${isLast ? 'disabled' : ''} title="انتقال به پایین"><i class="fas fa-arrow-down"></i> پایین</button>
+              <button type="button" class="sm-btn sm-btn-xs ${isHidden ? 'sm-btn-primary' : 'sm-btn-ghost'} sm-dash-ctrl-btn" onclick="SMDashboard.toggleSectionVisibility('${id}')" title="${isHidden ? 'نمایش مجدد' : 'مخفی کردن'}">
                 <i class="fas ${isHidden ? 'fa-eye' : 'fa-eye-slash'}"></i> ${isHidden ? 'نمایش' : 'مخفی'}
               </button>
             </div>
@@ -786,7 +786,7 @@ const SMDashboard = {
           </div>
           <div class="sm-exec-toolbar-actions">
             ${SMUI.moduleSearch('dashboard', 'جستجو در مراسم و مشتری...')}
-            <button type="button" class="sm-btn ${this._layoutEdit ? 'sm-btn-warning' : 'sm-btn-ghost'}" onclick="SMDashboard.toggleLayoutEdit()">
+            <button type="button" id="btn-toggle-dash-customizer" class="sm-btn ${this._layoutEdit ? 'sm-btn-warning' : 'sm-btn-ghost'}" onclick="SMDashboard.toggleLayoutEdit()">
               <i class="fas ${this._layoutEdit ? 'fa-check' : 'fa-sliders'}"></i> ${this._layoutEdit ? 'اتمام چیدمان' : 'شخصی‌سازی پیشخوان'}
             </button>
             <button type="button" class="sm-btn sm-btn-primary" onclick="window.location.href='../contract.html'"><i class="fas fa-plus"></i> قرارداد جدید</button>

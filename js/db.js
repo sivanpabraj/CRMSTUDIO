@@ -381,8 +381,9 @@ const DB = {
 
   /** ذخیره امن با CSRF (برای عملیات حساس در آینده) */
   async secureSet(collection, data, csrfToken) {
+    const isInternal = typeof SecureDB !== 'undefined' && (SecureDB._authInternal || SecureDB._systemSync)
     const setupPhase = typeof SecureDB !== 'undefined' && SecureDB._isSetupPhase?.()
-    if (!setupPhase && typeof Auth !== 'undefined' && !Auth.validateCsrf(csrfToken)) {
+    if (!isInternal && !setupPhase && typeof Auth !== 'undefined' && !Auth.validateCsrf(csrfToken)) {
       throw new Error('CSRF token invalid')
     }
     this._data[collection] = data
