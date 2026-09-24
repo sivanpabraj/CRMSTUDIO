@@ -356,20 +356,39 @@ const Portal = {
         }
 
         const creds = await Auth.hashCredentials(password)
-        const user = DB.insert('users', {
-          name: managerName,
-          phone,
-          email,
-          password: creds.password,
-          salt: creds.salt,
-          roles: ['studio_manager'],
-          status: 'active',
-          avatar: managerName.charAt(0),
-          mustChangePassword: true,
-          isDefaultPassword: true,
-          profileCompleted: false,
-          createdAt: Utils.todayJalali()
-        })
+        const existing = DB.find('users', u => (phone && Utils.normalizePhone(u.phone) === phone) || (email && u.email && u.email.toLowerCase() === email.toLowerCase()))
+        let user
+        if (existing) {
+          DB.update('users', existing.id, {
+            name: managerName,
+            phone,
+            email,
+            password: creds.password,
+            salt: creds.salt,
+            roles: ['studio_manager'],
+            status: 'active',
+            avatar: managerName.charAt(0),
+            mustChangePassword: false,
+            isDefaultPassword: false,
+            profileCompleted: true
+          })
+          user = DB.find('users', u => u.id === existing.id)
+        } else {
+          user = DB.insert('users', {
+            name: managerName,
+            phone,
+            email,
+            password: creds.password,
+            salt: creds.salt,
+            roles: ['studio_manager'],
+            status: 'active',
+            avatar: managerName.charAt(0),
+            mustChangePassword: false,
+            isDefaultPassword: false,
+            profileCompleted: true,
+            createdAt: Utils.todayJalali()
+          })
+        }
         DB.syncPersonnelFromUser(user)
         await DB.flush()
       })

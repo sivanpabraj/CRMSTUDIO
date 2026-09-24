@@ -17,7 +17,8 @@ const SMOnboarding = {
     overlay.id = 'sm-onboarding-overlay'
     overlay.className = 'sm-onboarding-overlay'
     overlay.innerHTML = `
-      <div class="sm-onboarding-modal" role="dialog" aria-modal="true">
+      <div class="sm-onboarding-modal" role="dialog" aria-modal="true" style="position:relative">
+        <button type="button" class="sm-btn-icon sm-modal-close" onclick="SMOnboarding.close()" title="بستن (X)" style="position:absolute;top:16px;left:16px;z-index:10"><i class="fas fa-times"></i></button>
         <div class="sm-onboarding-icon"><i class="fas fa-shield-halved"></i></div>
         <h2>خوش آمدید — تکمیل تنظیمات</h2>
         <p class="sm-onboarding-lead">قبل از استفاده، اطلاعات خود و استودیو را تکمیل کنید. در صورت نیاز رمز ورود را تغییر دهید.</p>
@@ -42,11 +43,27 @@ const SMOnboarding = {
         </details>
         <label class="sm-check-row" style="margin:12px 0"><input type="checkbox" id="onb-keep-pw" checked/> فعلاً همان رمز فعلی بماند (تغییر رمز اختیاری است)</label>
         <p class="sm-onboarding-error" id="onb-error"></p>
-        <button type="button" class="sm-btn sm-btn-primary sm-onboarding-submit" onclick="SMOnboarding.complete()">
-          <i class="fas fa-check"></i> ذخیره و ورود به پنل
-        </button>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+          <button type="button" class="sm-btn sm-btn-ghost" onclick="SMOnboarding.close()"><i class="fas fa-times"></i> انصراف</button>
+          <button type="button" class="sm-btn sm-btn-primary sm-onboarding-submit" onclick="SMOnboarding.complete()">
+            <i class="fas fa-check"></i> ذخیره و ورود به پنل
+          </button>
+        </div>
       </div>`
     document.body.appendChild(overlay)
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try { navigator.vibrate([35, 25, 35]) } catch { /* ignore */ }
+        }
+        const modalEl = overlay.querySelector('.sm-onboarding-modal')
+        if (modalEl) {
+          modalEl.classList.remove('sm-modal-shake')
+          void modalEl.offsetWidth
+          modalEl.classList.add('sm-modal-shake')
+        }
+      }
+    })
     overlay.querySelector('#onb-logo')?.addEventListener('change', e => {
       const f = e.target.files?.[0]
       if (!f) return
@@ -108,7 +125,8 @@ const SMOnboarding = {
       await SecureDB.update('users', user.id, {
         name,
         profileCompleted: true,
-        mustChangePassword: keepPw
+        mustChangePassword: false,
+        isDefaultPassword: false
       })
       await SecureDB.merge('studioInfo', patch)
       DB.syncPersonnelFromUser(DB.find('users', u => u.id === user.id))
@@ -129,6 +147,20 @@ const SMOnboarding = {
     document.title = `Studio M Pro — ${studioName}`
     SM.toast('تنظیمات ذخیره شد — خوش آمدید', 'success')
     SM.navigate('dashboard')
+  },
+
+  close() {
+    document.getElementById('sm-onboarding-overlay')?.remove()
+    const user = SM.user()
+    if (user) {
+      try {
+        SecureDB.update('users', user.id, {
+          profileCompleted: true,
+          mustChangePassword: false,
+          isDefaultPassword: false
+        })
+      } catch { /* ignore */ }
+    }
   },
 
   securityAudit() {
