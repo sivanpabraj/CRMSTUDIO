@@ -384,13 +384,15 @@ body.auth-screen .auth-otp-meta {
 
 .auth-btn:disabled { opacity: 0.65; cursor: wait; }
 
-.auth-btn-primary {
-  background: linear-gradient(135deg, var(--glass-accent, #F59E0B), color-mix(in srgb, var(--glass-accent, #F59E0B) 70%, #000));
-  color: #111;
+.auth-btn-primary,
+.auth-btn--primary {
+  background: linear-gradient(135deg, var(--glass-accent, #F59E0B), color-mix(in srgb, var(--glass-accent, #F59E0B) 70%, #000)) !important;
+  color: #111 !important;
   box-shadow: 0 8px 28px var(--glass-accent-glow, rgba(245,158,11,0.35));
 }
 
-.auth-btn-primary:hover:not(:disabled) {
+.auth-btn-primary:hover:not(:disabled),
+.auth-btn--primary:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 12px 36px var(--glass-accent-glow, rgba(245,158,11,0.45));
 }

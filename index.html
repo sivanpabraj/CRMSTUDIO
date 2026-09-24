@@ -27,6 +27,44 @@
     setTimeout(purgeStuckLoader, 1000);
   </script>
   <script src="js/title-bootstrap.js"></script>
+  <script>
+    window.Portal = window.Portal || {
+      state: { authTab: 'login', step: 'login', loginMethod: 'password', _phone: '' },
+      setAuthTab: function(t) {
+        this.state.authTab = t;
+        if (location.search.includes('tab=' + t)) return;
+        location.href = t === 'register' ? 'index.html?tab=register' : 'index.html';
+      },
+      setLoginMethod: function(m) {
+        this.state.loginMethod = m;
+        var b = document.getElementById('login-btn');
+        if (b && m === 'sms') b.innerHTML = '<i class="fas fa-paper-plane"></i> ارسال کد پیامکی';
+      },
+      togglePasswordVisibility: function(id, iconId) {
+        var inp = document.getElementById(id);
+        var ico = document.getElementById(iconId);
+        if (inp) {
+          var isPw = inp.type === 'password';
+          inp.type = isPw ? 'text' : 'password';
+          if (ico) ico.className = isPw ? 'fas fa-eye-slash' : 'fas fa-eye';
+        }
+      },
+      loginPassword: function() {
+        var id = document.getElementById('login-identifier')?.value?.trim();
+        var pw = document.getElementById('login-password')?.value;
+        var err = document.getElementById('login-error');
+        if (!id || !pw) {
+          if (err) { err.textContent = 'شماره موبایل/ایمیل و رمز عبور را وارد کنید'; err.style.display = 'block'; }
+          return;
+        }
+        var btn = document.getElementById('login-btn');
+        if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال ورود...';
+      },
+      submitPasswordLogin: function() {
+        return this.loginPassword();
+      }
+    };
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Estedad:wght@600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
@@ -42,6 +80,7 @@
 <body class="auth-screen">
   <div id="portal-app">
     <div class="auth-page auth-page--unified">
+      <canvas class="auth-ambient" data-auth-ambient aria-hidden="true"></canvas>
       <div class="auth-ambient-fallback" aria-hidden="true"></div>
       <div class="auth-unified-wrap">
         <div class="auth-card glass-panel auth-unified-card">
@@ -51,45 +90,47 @@
             <p class="auth-sub">شماره موبایل و رمز عبور خود را وارد کنید</p>
           </div>
           <div class="auth-method-tabs" style="margin-bottom:18px">
-            <button type="button" class="auth-method-tab auth-method-tab--active" onclick="window.Portal &amp;&amp; Portal.setAuthTab('login')">
+            <button type="button" class="auth-method-tab auth-method-tab--active" onclick="Portal.setAuthTab('login')">
               <i class="fas fa-sign-in-alt"></i> ورود به سیستم
             </button>
-            <button type="button" class="auth-method-tab" onclick="window.Portal &amp;&amp; Portal.setAuthTab('register')">
+            <button type="button" class="auth-method-tab" onclick="Portal.setAuthTab('register')">
               <i class="fas fa-user-plus"></i> ثبت‌نام استودیو
             </button>
           </div>
-          <form class="auth-form" onsubmit="event.preventDefault(); window.Portal &amp;&amp; Portal.submitPasswordLogin(event);">
+          <div class="auth-form">
             <div class="auth-field">
               <label class="auth-label" for="login-identifier">شماره موبایل یا ایمیل</label>
               <div class="auth-input-wrap">
-                <input class="auth-input" id="login-identifier" type="text" autocomplete="username" placeholder="0912... یا name@gmail.com" dir="ltr" autofocus required>
-                <i class="fas fa-user auth-field-icon"></i>
+                <i class="fas fa-user-circle"></i>
+                <input type="text" id="login-identifier" class="ltr" dir="ltr" autocomplete="username" placeholder="0912... یا name@gmail.com" autofocus/>
               </div>
             </div>
             <div class="auth-field">
-              <div class="auth-field-header">
-                <label class="auth-label" for="login-password">رمز عبور</label>
-                <button type="button" class="auth-field-action-btn" onclick="window.Portal &amp;&amp; Portal.togglePasswordVisibility('login-password', this)" title="مشاهده رمز">
-                  <i class="fas fa-eye"></i>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <label class="auth-label" for="login-password" style="margin:0">رمز عبور</label>
+                <button type="button" onclick="Portal.togglePasswordVisibility('login-password', 'pw-eye-icon')" title="نمایش/پنهان‌سازی رمز" style="background:none;border:none;color:rgba(255,255,255,0.65);cursor:pointer;font-size:13px;padding:2px 6px">
+                  <i class="fas fa-eye" id="pw-eye-icon"></i>
                 </button>
               </div>
               <div class="auth-input-wrap">
-                <input class="auth-input" id="login-password" type="password" autocomplete="current-password" placeholder="رمز عبور خود را وارد کنید" dir="ltr" required>
-                <i class="fas fa-key auth-field-icon"></i>
+                <i class="fas fa-key"></i>
+                <input type="password" id="login-password" class="ltr" dir="ltr" autocomplete="current-password" placeholder="رمز عبور خود را وارد کنید"/>
               </div>
             </div>
-            <button type="submit" class="auth-btn auth-btn--primary">
+            <div class="auth-error" id="login-error"></div>
+            <button type="button" class="auth-btn auth-btn-primary" id="login-btn" onclick="Portal.loginPassword()">
               <i class="fas fa-sign-in-alt"></i> ورود به پنل استودیو
             </button>
-            <div class="auth-links-row" style="margin-top:14px;display:flex;justify-content:space-between;gap:8px;font-size:12px">
-              <button type="button" class="auth-link-btn" onclick="window.Portal &amp;&amp; Portal.setLoginMethod('otp')" style="background:none;border:none;color:#ffb703;cursor:pointer;padding:0">
-                <i class="fas fa-comment-sms"></i> ورود با پیامک یک‌بار مصرف
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);font-size:12px">
+              <button type="button" onclick="Portal.setLoginMethod('sms')" style="background:none;border:none;color:rgba(255,255,255,0.75);cursor:pointer;padding:0;font-family:inherit;font-size:12px;text-decoration:underline">
+                <i class="fas fa-sms"></i> ورود با پیامک یک‌بار مصرف
               </button>
-              <button type="button" class="auth-link-btn" onclick="window.Portal &amp;&amp; Portal.setAuthTab('register')" style="background:none;border:none;color:#ffb703;cursor:pointer;padding:0">
+              <a href="javascript:void(0)" onclick="Portal.setAuthTab('register')" style="color:var(--glass-accent, #F59E0B);font-weight:700;text-decoration:none">
                 <i class="fas fa-user-plus"></i> ساخت استودیو جدید
-              </button>
+              </a>
             </div>
-          </form>
+          </div>
           <p class="auth-unified-foot"><a href="site.html">صفحه اصلی</a></p>
         </div>
       </div>

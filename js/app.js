@@ -83,7 +83,11 @@ const Portal = {
     } catch { return '' }
   },
 
-  renderAuth() {
+  submitPasswordLogin() {
+    return this.loginPassword()
+  },
+
+  renderAuth(force = false) {
     document.body.classList.add('auth-screen')
     const studio = this._studio()
     const authTab = this.state.authTab || 'login'
@@ -92,6 +96,22 @@ const Portal = {
     const title = this._authTitle(studio)
 
     document.title = title === 'ورود' ? 'ورود و ثبت‌نام استودیو' : `${title} — ورود و ثبت‌نام`
+
+    // جلوگیری قطعی از پرش صفحه (Screen Jump / Flicker):
+    // اگر کارت قبلاً در صفحه وجود دارد و نوع تب و مرحله یکسان است، DOM را از نو نساز
+    const existingWrap = document.querySelector('.auth-unified-wrap')
+    const isSameTab = (this._lastRenderedTab || 'login') === authTab
+    const isSameStep = (this._lastRenderedStep || 'login') === step
+    const hasInputs = !!document.getElementById(authTab === 'register' ? 'reg-studio-name' : 'login-identifier')
+
+    if (!force && existingWrap && isSameTab && isSameStep && hasInputs) {
+      this._bindStepKeys(step, authTab)
+      window.AuthAmbient?.mount?.()
+      return
+    }
+
+    this._lastRenderedTab = authTab
+    this._lastRenderedStep = step
 
     const body = step === 'otp' ? this._otpStep(phone)
       : step === 'portal_verify' ? this._portalVerifyStep(phone)
@@ -143,9 +163,10 @@ const Portal = {
   },
 
   setAuthTab(tab) {
+    if (this.state.authTab === tab && this.state.step === 'login') return
     this.state.authTab = tab
     this.state.step = 'login'
-    this.renderAuth()
+    this.renderAuth(true)
   },
 
   togglePasswordVisibility(inputId = 'login-password', iconId = 'pw-eye-icon') {
@@ -468,7 +489,7 @@ const Portal = {
 
   setLoginMethod(method) {
     this.state.loginMethod = method
-    this.renderAuth()
+    this.renderAuth(true)
   },
 
   _bindStepKeys(step, authTab = 'login') {
@@ -542,7 +563,7 @@ const Portal = {
     ConsultationBooking?.reset?.()
     this.state.step = 'login'
     this.state._phone = ''
-    this.renderAuth()
+    this.renderAuth(true)
   },
 
   async loginPassword() {
