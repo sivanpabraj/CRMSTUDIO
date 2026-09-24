@@ -593,7 +593,7 @@ const DB = {
       if (!data || typeof data !== 'object') throw new Error('Invalid format')
       const def = createDefaultData()
       const validKeys = new Set(Object.keys(def))
-      const objectKeys = new Set(['_meta', 'studioInfo'])
+      const objectKeys = new Set(['_meta', ...DB_OBJECT_KEYS])
       for (const key of Object.keys(data)) {
         if (key === '_meta') continue
         if (!validKeys.has(key)) throw new Error(`کلید ناشناخته: ${key}`)

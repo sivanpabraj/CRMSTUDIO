@@ -559,23 +559,37 @@ window.Utils = Utils
 // تبدیل خودکار اعداد فارسی و عربی به انگلیسی در کلیه فرم‌ها، پنجره‌ها و بخش‌ها
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   const digitRegex = /[۰-۹٠-٩]/
+  const supportsSelection = el => el && el.type !== 'number' && el.type !== 'range' && el.type !== 'color' && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'file'
 
   document.addEventListener('beforeinput', (e) => {
     if (e.data && digitRegex.test(e.data)) {
-      e.preventDefault()
       const converted = Utils.faToEn(e.data)
-      if (document.execCommand) {
-        document.execCommand('insertText', false, converted)
-      } else if (e.target && 'value' in e.target) {
-        const t = e.target
-        const start = t.selectionStart || 0
-        const end = t.selectionEnd || 0
-        t.value = t.value.slice(0, start) + converted + t.value.slice(end)
-        if (t.setSelectionRange) {
-          try { t.setSelectionRange(start + converted.length, start + converted.length) } catch { /* ignore */ }
-        }
+      const t = e.target
+      if (!t || !('value' in t)) return
+
+      e.preventDefault()
+      if (t.type === 'number') {
+        const cur = String(t.value || '')
+        t.value = Utils.faToEn(cur) + converted
         t.dispatchEvent(new Event('input', { bubbles: true }))
+        return
       }
+
+      if (supportsSelection(t)) {
+        try {
+          const start = t.selectionStart || 0
+          const end = t.selectionEnd || 0
+          t.value = t.value.slice(0, start) + converted + t.value.slice(end)
+          if (t.setSelectionRange) {
+            t.setSelectionRange(start + converted.length, start + converted.length)
+          }
+          t.dispatchEvent(new Event('input', { bubbles: true }))
+          return
+        } catch { /* fallback */ }
+      }
+
+      t.value = Utils.faToEn(String(t.value || '')) + converted
+      t.dispatchEvent(new Event('input', { bubbles: true }))
     }
   }, true)
 
@@ -584,11 +598,45 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     if (!target || !('value' in target)) return
     const val = target.value
     if (typeof val === 'string' && digitRegex.test(val)) {
-      const start = target.selectionStart
-      const end = target.selectionEnd
+      if (supportsSelection(target)) {
+        try {
+          const start = target.selectionStart
+          const end = target.selectionEnd
+          target.value = Utils.faToEn(val)
+          if (start != null && end != null && target.setSelectionRange) {
+            target.setSelectionRange(start, end)
+          }
+          return
+        } catch { /* fallback */ }
+      }
       target.value = Utils.faToEn(val)
-      if (start != null && end != null && target.setSelectionRange) {
-        try { target.setSelectionRange(start, end) } catch { /* ignore */ }
+    }
+  }, true)
+
+  document.addEventListener('paste', (e) => {
+    const text = (e.clipboardData || window.clipboardData)?.getData('text')
+    if (text && digitRegex.test(text)) {
+      const converted = Utils.faToEn(text)
+      const t = e.target
+      if (t && 'value' in t) {
+        e.preventDefault()
+        if (t.type === 'number') {
+          t.value = converted.replace(/[^0-9.-]/g, '')
+          t.dispatchEvent(new Event('input', { bubbles: true }))
+          return
+        }
+        if (supportsSelection(t)) {
+          try {
+            const start = t.selectionStart ?? t.value.length
+            const end = t.selectionEnd ?? t.value.length
+            t.value = t.value.slice(0, start) + converted + t.value.slice(end)
+            if (t.setSelectionRange) t.setSelectionRange(start + converted.length, start + converted.length)
+            t.dispatchEvent(new Event('input', { bubbles: true }))
+            return
+          } catch { /* fallback */ }
+        }
+        t.value = Utils.faToEn(t.value + converted)
+        t.dispatchEvent(new Event('input', { bubbles: true }))
       }
     }
   }, true)

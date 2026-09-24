@@ -117,7 +117,10 @@ const SMEmployees = {
           <div class="sm-emp-meta">${SM.esc(c.paySummary || '—')}</div>
           <div class="sm-emp-meta">ارسال: ${SM.esc(c.sentAt || '—')}${c.verification?.verifiedAt ? ` · تأیید: ${SM.esc(c.verification.verifiedAt)}` : ''}</div>
         </div>
-        <div>${SMUI.badge(st, stType)}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${SMUI.badge(st, stType)}
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMEmployees.showContractModal('${c.personnelId}')" title="مشاهده و چاپ قرارداد رسمی"><i class="fas fa-print"></i></button>
+        </div>
       </div>`
     }).join('')}</div>`
   },
@@ -178,9 +181,14 @@ const SMEmployees = {
               <p style="margin-top:8px;font-size:.85rem;color:var(--sm-text-muted)">${SM.esc(contract.paySummary || '')}</p>
               <p style="margin-top:8px;font-size:.82rem">ارسال: ${SM.esc(contract.sentAt || '—')}</p>
             ` : '<p class="sm-emp-meta">هنوز قرارداد همکاری ارسال نشده</p>'}
-            <button type="button" class="sm-btn sm-btn-primary sm-btn-sm" style="margin-top:12px" onclick="SMEmployees.sendContract('${p.id}')">
-              <i class="fas fa-paper-plane"></i> ${contract?.status === 'verified' ? 'ارسال مجدد قرارداد' : 'ارسال قرارداد به پنل پرسنل'}
-            </button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+              <button type="button" class="sm-btn sm-btn-primary sm-btn-sm" onclick="SMEmployees.showContractModal('${p.id}')">
+                <i class="fas fa-file-contract"></i> مشاهده و چاپ قرارداد رسمی
+              </button>
+              <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="SMEmployees.sendContract('${p.id}')">
+                <i class="fas fa-paper-plane"></i> ${contract?.status === 'verified' ? 'ارسال مجدد به پنل' : 'ارسال به پنل پرسنل'}
+              </button>
+            </div>
           </div></div>
       </div>
       <div class="sm-card" style="margin-top:16px"><div class="sm-card-head"><div class="sm-card-title">پروژه‌های اخیر</div></div>
@@ -373,6 +381,153 @@ const SMEmployees = {
       SM.state.viewStack.pop()
       this.view(personnelId)
     } else SM.navigate('employees')
+  },
+
+  showContractModal(personnelId) {
+    const p = DB.find('personnel', x => x.id === personnelId)
+    if (!p) return SM.toast('همکار یافت نشد', 'error')
+
+    const studio = SM.studio()
+    const studioName = studio.name || 'استودیو'
+    const managerName = studio.manager || 'مدیریت استودیو'
+    const studioPhone = studio.phone || '—'
+    const studioAddress = studio.address || '—'
+    const today = Utils.todayJalali()
+    const contract = this._latestContract(personnelId)
+    const roles = normalizeRoles(p.roles || []).map(r => typeof getRoleTitle === 'function' ? getRoleTitle(r) : r).join('، ') || 'همکار تخصصی'
+    const paySummary = this._paySummary(p)
+
+    const contractHtml = `
+      <div class="sm-printable-contract" id="sm-personnel-contract-doc" dir="rtl">
+        <div class="sm-pcontract-header">
+          <div class="sm-pcontract-logo">
+            ${studio.logo ? (Utils.safeImgHtml(studio.logo, 'style="max-height:60px;max-width:110px;object-fit:contain"') || '<i class="fas fa-camera" style="font-size:2rem;color:var(--sm-accent)"></i>') : '<i class="fas fa-camera" style="font-size:2rem;color:var(--sm-accent)"></i>'}
+          </div>
+          <div class="sm-pcontract-title-wrap">
+            <h2 class="sm-pcontract-title">قرارداد همکاری تخصصی و اجرایی استودیو</h2>
+            <div class="sm-pcontract-sub">تنظیم‌شده مطابق مقررات داخلی ${SM.esc(studioName)}</div>
+          </div>
+          <div class="sm-pcontract-meta">
+            <div><strong>شماره:</strong> <span dir="ltr">${contract?.id ? SM.esc(contract.id.slice(-8).toUpperCase()) : 'EMP-' + Date.now().toString().slice(-6)}</span></div>
+            <div><strong>تاریخ:</strong> <span>${SM.esc(contract?.sentAt || today)}</span></div>
+            <div><strong>وضعیت:</strong> <span>${contract?.status === 'verified' ? 'تأییدشده و معتبر' : 'پیش‌نویس / در انتظار'}</span></div>
+          </div>
+        </div>
+
+        <div class="sm-pcontract-body">
+          <div class="sm-pcontract-section">
+            <h4 class="sm-pcontract-sec-title">ماده ۱: مشخصات طرفین قرارداد</h4>
+            <p><strong>طرف اول (کارفرما / استودیو):</strong> ${SM.esc(studioName)} به مدیریت جناب آقای/سرکار خانم <strong>${SM.esc(managerName)}</strong> به شماره تماس <span dir="ltr">${SM.esc(studioPhone)}</span>${studioAddress !== '—' ? ` و نشانی ${SM.esc(studioAddress)}` : ''}.</p>
+            <p><strong>طرف دوم (همکار / مجری):</strong> جناب آقای/سرکار خانم <strong>${SM.esc(p.name)}</strong> به شماره همراه <span dir="ltr">${SM.esc(p.phone || '—')}</span> در سمت تخصصی <strong>«${SM.esc(roles)}»</strong>.</p>
+          </div>
+
+          <div class="sm-pcontract-section">
+            <h4 class="sm-pcontract-sec-title">ماده ۲: موضوع قرارداد</h4>
+            <p>موضوع این قرارداد عبارت است از همکاری طرف دوم با طرف اول در انجام امور محوله شامل (${SM.esc(roles)})، حضور در آفیش‌های پروژه‌های عکاسی و تصویربرداری، ادیت و تحویل پروژه‌ها با رعایت استانداردهای فنی و کیفی استودیو.</p>
+          </div>
+
+          <div class="sm-pcontract-section">
+            <h4 class="sm-pcontract-sec-title">ماده ۳: شرایط مالی و حق‌الزحمه</h4>
+            <p>حق‌الزحمه و شیوه تسویه حساب طرف دوم بر اساس توافق طرفین به شرح زیر می‌باشد:</p>
+            <div class="sm-pcontract-highlight">
+              <strong>نحوه پرداخت مصوب:</strong> ${SM.esc(paySummary)}
+            </div>
+            <p style="font-size:0.85rem;margin-top:6px;color:var(--sm-text-muted)">تسویه حساب پس از اتمام موفق کار، تحویل کلیه فایل‌های خام (Raw) یا ادیت‌شده و تأیید ناظر کیفی استودیو انجام می‌گردد.</p>
+          </div>
+
+          <div class="sm-pcontract-section">
+            <h4 class="sm-pcontract-sec-title">ماده ۴: تعهدات تخصصی و محرمانگی (بسیار مهم)</h4>
+            <ol class="sm-pcontract-rules">
+              <li><strong>حفظ حریم خصوصی:</strong> کلیه تصاویر، راش‌ها، فیلم‌ها و اطلاعات مراجعین و مجالس، کاملاً محرمانه بوده و طرف دوم حق هیچ‌گونه انتشار، ذخیره روی حافظه شخصی غیرمجاز، استفاده تبلیغاتی بدون مجوز کتبی، یا ارسال به شخص ثالث را ندارد.</li>
+              <li><strong>امانت‌داری تجهیزات:</strong> در صورت تحویل هرگونه تجهیزات (دوربین، لنز، نور، رم، باتری) از سوی استودیو، طرف دوم ملزم به حفظ و نگهداری با رعایت امانت‌داری بوده و مسئولیت خسارت عمدی یا ناشی از سهل‌انگاری بر عهده ایشان است.</li>
+              <li><strong>انضباط زمانی و پوشش:</strong> حضور به‌موقع در لوکیشن یا استودیو مطابق برنامه آفیش و رعایت پوشش حرفه‌ای و موقر الزامی است.</li>
+              <li><strong>تحویل فایل‌ها:</strong> کلیه فایل‌های عکاسی و تصویربرداری باید بلافاصله پس از اتمام مراسم به سرور یا واحد آرشیو استودیو منتقل گردد.</li>
+            </ol>
+          </div>
+
+          <div class="sm-pcontract-section">
+            <h4 class="sm-pcontract-sec-title">ماده ۵: تأییدیه و امضای طرفین</h4>
+            <div class="sm-pcontract-signs">
+              <div class="sm-pcontract-sign-box">
+                <div>امضا و مهر طرف اول (مدیریت استودیو):</div>
+                <div class="sm-pcontract-stamp">
+                  <strong>${SM.esc(studioName)}</strong>
+                  <div style="font-size:11px;color:var(--sm-text-muted)">${SM.esc(managerName)}</div>
+                </div>
+              </div>
+              <div class="sm-pcontract-sign-box">
+                <div>امضا و اثر انگشت طرف دوم (همکار):</div>
+                <div class="sm-pcontract-stamp">
+                  <strong>${SM.esc(p.name)}</strong>
+                  <div style="font-size:11px;color:var(--sm-text-muted)">${contract?.verification?.verified ? 'تأییدشده دیجیتالی با پیامک' : 'امضای دستی / دیجیتال'}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `
+
+    SMUI.modal(`قرارداد رسمی همکاری — ${p.name}`, `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px;flex-wrap:wrap">
+        <span style="font-size:0.85rem;color:var(--sm-text-muted)">پیش‌نمایش آماده چاپ بر روی برگه A4</span>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="sm-btn sm-btn-primary" onclick="SMEmployees.printContractDoc()"><i class="fas fa-print"></i> چاپ قرارداد (Print / PDF)</button>
+          <button type="button" class="sm-btn sm-btn-ghost" onclick="SMEmployees.sendContract('${p.id}')"><i class="fas fa-paper-plane"></i> ارسال به پنل پرسنل</button>
+        </div>
+      </div>
+      ${contractHtml}
+    `, {
+      width: 780
+    })
+  },
+
+  printContractDoc() {
+    const docEl = document.getElementById('sm-personnel-contract-doc')
+    if (!docEl) return
+    const printWin = window.open('', '_blank', 'width=800,height=900')
+    if (!printWin) {
+      window.print()
+      return
+    }
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html lang="fa" dir="rtl">
+      <head>
+        <meta charset="utf-8"/>
+        <title>قرارداد همکاری پرسنل</title>
+        <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&display=swap" rel="stylesheet">
+        <style>
+          body { font-family: 'Vazirmatn', sans-serif; margin: 0; padding: 24px; color: #111; background: #fff; line-height: 1.7; font-size: 13px; }
+          .sm-pcontract-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #222; padding-bottom: 14px; margin-bottom: 18px; }
+          .sm-pcontract-title { margin: 0 0 4px; font-size: 17px; font-weight: 800; }
+          .sm-pcontract-sub { font-size: 11px; color: #555; }
+          .sm-pcontract-meta { font-size: 11px; text-align: left; }
+          .sm-pcontract-section { margin-bottom: 16px; }
+          .sm-pcontract-sec-title { margin: 0 0 6px; font-size: 13px; font-weight: 800; border-right: 3px solid #2563eb; padding-right: 8px; color: #111; }
+          .sm-pcontract-highlight { background: #f3f4f6; border-radius: 8px; padding: 10px 14px; margin: 8px 0; border: 1px solid #e5e7eb; font-weight: 700; }
+          .sm-pcontract-rules { margin: 6px 0; padding-right: 20px; }
+          .sm-pcontract-rules li { margin-bottom: 6px; }
+          .sm-pcontract-signs { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 30px; }
+          .sm-pcontract-sign-box { border: 1px dashed #999; border-radius: 8px; padding: 16px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: space-between; }
+          .sm-pcontract-stamp { font-weight: 800; margin-top: 30px; }
+          @media print {
+            body { padding: 0; }
+            @page { margin: 15mm; size: A4; }
+          }
+        </style>
+      </head>
+      <body>
+        ${docEl.outerHTML}
+        <script>
+          window.onload = function() {
+            setTimeout(function() { window.print(); window.close(); }, 300);
+          };
+        </script>
+      </body>
+      </html>
+    `)
+    printWin.document.close()
   }
 }
 
@@ -381,7 +536,9 @@ SMModules.employees = {
   render(el) { SMEmployees.render(el) },
   add() { SMEmployees.add() },
   edit(id) { SMEmployees.edit(id) },
-  view(id) { SMEmployees.view(id) }
+  view(id) { SMEmployees.view(id) },
+  showContractModal(id) { SMEmployees.showContractModal(id) },
+  printContractDoc() { SMEmployees.printContractDoc() }
 }
 
 window.SMEmployees = SMEmployees

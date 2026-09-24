@@ -69,16 +69,19 @@
           <div class="fg"><label>نام و نام‌خانوادگی <span class="req">*</span></label><input id="groom-name" class="fi" type="text" placeholder="علی رضایی" oninput="syncPreview()"/></div>
           <div class="fg"><label>کد ملی <span class="req">*</span></label><input id="groom-nid" class="fi digit-field" type="text" inputmode="numeric" placeholder="۰۰۱۲۳۴۵۶۷۸" maxlength="10"/></div>
           <div class="fg"><label>شماره تماس <span class="req">*</span></label><input id="groom-phone" class="fi digit-field" type="tel" inputmode="numeric" placeholder="۰۹۱۲۱۲۳۴۵۶۷" maxlength="11" oninput="onVerifyPhoneChange('groom')"/></div>
-          <div class="verify-box" id="verify-groom">
-            <div class="verify-head"><i class="fas fa-shield-halved"></i> استعلام و تأیید شماره <span style="font-size:0.8em;opacity:0.8;font-weight:normal">(اختیاری)</span></div>
-            <p class="verify-hint">تأیید پیامکی اختیاری است و برای بستن قرارداد الزامی نیست.</p>
-            <button type="button" class="btn-verify-send" onclick="sendVerifySms('groom')"><i class="fas fa-paper-plane"></i> ارسال کد پیامکی</button>
-            <div class="verify-input-row">
-              <input id="verify-input-groom" class="fi digit-field verify-code-input" type="text" inputmode="numeric" placeholder="کد دریافتی از پیامک" maxlength="6"/>
-              <button type="button" class="btn-verify-confirm" onclick="confirmVerify('groom')">تأیید</button>
+          <details class="verify-details" id="verify-details-groom" style="margin:4px 0 8px">
+            <summary style="font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;padding:4px 0"><i class="fas fa-shield-halved"></i> استعلام پیامکی شماره (اختیاری — پیش‌فرض غیرفعال)</summary>
+            <div class="verify-box" id="verify-groom" style="margin-top:6px">
+              <div class="verify-head"><i class="fas fa-shield-halved"></i> استعلام و تأیید شماره <span style="font-size:0.8em;opacity:0.8;font-weight:normal">(اختیاری)</span></div>
+              <p class="verify-hint">تأیید پیامکی اختیاری است و برای بستن قرارداد الزامی نیست.</p>
+              <button type="button" class="btn-verify-send" onclick="sendVerifySms('groom')"><i class="fas fa-paper-plane"></i> ارسال کد پیامکی</button>
+              <div class="verify-input-row">
+                <input id="verify-input-groom" class="fi digit-field verify-code-input" type="text" inputmode="numeric" placeholder="کد دریافتی از پیامک" maxlength="6"/>
+                <button type="button" class="btn-verify-confirm" onclick="confirmVerify('groom')">تأیید</button>
+              </div>
+              <div class="verify-status pending" id="status-groom">اختیاری — نیازی به ارسال کد نیست</div>
             </div>
-            <div class="verify-status pending" id="status-groom">اختیاری — نیازی به ارسال کد نیست</div>
-          </div>
+          </details>
           <div class="fg"><label>آدرس</label><input id="groom-addr" class="fi" type="text" placeholder="شهر — خیابان..."/></div>
         </div>
 
@@ -87,16 +90,19 @@
           <div class="fg"><label>نام و نام‌خانوادگی <span class="req">*</span></label><input id="bride-name" class="fi" type="text" placeholder="مریم احمدی" oninput="syncPreview()"/></div>
           <div class="fg"><label>کد ملی</label><input id="bride-nid" class="fi digit-field" type="text" inputmode="numeric" placeholder="۰۰۱۲۳۴۵۶۷۸" maxlength="10"/></div>
           <div class="fg"><label>شماره تماس</label><input id="bride-phone" class="fi digit-field" type="tel" inputmode="numeric" placeholder="۰۹۱۲۱۲۳۴۵۶۷" maxlength="11" oninput="onVerifyPhoneChange('bride')"/></div>
-          <div class="verify-box" id="verify-bride">
-            <div class="verify-head"><i class="fas fa-shield-halved"></i> استعلام و تأیید شماره <span style="font-size:0.8em;opacity:0.8;font-weight:normal">(اختیاری)</span></div>
-            <p class="verify-hint">تأیید پیامکی اختیاری است و برای بستن قرارداد الزامی نیست.</p>
-            <button type="button" class="btn-verify-send" onclick="sendVerifySms('bride')"><i class="fas fa-paper-plane"></i> ارسال کد پیامکی</button>
-            <div class="verify-input-row">
-              <input id="verify-input-bride" class="fi digit-field verify-code-input" type="text" inputmode="numeric" placeholder="کد دریافتی از پیامک" maxlength="6"/>
-              <button type="button" class="btn-verify-confirm" onclick="confirmVerify('bride')">تأیید</button>
+          <details class="verify-details" id="verify-details-bride" style="margin:4px 0 8px">
+            <summary style="font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;padding:4px 0"><i class="fas fa-shield-halved"></i> استعلام پیامکی شماره (اختیاری — پیش‌فرض غیرفعال)</summary>
+            <div class="verify-box" id="verify-bride" style="margin-top:6px">
+              <div class="verify-head"><i class="fas fa-shield-halved"></i> استعلام و تأیید شماره <span style="font-size:0.8em;opacity:0.8;font-weight:normal">(اختیاری)</span></div>
+              <p class="verify-hint">تأیید پیامکی اختیاری است و برای بستن قرارداد الزامی نیست.</p>
+              <button type="button" class="btn-verify-send" onclick="sendVerifySms('bride')"><i class="fas fa-paper-plane"></i> ارسال کد پیامکی</button>
+              <div class="verify-input-row">
+                <input id="verify-input-bride" class="fi digit-field verify-code-input" type="text" inputmode="numeric" placeholder="کد دریافتی از پیامک" maxlength="6"/>
+                <button type="button" class="btn-verify-confirm" onclick="confirmVerify('bride')">تأیید</button>
+              </div>
+              <div class="verify-status pending" id="status-bride">اختیاری — نیازی به ارسال کد نیست</div>
             </div>
-            <div class="verify-status pending" id="status-bride">اختیاری — نیازی به ارسال کد نیست</div>
-          </div>
+          </details>
           <div class="fg"><label>آدرس</label><input id="bride-addr" class="fi" type="text" placeholder="شهر — خیابان..."/></div>
         </div>
       </div>

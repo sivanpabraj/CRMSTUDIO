@@ -143,6 +143,11 @@ SMModules.timeline = {
 
 /* ── Contracts ── */
 SMModules.contracts = {
+  _tab: 'clients',
+  setTab(tab) {
+    this._tab = tab
+    SM.navigate('contracts')
+  },
   _cadres: SM_CONTRACT_PALETTE,
   _selectedId: null,
   _statusMap: {
@@ -292,6 +297,11 @@ SMModules.contracts = {
 
   render(el) {
     const q = SM.getModuleSearch('contracts')
+    if (this._tab === 'personnel') {
+      this._renderPersonnelContracts(el, q)
+      return
+    }
+
     let contracts = DB.get('contracts')
     if (q) {
       contracts = contracts.filter(c =>
@@ -301,16 +311,72 @@ SMModules.contracts = {
     contracts = this._sort(contracts)
 
     el.innerHTML = `
-      ${SMUI.sectionHead('قراردادها', 'مرتب‌شده بر اساس تاریخ مراسم', `
-        <button class="sm-btn sm-btn-primary" onclick="window.location.href='../contract.html'"><i class="fas fa-plus"></i> قرارداد جدید</button>`)}
-      ${SMUI.moduleSearch('contracts', 'جستجو در قراردادها — نام، شماره، تاریخ...')}
-      ${contracts.length ? `
-        <div class="sm-contract-list">
-          <div class="sm-contract-list-head">
-            <span>شماره</span><span>زوج</span><span>تاریخ مراسم</span><span>مبلغ</span><span>وضعیت</span><span>عملیات</span>
-          </div>
-          ${contracts.map((c, i) => this._row(c, i)).join('')}
-        </div>` : SMUI.empty('fa-file-signature', q ? 'قراردادی یافت نشد' : 'قراردادی ثبت نشده')}
+      ${SMUI.sectionHead('قراردادها', 'مدیریت و صدور قراردادهای مشتریان و پرسنل', `
+        <button class="sm-btn sm-btn-primary" onclick="window.location.href='../contract.html'"><i class="fas fa-plus"></i> قرارداد مجلس جدید</button>`)}
+      ${SMUI.tabs([
+        { id: 'clients', fa: 'قراردادهای مشتریان و مجالس', en: 'Clients', icon: 'fa-file-signature', onclick: "SMModules.contracts.setTab('clients')" },
+        { id: 'personnel', fa: 'قراردادهای همکاری پرسنل', en: 'Staff Contracts', icon: 'fa-users', onclick: "SMModules.contracts.setTab('personnel')" }
+      ], this._tab)}
+      <div style="margin-top:14px">
+        ${SMUI.moduleSearch('contracts', 'جستجو در قراردادها — نام، شماره، تاریخ...')}
+        ${contracts.length ? `
+          <div class="sm-contract-list">
+            <div class="sm-contract-list-head">
+              <span>شماره</span><span>زوج</span><span>تاریخ مراسم</span><span>مبلغ</span><span>وضعیت</span><span>عملیات</span>
+            </div>
+            ${contracts.map((c, i) => this._row(c, i)).join('')}
+          </div>` : SMUI.empty('fa-file-signature', q ? 'قراردادی یافت نشد' : 'قراردادی ثبت نشده')}
+      </div>
+    `
+  },
+
+  _renderPersonnelContracts(el, q) {
+    let staff = DB.get('personnel') || []
+    if (q) {
+      staff = staff.filter(p => [p.name, p.phone, p.notes].join(' ').toLowerCase().includes(q))
+    }
+    const persContracts = DB.get('persContracts') || []
+
+    el.innerHTML = `
+      ${SMUI.sectionHead('قراردادهای همکاری پرسنل', 'تنظیم، مشاهده، چاپ و تأیید قراردادهای همکاری عوامل استودیو', `
+        <button class="sm-btn sm-btn-primary" onclick="SM.navigate('employees');SMEmployees.add()"><i class="fas fa-user-plus"></i> همکار جدید</button>`)}
+      ${SMUI.tabs([
+        { id: 'clients', fa: 'قراردادهای مشتریان و مجالس', en: 'Clients', icon: 'fa-file-signature', onclick: "SMModules.contracts.setTab('clients')" },
+        { id: 'personnel', fa: 'قراردادهای همکاری پرسنل', en: 'Staff Contracts', icon: 'fa-users', onclick: "SMModules.contracts.setTab('personnel')" }
+      ], this._tab)}
+      <div style="margin-top:14px">
+        ${SMUI.moduleSearch('contracts', 'جستجو در پرسنل — نام، شماره، نقش...')}
+        ${staff.length ? `
+          <div class="sm-contract-list">
+            <div class="sm-contract-list-head" style="grid-template-columns: 100px 1.4fr 1.2fr 120px 130px 140px">
+              <span>کد</span><span>نام همکار</span><span>سمت / نقش‌ها</span><span>شماره تماس</span><span>وضعیت قرارداد</span><span>عملیات</span>
+            </div>
+            ${staff.map(p => {
+              const contract = persContracts.filter(c => c.personnelId === p.id && c.type === 'employment').sort((a,b) => String(b.sentAt||'').localeCompare(String(a.sentAt||'')))[0]
+              const roles = normalizeRoles(p.roles || []).map(r => typeof getRoleTitle === 'function' ? getRoleTitle(r) : r).join('، ') || '—'
+              const st = contract?.status === 'verified' ? SMUI.badge('قرارداد تأییدشده', 'success')
+                : contract?.status === 'sms_sent' || contract?.status === 'pending' ? SMUI.badge('در انتظار تأیید', 'warning')
+                : SMUI.badge('تنظیم نشده', 'muted')
+
+              return `
+              <div class="sm-contract-row" style="grid-template-columns: 100px 1.4fr 1.2fr 120px 130px 140px">
+                <div class="sm-contract-cell" dir="ltr"><span class="sm-contract-pill">${p.id.slice(-6).toUpperCase()}</span></div>
+                <div class="sm-contract-cell"><strong>${SM.esc(p.name)}</strong></div>
+                <div class="sm-contract-cell" style="font-size:12px;color:var(--sm-text-muted)">${SM.esc(roles)}</div>
+                <div class="sm-contract-cell" dir="ltr">${SM.esc(p.phone || '—')}</div>
+                <div class="sm-contract-cell">${st}</div>
+                <div class="sm-contract-cell sm-contract-actions">
+                  <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMEmployees.showContractModal('${p.id}')" title="مشاهده و چاپ قرارداد رسمی">
+                    <i class="fas fa-file-contract"></i> چاپ قرارداد
+                  </button>
+                  <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('employees');SMEmployees.view('${p.id}')" title="پروفایل همکار">
+                    <i class="fas fa-user"></i>
+                  </button>
+                </div>
+              </div>`
+            }).join('')}
+          </div>` : SMUI.empty('fa-users', q ? 'همکاری یافت نشد' : 'پرسنلی در سیستم ثبت نشده است')}
+      </div>
     `
   },
 

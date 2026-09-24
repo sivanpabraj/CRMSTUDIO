@@ -2285,3 +2285,61 @@ body.sm-sidebar-open { overflow: hidden; }
   .sm-exec-panel, .sm-exec-kpi { border: 1px solid CanvasText; }
   .sm-expense-track i, .sm-workflow-row i { background: Highlight; }
 }
+
+/* ── Printable Personnel Contract ── */
+.sm-printable-contract {
+  background: var(--sm-card, #ffffff);
+  color: var(--sm-text, #111827);
+  border: 1px solid var(--sm-border, #e5e7eb);
+  border-radius: 12px;
+  padding: 24px 28px;
+  font-size: 13px;
+  line-height: 1.75;
+}
+.sm-pcontract-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid var(--sm-border, #e5e7eb);
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+  gap: 16px;
+}
+.sm-pcontract-title-wrap { flex: 1; text-align: center; }
+.sm-pcontract-title { margin: 0 0 4px; font-size: 1.15rem; font-weight: 800; }
+.sm-pcontract-sub { font-size: 11px; color: var(--sm-text-muted); }
+.sm-pcontract-meta { font-size: 11.5px; text-align: left; }
+.sm-pcontract-section { margin-bottom: 16px; }
+.sm-pcontract-sec-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 800;
+  border-right: 3px solid var(--sm-accent, #2563eb);
+  padding-right: 8px;
+}
+.sm-pcontract-highlight {
+  background: var(--sm-accent-soft, rgba(37,99,235,0.08));
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  border: 1px solid color-mix(in srgb, var(--sm-accent) 20%, transparent);
+}
+.sm-pcontract-rules { margin: 6px 0; padding-right: 20px; }
+.sm-pcontract-rules li { margin-bottom: 6px; }
+.sm-pcontract-signs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 24px;
+}
+.sm-pcontract-sign-box {
+  border: 1px dashed var(--sm-border);
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+  min-height: 90px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.sm-pcontract-stamp { font-weight: 800; margin-top: 24px; }
