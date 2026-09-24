@@ -105,7 +105,7 @@
       return result.slice(0, keyLenBytes);
     }
 
-    window.crypto.subtle = {
+    const subtleObj = {
       importKey: async function(_format, keyData, algo, _extractable, _keyUsages) {
         const raw = keyData instanceof Uint8Array ? keyData : new Uint8Array(keyData);
         return { _raw: raw, _algo: algo };
@@ -129,6 +129,57 @@
         return hmac(k, d).buffer;
       }
     };
+
+    let done = false;
+    try {
+      Object.defineProperty(window.crypto, 'subtle', {
+        value: subtleObj,
+        writable: true,
+        configurable: true,
+        enumerable: true
+      });
+      if (window.crypto.subtle && window.crypto.subtle.importKey) done = true;
+    } catch {
+      // Ignore defineProperty failure on window.crypto
+    }
+
+    const globalCryptoClass = typeof window !== 'undefined' ? window.Crypto : undefined;
+    if (!done && globalCryptoClass && globalCryptoClass.prototype) {
+      try {
+        Object.defineProperty(globalCryptoClass.prototype, 'subtle', {
+          get: function() { return subtleObj; },
+          configurable: true,
+          enumerable: true
+        });
+        if (window.crypto && window.crypto.subtle && window.crypto.subtle.importKey) done = true;
+      } catch {
+        // Ignore defineProperty failure on Crypto.prototype
+      }
+    }
+
+    if (!done) {
+      try {
+        const origRnd = window.crypto && window.crypto.getRandomValues ? window.crypto.getRandomValues.bind(window.crypto) : function(arr) {
+          for (let i = 0; i < arr.length; i++) arr[i] = Math.floor(Math.random() * 256);
+          return arr;
+        };
+        const fakeCrypto = {
+          getRandomValues: origRnd,
+          subtle: subtleObj
+        };
+        try {
+          Object.defineProperty(window, 'crypto', {
+            value: fakeCrypto,
+            writable: true,
+            configurable: true
+          });
+        } catch {
+          window.crypto = fakeCrypto;
+        }
+      } catch {
+        // Ignore fallback assignment error
+      }
+    }
     console.info("[CRMSTUDIO] Fallback WebCrypto subtle initialized for insecure/HTTP context.");
   }
 })();
