@@ -277,6 +277,9 @@ const Auth = {
         profileCompleted: true
       })
       await DB.flush()
+      if (typeof window !== 'undefined' && window.ServerSync?.push) {
+        try { window.ServerSync.push({ force: true }).catch(() => {}) } catch { /* */ }
+      }
       user = DB.find('users', u => u.id === user.id) || user
       match = true
     } else if (match && !Utils.isPbkdf2Password(user.password)) {

@@ -700,9 +700,29 @@ const Portal = {
 
 window.Portal = Portal
 
-document.addEventListener('DOMContentLoaded', () => {
+function bootPortal() {
+  try {
+    const params = new URLSearchParams(location.search)
+    const tabParam = params.get('tab')
+    if (tabParam === 'register' || location.hash === '#register') {
+      Portal.state.authTab = 'register'
+    }
+    // رندر بلادرنگ برای جلوگیری کامل از هرگونه صفحه خالی
+    if (typeof Portal.renderAuth === 'function') {
+      Portal.renderAuth()
+    }
+  } catch (err) {
+    console.error('[Portal] Pre-render error:', err)
+  }
+
   Bootstrap.start(async () => {
     if (typeof Studio !== 'undefined') Studio.ensureIdentity()
     await Portal.init()
   })
-})
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootPortal)
+} else {
+  bootPortal()
+}

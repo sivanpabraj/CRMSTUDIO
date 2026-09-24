@@ -6,6 +6,9 @@ const Bootstrap = {
   _safetyTimer: null,
 
   _showLoader() {
+    if (document.body.classList.contains('auth-screen') || location.pathname.endsWith('/index.html') || location.pathname === '/' || location.pathname.endsWith('/site.html')) {
+      return
+    }
     if (document.getElementById('talar-loader')) return
     const el = document.createElement('div')
     el.id = 'talar-loader'
