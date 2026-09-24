@@ -5,9 +5,9 @@
 const AppConfig = {
   APP_NAME: 'Studio ERP',
   DEFAULT_STUDIO_NAME: 'Studio ERP',
-  APP_VERSION: '6.1.1',
-  BUILD_DATE: '2026-09-21',
-  SW_CACHE: 'studio-erp-v25',
+  APP_VERSION: '1.0.0',
+  BUILD_DATE: '2026-09-24',
+  SW_CACHE: 'studio-erp-v40',
 
   DB_KEY: 'studio_db_v5',
   DB_VERSION: 20,

@@ -15,26 +15,72 @@
   transition: opacity 0.3s ease;
 }
 #talar-loader.talar-loader-out { opacity: 0; pointer-events: none; }
-.talar-loader-inner { text-align: center; padding: 24px; }
-.talar-loader-spinner {
-  width: 46px;
-  height: 46px;
+.talar-loader-circle-wrap {
+  position: relative;
+  width: 68px;
+  height: 68px;
   margin: 0 auto 16px;
-  border: 3.5px solid rgba(255, 255, 255, 0.12);
-  border-top-color: #0071E3;
-  border-right-color: #0071E3;
-  border-radius: 50%;
-  animation: talarSpin 0.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-@keyframes talarSpin {
-  to { transform: rotate(360deg); }
+.talar-loader-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  animation: talarRotate 1.6s linear infinite;
+}
+.talar-loader-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 4;
+}
+.talar-loader-progress {
+  fill: none;
+  stroke: #0071E3;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 175.9;
+  stroke-dashoffset: 175.9;
+  animation: talarDash 1.4s ease-in-out infinite;
+}
+.talar-loader-icon {
+  position: absolute;
+  font-size: 20px;
+  color: #fff;
+  opacity: 0.9;
+  animation: talarPulse 1.4s ease-in-out infinite;
+}
+@keyframes talarRotate {
+  100% { transform: rotate(270deg); }
+}
+@keyframes talarDash {
+  0% { stroke-dashoffset: 175.9; }
+  50% { stroke-dashoffset: 44; }
+  100% { stroke-dashoffset: 175.9; }
+}
+@keyframes talarPulse {
+  0%, 100% { transform: scale(0.92); opacity: 0.75; }
+  50% { transform: scale(1.08); opacity: 1; }
 }
 .talar-loader-sub {
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.85);
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
   font-family: Vazirmatn, sans-serif;
   letter-spacing: -0.2px;
+  margin-bottom: 6px;
+}
+.talar-loader-ver {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-family: Vazirmatn, sans-serif;
 }
 
 .talar-changelog-overlay {

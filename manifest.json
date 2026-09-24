@@ -2,7 +2,7 @@
   "name": "Studio ERP — Photography & Media Enterprise ERP",
   "short_name": "Studio ERP",
   "description": "Enterprise photography & videography studio ERP platform",
-  "version": "6.1.0",
+  "version": "1.0.0",
   "start_url": "./site.html",
   "scope": "./",
   "display": "standalone",

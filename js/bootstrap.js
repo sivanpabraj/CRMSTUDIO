@@ -3,23 +3,42 @@
    ══════════════════════════════════════════════ */
 
 const Bootstrap = {
+  _safetyTimer: null,
+
   _showLoader() {
     if (document.getElementById('talar-loader')) return
     const el = document.createElement('div')
     el.id = 'talar-loader'
     el.innerHTML = `
       <div class="talar-loader-inner">
-        <div class="talar-loader-spinner"></div>
+        <div class="talar-loader-circle-wrap">
+          <svg class="talar-loader-svg" viewBox="0 0 64 64" aria-hidden="true">
+            <circle class="talar-loader-bg" cx="32" cy="32" r="28"></circle>
+            <circle class="talar-loader-progress" cx="32" cy="32" r="28"></circle>
+          </svg>
+          <div class="talar-loader-icon"><i class="fas fa-camera"></i></div>
+        </div>
         <div class="talar-loader-sub">در حال بارگذاری...</div>
+        <div class="talar-loader-ver">نسخه ۱</div>
       </div>`
     document.body.prepend(el)
+
+    // تضمین قطعی عدم گیر کردن لودر — بعد از حداکثر ۲ ثانیه به صورت خودکار محو می‌شود
+    if (this._safetyTimer) clearTimeout(this._safetyTimer)
+    this._safetyTimer = setTimeout(() => {
+      this._hideLoader()
+    }, 2200)
   },
 
   _hideLoader() {
+    if (this._safetyTimer) {
+      clearTimeout(this._safetyTimer)
+      this._safetyTimer = null
+    }
     const el = document.getElementById('talar-loader')
     if (el) {
       el.classList.add('talar-loader-out')
-      setTimeout(() => el.remove(), 400)
+      setTimeout(() => el.remove(), 350)
     }
   },
 
@@ -59,7 +78,12 @@ const Bootstrap = {
     this._showLoader()
     try {
       this._bindGlobalErrorHandler()
-      if (typeof DB !== 'undefined' && DB.ready) await DB.ready
+      if (typeof DB !== 'undefined' && DB.ready) {
+        await Promise.race([
+          DB.ready,
+          new Promise(resolve => setTimeout(resolve, 1500))
+        ])
+      }
       // همگام‌سازی سریع با سرور مرکزی (در صورت در دسترس بودن)
       if (typeof window !== 'undefined') {
         try {
@@ -99,8 +123,14 @@ const Bootstrap = {
       }
       if (typeof Utils !== 'undefined') Utils.applyStudioTitle()
       if (typeof GlassTheme !== 'undefined') GlassTheme.init()
-      if (typeof initFn === 'function') await initFn()
-      else if (typeof initFn === 'string' && window[initFn]?.init) window[initFn].init()
+      if (typeof initFn === 'function') {
+        await Promise.race([
+          Promise.resolve(initFn()),
+          new Promise(resolve => setTimeout(resolve, 2500))
+        ])
+      } else if (typeof initFn === 'string' && window[initFn]?.init) {
+        window[initFn].init()
+      }
     } catch (e) {
       console.error('Bootstrap failed:', e)
       if (typeof Utils !== 'undefined') Utils.toast('خطا در بارگذاری داده‌ها', 'error')

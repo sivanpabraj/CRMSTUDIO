@@ -1,5 +1,5 @@
 /* Studio ERP — Service Worker (offline shell + asset cache) */
-const CACHE = 'studio-erp-v30'
+const CACHE = 'studio-erp-v40'
 
 const ASSETS = [
   './site.html',
