@@ -25,7 +25,7 @@ const AppConfig = {
   LEGACY_DB_KEYS: ['studio_db_v4', 'talar_db_v3'],
   BACKUP_PREFIX: 'studio_bu_',
 
-  MIN_PASSWORD_LENGTH: 8,
+  MIN_PASSWORD_LENGTH: 6,
   /** فقط برای seed تست محلی — در production رمز تصادفی ساخته می‌شود */
   INITIAL_ADMIN_PHONE: '09121000000',
   INITIAL_ADMIN_PASSWORD: '12345678',

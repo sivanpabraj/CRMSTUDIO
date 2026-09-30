@@ -30,10 +30,36 @@
   <script>
     window.Portal = window.Portal || {
       state: { authTab: 'login', step: 'login', loginMethod: 'password', _phone: '' },
-      setAuthTab: function(t) {
-        this.state.authTab = t;
-        if (location.search.includes('tab=' + t)) return;
-        location.href = t === 'register' ? 'index.html?tab=register' : 'index.html';
+      setAuthTab: function(tab) {
+        this.state.authTab = tab;
+        this.state.step = 'login';
+        var loginView = document.getElementById('auth-login-view');
+        var regView = document.getElementById('auth-register-view');
+        var tabLogin = document.getElementById('tab-btn-login');
+        var tabReg = document.getElementById('tab-btn-register');
+        var wrap = document.getElementById('auth-card-wrap');
+        var subEl = document.getElementById('auth-sub-text');
+        
+        if (tab === 'register') {
+          if (loginView) loginView.style.display = 'none';
+          if (regView) regView.style.display = 'block';
+          if (tabLogin) tabLogin.className = 'auth-method-tab auth-cinema-tab';
+          if (tabReg) tabReg.className = 'auth-method-tab auth-cinema-tab auth-method-tab--active';
+          if (wrap) wrap.classList.add('auth-unified-wrap--wide');
+          if (subEl) subEl.textContent = 'اطلاعات استودیو و مدیر را برای ساخت پنل وارد کنید';
+          try { history.replaceState(null, '', '?tab=register'); } catch(e) {}
+        } else {
+          if (regView) regView.style.display = 'none';
+          if (loginView) loginView.style.display = 'block';
+          if (tabReg) tabReg.className = 'auth-method-tab auth-cinema-tab';
+          if (tabLogin) tabLogin.className = 'auth-method-tab auth-cinema-tab auth-method-tab--active';
+          if (wrap) wrap.classList.remove('auth-unified-wrap--wide');
+          if (subEl) subEl.textContent = 'شماره موبایل و رمز عبور خود را وارد کنید';
+          try { history.replaceState(null, '', location.pathname); } catch(e) {}
+        }
+        if (window.Portal._appLoaded && typeof window.Portal.renderAuth === 'function') {
+          window.Portal.setAuthTab(tab);
+        }
       },
       setLoginMethod: function(m) {
         this.state.loginMethod = m;
@@ -50,6 +76,9 @@
         }
       },
       loginPassword: function() {
+        if (window.Portal._appLoaded && typeof window.Portal.loginPassword === 'function') {
+          return window.Portal.loginPassword();
+        }
         var id = document.getElementById('login-identifier')?.value?.trim();
         var pw = document.getElementById('login-password')?.value;
         var err = document.getElementById('login-error');
@@ -60,10 +89,27 @@
         var btn = document.getElementById('login-btn');
         if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال ورود...';
       },
+      submitRegister: function() {
+        if (window.Portal._appLoaded && typeof window.Portal.submitRegister === 'function') {
+          return window.Portal.submitRegister();
+        }
+        var name = document.getElementById('reg-studio-name')?.value?.trim();
+        var err = document.getElementById('reg-error');
+        if (!name) {
+          if (err) { err.textContent = 'لطفاً نام استودیو را وارد کنید'; err.style.display = 'block'; }
+          return;
+        }
+      },
       submitPasswordLogin: function() {
         return this.loginPassword();
       }
     };
+
+    if (location.search.includes('tab=register') || location.hash === '#register') {
+      window.addEventListener('DOMContentLoaded', function() {
+        window.Portal.setAuthTab('register');
+      });
+    }
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -79,59 +125,180 @@
 </head>
 <body class="auth-screen">
   <div id="portal-app">
-    <div class="auth-page auth-page--unified">
+    <div class="auth-page auth-page--cinema">
       <canvas class="auth-ambient" data-auth-ambient aria-hidden="true"></canvas>
       <div class="auth-ambient-fallback" aria-hidden="true"></div>
-      <div class="auth-unified-wrap">
-        <div class="auth-card glass-panel auth-unified-card">
-          <div class="auth-unified-head">
-            <div class="auth-unified-logo"><i class="fas fa-camera-retro"></i></div>
-            <h1 class="auth-title">ورود به مدیریت استودیو</h1>
-            <p class="auth-sub">شماره موبایل و رمز عبور خود را وارد کنید</p>
+
+      <div class="auth-cinema-container">
+        <!-- ستون برند و ویترین سینمایی استودیو -->
+        <div class="auth-cinema-hero">
+          <div class="auth-hero-badge">
+            <span class="auth-hero-badge-dot"></span>
+            <i class="fas fa-camera"></i>
+            <span>Studio ERP v1.0 • نسل جدید</span>
           </div>
-          <div class="auth-method-tabs" style="margin-bottom:18px">
-            <button type="button" class="auth-method-tab auth-method-tab--active" onclick="Portal.setAuthTab('login')">
-              <i class="fas fa-sign-in-alt"></i> ورود به سیستم
-            </button>
-            <button type="button" class="auth-method-tab" onclick="Portal.setAuthTab('register')">
-              <i class="fas fa-user-plus"></i> ثبت‌نام استودیو
-            </button>
-          </div>
-          <div class="auth-form">
-            <div class="auth-field">
-              <label class="auth-label" for="login-identifier">شماره موبایل یا ایمیل</label>
-              <div class="auth-input-wrap">
-                <i class="fas fa-user-circle"></i>
-                <input type="text" id="login-identifier" class="ltr" dir="ltr" autocomplete="username" placeholder="0912... یا name@gmail.com" autofocus/>
+
+          <h1 class="auth-hero-title">
+            اکوسیستم یکپارچه<br>
+            <span class="auth-hero-title-accent">مدیریت آتلیه و سینما</span>
+          </h1>
+
+          <p class="auth-hero-subtitle">
+            بستری هوشمند و اختصاصی برای قراردادهای دیجیتال، زمان‌بندی آفیش، حسابداری یکپارچه و تحویل فایل مشتریان.
+          </p>
+
+          <div class="auth-hero-cards">
+            <div class="auth-hero-card">
+              <div class="auth-hero-card-icon"><i class="fas fa-film"></i></div>
+              <div class="auth-hero-card-content">
+                <strong>مدیریت آفیش و تایم‌لاین عکاسی</strong>
+                <span>برنامه‌ریزی عکاسان، ادیتورها، لوکیشن و تجهیزات</span>
               </div>
             </div>
-            <div class="auth-field">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                <label class="auth-label" for="login-password" style="margin:0">رمز عبور</label>
-                <button type="button" onclick="Portal.togglePasswordVisibility('login-password', 'pw-eye-icon')" title="نمایش/پنهان‌سازی رمز" style="background:none;border:none;color:rgba(255,255,255,0.65);cursor:pointer;font-size:13px;padding:2px 6px">
-                  <i class="fas fa-eye" id="pw-eye-icon"></i>
+
+            <div class="auth-hero-card">
+              <div class="auth-hero-card-icon"><i class="fas fa-coins"></i></div>
+              <div class="auth-hero-card-content">
+                <strong>قرارداد دیجیتال و حسابداری دقیق</strong>
+                <span>محاسبه اقساط، فاکتور هوشمند و ثبت تراکنش‌ها</span>
+              </div>
+            </div>
+
+            <div class="auth-hero-card">
+              <div class="auth-hero-card-icon"><i class="fas fa-shield-alt"></i></div>
+              <div class="auth-hero-card-content">
+                <strong>پایداری و امنیت داده سطح سازمانی</strong>
+                <span>پایگاه داده محلی سریع + اتصال امن به سرور ایران</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="auth-hero-footer">
+            <div class="auth-hero-avatars">
+              <span class="auth-avatar-circle" style="background:#D97706">م</span>
+              <span class="auth-avatar-circle" style="background:#4F46E5">ن</span>
+              <span class="auth-avatar-circle" style="background:#059669">آ</span>
+              <span class="auth-avatar-circle" style="background:#2563EB">س</span>
+            </div>
+            <div class="auth-hero-stats">
+              <strong>مورد اعتماد برترین استودیوها و آتلیه‌های کشور</strong>
+              <small><i class="fas fa-circle" style="color:#22c55e;font-size:7px"></i> سرور ایران پرسرعت و پایدار</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- ستون کارت ورود و فرم -->
+        <div class="auth-cinema-form-wrap" id="auth-card-wrap">
+          <div class="auth-card glass-panel auth-cinema-card">
+            <div class="auth-cinema-head">
+              <div class="auth-cinema-logo"><i class="fas fa-camera-retro"></i></div>
+              <h2 class="auth-cinema-title" id="auth-title-text">ورود به مدیریت استودیو</h2>
+              <p class="auth-cinema-sub" id="auth-sub-text">شماره موبایل و رمز عبور خود را وارد کنید</p>
+            </div>
+
+            <div class="auth-method-tabs auth-cinema-tabs" style="margin-bottom:20px">
+              <button type="button" id="tab-btn-login" class="auth-method-tab auth-cinema-tab auth-method-tab--active" onclick="Portal.setAuthTab('login')">
+                <i class="fas fa-sign-in-alt"></i> ورود به سیستم
+              </button>
+              <button type="button" id="tab-btn-register" class="auth-method-tab auth-cinema-tab" onclick="Portal.setAuthTab('register')">
+                <i class="fas fa-user-plus"></i> ثبت‌نام استودیو
+              </button>
+            </div>
+
+            <!-- فرم ورود -->
+            <div id="auth-login-view" class="auth-form" style="display:block">
+              <div class="auth-field">
+                <label class="auth-label" for="login-identifier">شماره موبایل یا ایمیل</label>
+                <div class="auth-input-wrap">
+                  <i class="fas fa-user-circle"></i>
+                  <input type="text" id="login-identifier" class="ltr" dir="ltr" autocomplete="username" placeholder="0912... یا name@gmail.com" autofocus/>
+                </div>
+              </div>
+              <div class="auth-field">
+                <label class="auth-label" for="login-password">رمز عبور</label>
+                <div class="auth-input-wrap">
+                  <i class="fas fa-lock"></i>
+                  <input type="password" id="login-password" class="ltr" dir="ltr" autocomplete="current-password" placeholder="رمز عبور خود را وارد کنید"/>
+                  <button type="button" class="auth-pw-toggle" onclick="Portal.togglePasswordVisibility('login-password', 'pw-eye-icon')" title="نمایش/پنهان‌سازی رمز" tabindex="-1">
+                    <i class="fas fa-eye" id="pw-eye-icon"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="auth-error" id="login-error"></div>
+              <button type="button" class="auth-btn auth-btn-primary" id="login-btn" onclick="Portal.loginPassword()">
+                <i class="fas fa-sign-in-alt"></i> ورود به پنل استودیو
+              </button>
+
+              <div style="display:flex;justify-content:center;align-items:center;margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.07)">
+                <button type="button" class="auth-sms-chip" onclick="Portal.setLoginMethod('sms')">
+                  <i class="fas fa-sms"></i> ورود با پیامک یک‌بار مصرف
                 </button>
               </div>
-              <div class="auth-input-wrap">
-                <i class="fas fa-key"></i>
-                <input type="password" id="login-password" class="ltr" dir="ltr" autocomplete="current-password" placeholder="رمز عبور خود را وارد کنید"/>
-              </div>
             </div>
-            <div class="auth-error" id="login-error"></div>
-            <button type="button" class="auth-btn auth-btn-primary" id="login-btn" onclick="Portal.loginPassword()">
-              <i class="fas fa-sign-in-alt"></i> ورود به پنل استودیو
-            </button>
 
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);font-size:12px">
-              <button type="button" onclick="Portal.setLoginMethod('sms')" style="background:none;border:none;color:rgba(255,255,255,0.75);cursor:pointer;padding:0;font-family:inherit;font-size:12px;text-decoration:underline">
-                <i class="fas fa-sms"></i> ورود با پیامک یک‌بار مصرف
+            <!-- فرم ثبت‌نام استودیو جدید -->
+            <div id="auth-register-view" class="auth-form" style="display:none">
+              <div class="auth-grid-2col">
+                <div class="auth-field">
+                  <label class="auth-label" for="reg-studio-name">نام استودیو / آتلیه</label>
+                  <div class="auth-input-wrap">
+                    <i class="fas fa-store"></i>
+                    <input type="text" id="reg-studio-name" placeholder="مثلاً استودیو ماندگار"/>
+                  </div>
+                </div>
+                <div class="auth-field">
+                  <label class="auth-label" for="reg-manager-name">نام و نام خانوادگی مدیر</label>
+                  <div class="auth-input-wrap">
+                    <i class="fas fa-user-tie"></i>
+                    <input type="text" id="reg-manager-name" placeholder="مثلاً علی محمدی"/>
+                  </div>
+                </div>
+              </div>
+
+              <div class="auth-grid-2col">
+                <div class="auth-field">
+                  <label class="auth-label" for="reg-phone">شماره همراه مدیر (جهت ورود)</label>
+                  <div class="auth-input-wrap">
+                    <i class="fas fa-mobile-alt"></i>
+                    <input type="tel" id="reg-phone" class="ltr" dir="ltr" inputmode="numeric" placeholder="09121234567"/>
+                  </div>
+                </div>
+                <div class="auth-field">
+                  <label class="auth-label" for="reg-email">ایمیل / جیمیل <small style="opacity:0.65">(جهت بکاپ)</small></label>
+                  <div class="auth-input-wrap">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="reg-email" class="ltr" dir="ltr" placeholder="name@gmail.com"/>
+                  </div>
+                </div>
+              </div>
+
+              <div class="auth-grid-2col">
+                <div class="auth-field">
+                  <label class="auth-label" for="reg-password">رمز عبور مدیر</label>
+                  <div class="auth-input-wrap">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="reg-password" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="حداقل ۶ کاراکتر"/>
+                    <button type="button" class="auth-pw-toggle" onclick="Portal.togglePasswordVisibility('reg-password', 'reg-pw-eye-icon')" title="نمایش رمز" tabindex="-1">
+                      <i class="fas fa-eye" id="reg-pw-eye-icon"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="auth-field">
+                  <label class="auth-label" for="reg-password-confirm">تکرار رمز عبور</label>
+                  <div class="auth-input-wrap">
+                    <i class="fas fa-shield-alt"></i>
+                    <input type="password" id="reg-password-confirm" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="تکرار رمز عبور"/>
+                  </div>
+                </div>
+              </div>
+              <div class="auth-error" id="reg-error"></div>
+              <button type="button" class="auth-btn auth-btn-primary" id="reg-btn" onclick="Portal.submitRegister()" style="margin-top:6px">
+                <i class="fas fa-rocket"></i> ساخت و ثبت استودیو
               </button>
-              <a href="javascript:void(0)" onclick="Portal.setAuthTab('register')" style="color:var(--glass-accent, #F59E0B);font-weight:700;text-decoration:none">
-                <i class="fas fa-user-plus"></i> ساخت استودیو جدید
-              </a>
             </div>
+
+            <div class="auth-cinema-foot"><a href="site.html"><i class="fas fa-home"></i> صفحه اصلی استودیو</a></div>
           </div>
-          <p class="auth-unified-foot"><a href="site.html">صفحه اصلی</a></p>
         </div>
       </div>
     </div>

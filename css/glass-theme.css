@@ -482,7 +482,7 @@ body.glass-app {
 }
 
 .glass-app .portal-btn-primary,
-.glass-app .auth-form button:not(.auth-admin-btn) {
+.glass-app .auth-btn-primary {
   background: linear-gradient(135deg, var(--glass-accent), color-mix(in srgb, var(--glass-accent) 75%, #000)) !important;
   color: #111 !important;
   border: none !important;
