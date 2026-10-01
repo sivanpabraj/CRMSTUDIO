@@ -698,6 +698,12 @@ const SMDashboard = {
     SM.navigate('dashboard')
   },
 
+  async resetLayoutConfig() {
+    await this.saveLayoutConfig(this.defaultSectionOrder(), [])
+    SM.toast('چیدمان پیشخوان به حالت پیش‌فرض بازگشت', 'info')
+    SM.navigate('dashboard')
+  },
+
   _renderSectionContent(id, ctx, finance, expenses, forecasts, stages, insights, activeContracts, closeEvents) {
     switch (id) {
       case 'kpis':
@@ -786,6 +792,10 @@ const SMDashboard = {
           </div>
           <div class="sm-exec-toolbar-actions">
             ${SMUI.moduleSearch('dashboard', 'جستجو در مراسم و مشتری...')}
+            ${this._layoutEdit ? `
+            <button type="button" class="sm-btn sm-btn-ghost sm-btn-xs" onclick="SMDashboard.resetLayoutConfig()" title="بازگرداندن چیدمان پیشخوان به حالت اولیه">
+              <i class="fas fa-rotate-left"></i> بازنشانی پیش‌فرض
+            </button>` : ''}
             <button type="button" id="btn-toggle-dash-customizer" class="sm-btn ${this._layoutEdit ? 'sm-btn-warning' : 'sm-btn-ghost'}" onclick="SMDashboard.toggleLayoutEdit()">
               <i class="fas ${this._layoutEdit ? 'fa-check' : 'fa-sliders'}"></i> ${this._layoutEdit ? 'اتمام چیدمان' : 'شخصی‌سازی پیشخوان'}
             </button>

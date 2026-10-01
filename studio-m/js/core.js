@@ -256,6 +256,20 @@ const SM = {
     btn.hidden = !show
   },
 
+  toggleNavGroup(gid) {
+    if (!gid) return
+    const el = document.querySelector(`.sm-nav-group[data-nav-group="${gid}"]`)
+    if (!el) return
+    const isCollapsed = el.classList.toggle('is-collapsed')
+    try {
+      const saved = JSON.parse(localStorage.getItem('sm_nav_collapsed_groups') || '[]')
+      const set = new Set(Array.isArray(saved) ? saved : [])
+      if (isCollapsed) set.add(gid)
+      else set.delete(gid)
+      localStorage.setItem('sm_nav_collapsed_groups', JSON.stringify([...set]))
+    } catch (_) {}
+  },
+
   renderShell() {
     const user = this.user()
     const studio = this.studio()
@@ -271,21 +285,38 @@ const SM = {
     }
     const unread = (typeof DB !== 'undefined' ? DB.get('notifications') : []).filter(n => !n.read).length
 
+    let collapsedGroups = new Set()
+    try {
+      const saved = JSON.parse(localStorage.getItem('sm_nav_collapsed_groups') || '[]')
+      if (Array.isArray(saved)) collapsedGroups = new Set(saved)
+    } catch (_) {}
+
     let navHtml = ''
     for (const [gid, label] of Object.entries(groups)) {
       const items = routes.filter(r => r.group === gid)
       if (!items.length) continue
-      navHtml += `<div class="sm-nav-group"><div class="sm-nav-label">${label}</div>`
-      navHtml += items.map(r => {
-        const off = this.isModuleDisabled(r.id)
-        return `
-        <button type="button" class="sm-nav-item${this.state.route === r.id ? ' active' : ''}${off ? ' sm-nav-item--off' : ''}" data-route="${r.id}" onclick="SM.navigate('${r.id}')">
-          <i class="fas ${r.icon}"></i><span>${this.t(r.id)}</span>
-          ${off ? '<span class="sm-nav-soon">به‌زودی</span>' : ''}
-          ${r.id === 'notifications' && unread ? `<span class="sm-nav-badge">${unread}</span>` : ''}
-        </button>`
-      }).join('')
-      navHtml += '</div>'
+
+      const containsActive = items.some(r => r.id === this.state.route)
+      const isCollapsed = collapsedGroups.has(gid) && !containsActive
+
+      navHtml += `
+      <div class="sm-nav-group${isCollapsed ? ' is-collapsed' : ''}" data-nav-group="${gid}">
+        <div class="sm-nav-label" role="button" tabindex="0" onclick="SM.toggleNavGroup('${gid}')" title="باز / بستن ${this.esc(label)}">
+          <span>${label}</span>
+          <i class="fas fa-chevron-down sm-nav-chevron"></i>
+        </div>
+        <div class="sm-nav-group-items">
+          ${items.map(r => {
+            const off = this.isModuleDisabled(r.id)
+            return `
+            <button type="button" class="sm-nav-item${this.state.route === r.id ? ' active' : ''}${off ? ' sm-nav-item--off' : ''}" data-route="${r.id}" onclick="SM.navigate('${r.id}')">
+              <i class="fas ${r.icon}"></i><span>${this.t(r.id)}</span>
+              ${off ? '<span class="sm-nav-soon">به‌زودی</span>' : ''}
+              ${r.id === 'notifications' && unread ? `<span class="sm-nav-badge">${unread}</span>` : ''}
+            </button>`
+          }).join('')}
+        </div>
+      </div>`
     }
 
     const roleBadge = typeof Access !== 'undefined' ? Access.getRoleBadge(user) : { emoji: '👑', title: roleLabel }

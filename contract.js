@@ -842,6 +842,110 @@ function populateDepositBanks() {
   FinanceSync.populateBankSelect('deposit-bank')
 }
 
+function loadContractData(obj) {
+  if (!obj) return
+  state.currentContractId = obj.id || obj.contractNum || ''
+
+  const sv = (id, val) => {
+    const el = document.getElementById(id)
+    if (el && val !== undefined && val !== null) el.value = val
+  }
+  const sc = (id, val) => {
+    const el = document.getElementById(id)
+    if (el) el.checked = Boolean(val)
+  }
+
+  // Groom & Bride
+  sv('groom-name', obj.groom || '')
+  sv('groom-nid', obj.groomNid || '')
+  sv('groom-phone', obj.phoneGroom || obj.groomPhone || '')
+  sv('groom-addr', obj.groomAddr || obj.addressGroom || '')
+
+  sv('bride-name', obj.bride || '')
+  sv('bride-nid', obj.brideNid || '')
+  sv('bride-phone', obj.phoneBride || obj.bridePhone || '')
+  sv('bride-addr', obj.brideAddr || obj.addressBride || '')
+
+  // Contract meta & dates
+  if (obj.id || obj.contractNum) {
+    sv('contract-num', obj.id || obj.contractNum)
+    const display = document.getElementById('contract-id-display')
+    if (display) display.textContent = obj.id || obj.contractNum
+  }
+  if (obj.contractDate) sv('contract-date', obj.contractDate)
+  if (obj.date || obj.eventDate) sv('event-date', obj.date || obj.eventDate)
+
+  // Venue & details
+  sv('event-venue', obj.venue || '')
+  sv('event-makeup', obj.makeup || '')
+  sv('event-music', obj.music || '')
+  sv('event-tailor', obj.tailor || '')
+  sv('pkg-guests', obj.guests || '')
+
+  if (obj.cameras) sv('pkg-cameras', obj.cameras)
+  if (obj.quality) sv('pkg-quality', obj.quality)
+
+  // Options
+  if (obj.options) {
+    sc('pkg-photo-venue', obj.options.photoVenue)
+    sc('pkg-photo-garden', obj.options.photoGarden)
+    sc('pkg-helishot', obj.options.helishot)
+    sc('pkg-fpv', obj.options.fpv)
+    sc('pkg-crane', obj.options.crane)
+    sc('pkg-tv', obj.options.tv)
+    sc('ord-album', obj.options.album)
+    sc('ord-prints', obj.options.prints)
+    sc('ord-photo-pack', obj.options.photoPack)
+  }
+  if (obj.albumSize) sv('album-size', obj.albumSize)
+  if (obj.printQty) sv('print-qty', obj.printQty)
+  if (obj.photoPackQty) sv('photo-pack-qty', obj.photoPackQty)
+
+  // Financials
+  if (obj.deposit !== undefined && obj.deposit !== null) {
+    sv('deposit', obj.deposit ? String(obj.deposit).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '')
+  }
+  if (obj.payPlan) sv('pay-plan', obj.payPlan)
+  if (obj.terms) sv('contract-terms', obj.terms)
+
+  if (obj.packageId) {
+    state.selectedPackageId = obj.packageId
+    state.selectedPackageName = obj.packageName || ''
+  }
+
+  // Restore staff assignments if present
+  if (obj.staffAssignments || obj.staff) {
+    setTimeout(() => {
+      populatePersonnelDropdowns()
+      const staffMap = obj.staffAssignments || {}
+      for (const [roleKey, val] of Object.entries(staffMap)) {
+        const id = (typeof val === 'object' && val) ? (val.id || val.name) : val
+        const el = document.getElementById(roleKey)
+        if (el && id) el.value = id
+      }
+      if (obj.staff) {
+        for (const [k, v] of Object.entries(obj.staff)) {
+          const el = document.getElementById(k)
+          if (el && !el.value && v) {
+            const opt = Array.from(el.options).find(o => o.dataset.name === v || o.value === v)
+            if (opt) el.value = opt.value
+          }
+        }
+      }
+    }, 100)
+  }
+
+  if (obj.verification) applyVerificationState(obj.verification)
+
+  toggleQualityPrice()
+  toggleAlbumFields()
+  togglePrintFields()
+  togglePhotoPackFields()
+  updateCamOperators()
+  calcTotals()
+  syncPreview()
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const display = document.getElementById('contract-id-display')
   if (display && !gv('contract-num')) display.textContent = 'جدید'
@@ -856,6 +960,30 @@ document.addEventListener('DOMContentLoaded', () => {
   populateDepositBanks()
   calcTotals()
   renderPackagePicker()
+  initVerifyUi()
+
+  // Load from URL query ?id=... or localStorage draft
+  try {
+    const urlParams = new URLSearchParams(window.location.search)
+    const editId = urlParams.get('id')
+    if (editId && typeof DB !== 'undefined' && DB.get) {
+      const contracts = DB.get('contracts') || []
+      const found = contracts.find(c => String(c.id) === String(editId))
+      if (found) {
+        loadContractData(found)
+        toast('اطلاعات قرارداد بارگذاری شد', 'info')
+        return
+      }
+    }
+
+    const draftRaw = localStorage.getItem('talar_contract_draft')
+    if (draftRaw) {
+      const draftObj = JSON.parse(draftRaw)
+      if (draftObj && (draftObj.bride || draftObj.groom || draftObj.total || draftObj.date)) {
+        loadContractData(draftObj)
+      }
+    }
+  } catch (_) { /* ignore */ }
 })
 
 function personMatchesStaffRole(p, keywords) {
@@ -917,16 +1045,32 @@ function populatePersonnelDropdowns() {
   ids.forEach(id => fillStaffSelect(id, STAFF_SELECT_ROLES[id] || []))
 }
 
-function saveContractDraft() {
+async function saveContractDraft() {
   // ذخیره پیش‌نویس قرارداد بدون نهایی‌سازی
   const contractObj = buildContractObject(false);
   if (!contractObj) return;
 
-  // ذخیره موقت در localStorage
+  contractObj.isDraft = true;
+  contractObj.status = 'draft';
+  state.currentContractId = contractObj.id;
+
+  // ذخیره در localStorage و دیتابیس
   try {
     localStorage.setItem('talar_contract_draft', JSON.stringify(contractObj));
-    toast('پیش‌نویس ذخیره شد ✓', 'success');
+
+    if (typeof SecureDB !== 'undefined' && SecureDB.insert) {
+      const contracts = (typeof DB !== 'undefined' && DB.get ? DB.get('contracts') : []) || [];
+      const existing = contracts.find(c => c.id === contractObj.id);
+      if (existing) {
+        await SecureDB.update('contracts', existing.id, contractObj);
+      } else {
+        await SecureDB.insert('contracts', contractObj);
+      }
+      if (typeof DB !== 'undefined' && DB.flush) DB.flush();
+    }
+    toast('پیش‌نویس قرارداد با موفقیت ذخیره شد ✓', 'success');
   } catch(e) {
+    console.error('Save draft error:', e);
     toast('خطا در ذخیره پیش‌نویس', 'error');
   }
 }
@@ -1011,6 +1155,13 @@ async function finalizeContract() {
 
   if (typeof DB.log === 'function') DB.log('contract_final', contractObj.couple)
   DB.flush?.()
+
+  if (state.currentContractId && state.currentContractId !== record.id) {
+    try {
+      const existingDraft = (DB.get('contracts') || []).find(c => c.id === state.currentContractId && c.status === 'draft');
+      if (existingDraft) await SecureDB.remove('contracts', existingDraft.id);
+    } catch (_) {}
+  }
   localStorage.removeItem('talar_contract_draft')
   toast('قرارداد ثبت شد' + (assignedStaff.length ? ` — ${assignedStaff.length} همکار ابلاغ شد` : ''), 'success')
   setTimeout(() => { window.location.href = 'studio-m/#contracts' }, 1200)
@@ -1028,16 +1179,17 @@ function buildContractObject(isFinalized) {
   const phoneBride = gv('bride-phone') || gv('c-phone-b');
   const phoneGroom = gv('groom-phone') || gv('c-phone-g');
 
-  if (!bride || !groom) {
+  if (isFinalized && (!bride || !groom)) {
     toast('نام عروس و داماد الزامی است', 'error');
     return null;
   }
 
+  const couple = (bride && groom) ? `${bride} و ${groom}` : (bride || groom || 'پیش‌نویس قرارداد');
   const total = state.total || 0
   const depositVal = parseMoney(gv('deposit'))
-  const contractId = gv('contract-num') || generateContractNum(gv('event-date')) || ('TMP-' + Date.now())
-  const venue = gv('event-venue') || '—'
   const eventDate = gv('event-date') || todayFa()
+  const contractId = gv('contract-num') || (gv('event-date') ? generateContractNum(gv('event-date')) : '') || state.currentContractId || ('TMP-' + Date.now())
+  const venue = gv('event-venue') || '—'
   const contractDate = gv('contract-date') || todayFa()
 
   // جمع دستمزد پرسنل
@@ -1046,7 +1198,7 @@ function buildContractObject(isFinalized) {
   const assignedStaff = getAssignedStaff()
   return {
     id: contractId,
-    couple: bride + ' و ' + groom,
+    couple,
     bride: bride,
     groom: groom,
     phoneBride: normalizePhoneField('bride-phone'),
