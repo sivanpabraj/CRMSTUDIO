@@ -28,8 +28,12 @@ const PortalInvite = {
   },
 
   portalUrl(user) {
-    const base = location.origin + location.pathname.replace(/[^/]+$/, '')
-    return base + this.portalPath(user)
+    try {
+      const base = location.origin + location.pathname.replace(/[^/]+$/, '')
+      return new URL(this.portalPath(user), base).href
+    } catch {
+      return location.origin + '/index.html?view=portal'
+    }
   },
 
   portalLabel(user) {

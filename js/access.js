@@ -71,8 +71,8 @@ const Access = {
     const user = Auth.getUser()
     if (this.isSystemAdmin(user) || this.isStudioManager(user)) return 'studio-m/'
     if (this.isManagement(user)) return 'studio-m/'
-    if (this.isStaffOnly(user) || Auth.userHasPermission?.('view_own_projects')) {
-      return 'studio-m/'
+    if (this.isStaffOnly(user) || !this.canAccessStudioM(user)) {
+      return 'index.html?view=portal'
     }
     return 'studio-m/'
   },

@@ -33,7 +33,8 @@ const BackupService = {
       })
       await DB.flush?.()
 
-      if (prev.backupAutoDownload || label === 'manual') {
+      // ذخیره در دیتابیس همیشه انجام می‌شود، اما دانلود فایل در مرورگر فقط با درخواست دستی کاربر
+      if (label === 'manual') {
         this._download(json, key, label)
       }
 

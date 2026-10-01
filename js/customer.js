@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════
-   MAN — Customer Portal v2
+   Studio ERP — Customer Portal
    ══════════════════════════════════════════════ */
 
 const CustomerPortal = {

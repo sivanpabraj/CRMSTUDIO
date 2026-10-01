@@ -72,7 +72,7 @@ const UnifiedLogin = {
     if (!resolved) return 'index.html'
     if (resolved.kind === 'manager') return 'studio-m/'
     if (resolved.kind === 'admin') return 'studio-m/'
-    if (resolved.kind === 'staff') return 'studio-m/'
+    if (resolved.kind === 'staff') return 'index.html?view=portal'
     if (resolved.kind === 'customer') return 'customer.html'
     return 'index.html'
   },
@@ -157,7 +157,9 @@ const UnifiedLogin = {
     // پرسنل/ادمین دعوت‌شده: همان کد دعوت مدیر را دوباره بفرست / نشان بده (کد دوم نساز)
     if (resolved.user && typeof PortalInvite !== 'undefined' &&
         PortalInvite.needsOtpVerification(resolved.user)) {
-      const inv = await PortalInvite.sendInvite(resolved.user.id)
+      const inv = typeof SecureDB !== 'undefined' && SecureDB.runInternalAsync
+        ? await SecureDB.runInternalAsync(() => PortalInvite.sendInvite(resolved.user.id))
+        : await PortalInvite.sendInvite(resolved.user.id)
       if (!inv.ok) return inv
       this._setPending({
         phone,
@@ -285,7 +287,7 @@ const UnifiedLogin = {
     // یک مرحله: تأیید پیامک ورود = فعال‌سازی پرتال (بدون کد دوم)
     if (typeof PortalInvite !== 'undefined' && PortalInvite.needsOtpVerification(user)) {
       try {
-        await SecureDB.update('users', user.id, {
+        const updater = () => SecureDB.update('users', user.id, {
           portalStatus: 'active',
           portalOtp: {
             ...(user.portalOtp || {}),
@@ -294,6 +296,11 @@ const UnifiedLogin = {
             via: 'unified_sms_login'
           }
         })
+        if (typeof SecureDB !== 'undefined' && SecureDB.runInternalAsync) {
+          await SecureDB.runInternalAsync(updater)
+        } else {
+          await updater()
+        }
       } catch { /* */ }
     }
 
