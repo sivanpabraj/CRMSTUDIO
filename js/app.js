@@ -143,7 +143,7 @@ const Portal = {
         <div class="auth-ambient-fallback" aria-hidden="true"></div>
 
         <div class="auth-cinema-container">
-          <!-- ستون برند و ویترین سینمایی استودیو -->
+          <!-- ستون برند و ویترین استودیو -->
           <div class="auth-cinema-hero">
             <div class="auth-hero-badge">
               <span class="auth-hero-badge-dot"></span>
@@ -153,7 +153,7 @@ const Portal = {
 
             <h1 class="auth-hero-title">
               اکوسیستم یکپارچه<br>
-              <span class="auth-hero-title-accent">مدیریت آتلیه و سینما</span>
+              <span class="auth-hero-title-accent">مدیریت آتلیه و استودیو</span>
             </h1>
 
             <p class="auth-hero-subtitle">
