@@ -1160,7 +1160,9 @@ async function finalizeContract() {
     try {
       const existingDraft = (DB.get('contracts') || []).find(c => c.id === state.currentContractId && c.status === 'draft');
       if (existingDraft) await SecureDB.remove('contracts', existingDraft.id);
-    } catch (_) {}
+    } catch (e) {
+      console.warn('Could not remove previous draft record:', e)
+    }
   }
   localStorage.removeItem('talar_contract_draft')
   toast('قرارداد ثبت شد' + (assignedStaff.length ? ` — ${assignedStaff.length} همکار ابلاغ شد` : ''), 'success')

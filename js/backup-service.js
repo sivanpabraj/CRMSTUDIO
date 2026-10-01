@@ -22,7 +22,6 @@ const BackupService = {
       const key = `${AppConfig.BACKUP_PREFIX}${ts}`
       await DB.saveBackup(key, json)
       const now = new Date().toISOString()
-      const prev = this.settings()
       const jalaliAt = typeof Utils !== 'undefined' ? Utils.formatJalaliDateTime(ts) : Utils.todayJalali()
       await SecureDB.merge('studioInfo', {
         lastBackup: Utils.todayJalali(),

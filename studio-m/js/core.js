@@ -267,7 +267,9 @@ const SM = {
       if (isCollapsed) set.add(gid)
       else set.delete(gid)
       localStorage.setItem('sm_nav_collapsed_groups', JSON.stringify([...set]))
-    } catch (_) {}
+    } catch (e) {
+      console.warn('Navigation group save error:', e)
+    }
   },
 
   renderShell() {
@@ -289,7 +291,9 @@ const SM = {
     try {
       const saved = JSON.parse(localStorage.getItem('sm_nav_collapsed_groups') || '[]')
       if (Array.isArray(saved)) collapsedGroups = new Set(saved)
-    } catch (_) {}
+    } catch (e) {
+      console.warn('Navigation group load error:', e)
+    }
 
     let navHtml = ''
     for (const [gid, label] of Object.entries(groups)) {
