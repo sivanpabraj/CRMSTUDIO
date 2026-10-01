@@ -36,6 +36,16 @@ export const ServerSync = {
     console.info('[ServerSync] موتور همگام‌سازی زنده فعال شد. ویرایش محلی:', this._localRevision)
   },
 
+  _getStudioId() {
+    try {
+      if (typeof DB === 'undefined' || !DB.get) return ''
+      const info = DB.get('studioInfo') || {}
+      return info.id || info.slug || ''
+    } catch {
+      return ''
+    }
+  },
+
   _connectStream() {
     if (typeof EventSource === 'undefined') return
 
@@ -44,7 +54,10 @@ export const ServerSync = {
         this._eventSource.close()
       }
 
-      const streamUrl = '/api/sync/stream'
+      const studioId = this._getStudioId()
+      const streamUrl = studioId
+        ? `/api/sync/stream?studioId=${encodeURIComponent(studioId)}`
+        : '/api/sync/stream'
       this._eventSource = new EventSource(streamUrl)
 
       this._eventSource.onopen = () => {
@@ -78,7 +91,12 @@ export const ServerSync = {
     this._updateStatusUi('syncing')
 
     try {
-      const res = await fetch(`/api/sync/pull?rev=${this._localRevision}`, {
+      const studioId = this._getStudioId()
+      const q = new URLSearchParams()
+      if (this._localRevision) q.set('rev', String(this._localRevision))
+      if (studioId) q.set('studioId', studioId)
+
+      const res = await fetch(`/api/sync/pull?${q.toString()}`, {
         cache: 'no-store'
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -89,8 +107,8 @@ export const ServerSync = {
         return
       }
 
-      // اگر سرور خالی است اما دیتای محلی وجود دارد -> مقداردهی اولیه سرور
-      if (json.empty && initial) {
+      // اگر سرور برای این استودیو خالی است اما دیتای محلی وجود دارد -> مقداردهی اولیه سرور
+      if (json.empty && initial && studioId) {
         const localContracts = DB.get('contracts') || []
         const localUsers = DB.get('users') || []
         if (localContracts.length > 0 || localUsers.length > 0) {
@@ -148,10 +166,10 @@ export const ServerSync = {
   async push({ force = false } = {}) {
     if (this._isPushing) return
 
+    const studioId = this._getStudioId()
     const localUsers = DB.get('users') || []
     const localStudio = DB.get('studioInfo') || {}
     if (!localUsers.length && !localStudio.setupCompleted && !force) {
-      console.warn('[ServerSync] صرف‌نظر از ارسال: دیتابیس محلی کاربر فعالی ندارد.')
       return
     }
 
@@ -164,9 +182,13 @@ export const ServerSync = {
 
       const res = await fetch('/api/sync/push', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(studioId ? { 'X-Studio-Id': studioId } : {})
+        },
         body: JSON.stringify({
           data,
+          studioId,
           clientRev: this._localRevision
         })
       })

@@ -735,6 +735,55 @@ const SMDashboard = {
     }
   },
 
+  _quickActionBar() {
+    return `
+      <div class="sm-quick-actions-bar" style="display:flex;gap:10px;margin-bottom:18px;overflow-x:auto;padding-bottom:4px;flex-wrap:wrap">
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="window.location.href='../contract.html'"><i class="fas fa-plus-circle"></i> قرارداد جدید</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('accounting')"><i class="fas fa-cash-register"></i> ثبت تراکنش مالی</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('calendar')"><i class="fas fa-calendar-plus"></i> آفیش و تقویم</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('employees')"><i class="fas fa-user-plus"></i> افزودن پرسنل</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('settings')"><i class="fas fa-gear"></i> ضوابط و تنظیمات</button>
+      </div>`
+  },
+
+  _onboardingCard(activeContracts) {
+    if (activeContracts > 0) return ''
+    return `
+      <div class="sm-onboarding-card" style="background:linear-gradient(135deg, rgba(201,169,110,0.12), rgba(0,113,227,0.08));border:1px solid rgba(201,169,110,0.3);border-radius:16px;padding:20px;margin-bottom:24px;position:relative">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+          <div>
+            <span class="sm-badge sm-badge-primary" style="margin-bottom:8px"><i class="fas fa-sparkles"></i> خوش‌آمدید به نرم‌افزار جامع مدیریت استودیو</span>
+            <h3 style="margin:4px 0 8px;font-size:1.15rem;font-weight:700">راهنمای راه‌اندازی سریع استودیو در ۴ گام</h3>
+            <p style="font-size:.85rem;color:var(--sm-text-muted);margin:0;max-width:680px;line-height:1.7">
+              سیستم شما کاملاً آماده و ایزوله است. برای شروع چرخه هوشمند مدیریت مراسم‌ها، ۴ مرحله زیر را به ترتیب انجام دهید:
+            </p>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-top:16px">
+          <div style="background:var(--sm-bg-card, rgba(255,255,255,0.03));padding:12px 14px;border-radius:12px;border:1px solid var(--sm-border)">
+            <strong style="display:block;margin-bottom:4px;font-size:.88rem">۱. اطلاعات استودیو و مهر</strong>
+            <p style="font-size:.78rem;color:var(--sm-text-muted);margin:0 0 10px">نام آتلیه، لوگو و امضای دیجیتال</p>
+            <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost" onclick="SM.navigate('settings')">تنظیم مشخصات <i class="fas fa-arrow-left"></i></button>
+          </div>
+          <div style="background:var(--sm-bg-card, rgba(255,255,255,0.03));padding:12px 14px;border-radius:12px;border:1px solid var(--sm-border)">
+            <strong style="display:block;margin-bottom:4px;font-size:.88rem">۲. حساب و صندوق مالی</strong>
+            <p style="font-size:.78rem;color:var(--sm-text-muted);margin:0 0 10px">تعریف کارت‌خوان و حساب بانکی</p>
+            <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost" onclick="SM.navigate('accounting')">مدیریت حساب‌ها <i class="fas fa-arrow-left"></i></button>
+          </div>
+          <div style="background:var(--sm-bg-card, rgba(255,255,255,0.03));padding:12px 14px;border-radius:12px;border:1px solid var(--sm-border)">
+            <strong style="display:block;margin-bottom:4px;font-size:.88rem">۳. عکاسان و تدوین‌گران</strong>
+            <p style="font-size:.78rem;color:var(--sm-text-muted);margin:0 0 10px">ثبت پرسنل جهت آفیش و دستمزد</p>
+            <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost" onclick="SM.navigate('employees')">افزودن تیم <i class="fas fa-arrow-left"></i></button>
+          </div>
+          <div style="background:var(--sm-bg-card, rgba(255,255,255,0.03));padding:12px 14px;border-radius:12px;border:1px solid var(--sm-border)">
+            <strong style="display:block;margin-bottom:4px;font-size:.88rem">۴. ثبت اولین قرارداد</strong>
+            <p style="font-size:.78rem;color:var(--sm-text-muted);margin:0 0 10px">ثبت مراسم عروسی، عقد یا کودک</p>
+            <button type="button" class="sm-btn sm-btn-xs sm-btn-primary" onclick="window.location.href='../contract.html'">ثبت قرارداد <i class="fas fa-arrow-left"></i></button>
+          </div>
+        </div>
+      </div>`
+  },
+
   render(el) {
     const ctx = this._ctx()
     if (!this._canViewFinance()) {
@@ -802,6 +851,8 @@ const SMDashboard = {
             <button type="button" class="sm-btn sm-btn-primary" onclick="window.location.href='../contract.html'"><i class="fas fa-plus"></i> قرارداد جدید</button>
           </div>
         </div>
+        ${this._quickActionBar()}
+        ${this._onboardingCard(activeContracts)}
         <div class="sm-dash-sections-container" id="sm-dash-sections-container">
           ${sectionsHtml}
         </div>

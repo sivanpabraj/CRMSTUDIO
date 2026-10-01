@@ -5,14 +5,17 @@ const SMSettings = {
   _search: '',
 
   TAB_META: [
-    { id: 'profile', icon: 'fa-user', title: 'پروفایل من', keywords: 'نام موبایل ایمیل لوگو رمز عبور پسورد password' },
-    { id: 'studio', icon: 'fa-building', title: 'استودیو', keywords: 'آدرس تلفن شعار شبکه اجتماعی کد عضویت join' },
+    { id: 'profile', icon: 'fa-user', title: 'پروفایل مدیر', keywords: 'نام موبایل ایمیل لوگو رمز عبور پسورد password' },
+    { id: 'studio', icon: 'fa-building', title: 'اطلاعات استودیو', keywords: 'آدرس تلفن شعار شبکه اجتماعی کد عضویت join' },
+    { id: 'legal', icon: 'fa-scale-balanced', title: 'ضوابط قرارداد و صنف', keywords: 'قرارداد صنف تعهدات شرایط کنسلی آرشیو مالیات قوانین صنف عکاسان' },
+    { id: 'automation', icon: 'fa-bolt', title: 'اتوماسیون پیامک', keywords: 'سالگرد ازدواج اقساط یادآوری اعلان الگو باشگاه مشتریان' },
+    { id: 'security', icon: 'fa-shield-halved', title: 'امنیت و نشست‌ها', keywords: 'خروج نشست‌ها دستگاه‌ها انقضا پسورد امنیت' },
     { id: 'widgets', icon: 'fa-gauge-high', title: 'پیشخوان مدیریتی', keywords: 'داشبورد مالی عملیات نمودار سلامت مالی' },
-    { id: 'site', icon: 'fa-globe', title: 'سایت', keywords: 'وب سایت html embed لینک ورود' },
-    { id: 'sms', icon: 'fa-sms', title: 'پیامک', keywords: 'sms api کاوهنگار پیامک' },
-    { id: 'backup', icon: 'fa-cloud', title: 'پشتیبان', keywords: 'backup بازیابی restore دانلود پوشه فایل' },
+    { id: 'site', icon: 'fa-globe', title: 'سایت و پورتال', keywords: 'وب سایت html embed لینک ورود' },
+    { id: 'sms', icon: 'fa-sms', title: 'درگاه پیامک', keywords: 'sms api کاوهنگار پیامک ملی پیامک' },
+    { id: 'backup', icon: 'fa-cloud', title: 'پشتیبان و دیتا', keywords: 'backup بازیابی restore دانلود پوشه فایل' },
     { id: 'cloud', icon: 'fa-cloud-arrow-up', title: 'ابر Supabase', keywords: 'supabase sync cloud ابر همگام sync' },
-    { id: 'system', icon: 'fa-server', title: 'سیستم', keywords: 'پاکسازی بازنشانی reset wipe امنیت مدیر پیشفرض' }
+    { id: 'system', icon: 'fa-server', title: 'سیستم و بازنشانی', keywords: 'پاکسازی بازنشانی reset wipe امنیت مدیر پیشفرض' }
   ],
 
   setTab(tab) {
@@ -67,7 +70,7 @@ const SMSettings = {
   render(el) {
     const info = SM.studio()
     el.innerHTML = `
-      ${SMUI.sectionHead('تنظیمات', 'پروفایل · استودیو · پشتیبان · سیستم')}
+      ${SMUI.sectionHead('تنظیمات پیشرفته استودیو', 'پروفایل · ضوابط صنف · اتوماسیون پیامک · امنیت · پشتیبان')}
       ${this._searchBar()}
       ${SMUI.tabs(this.TAB_META.map(t => ({
         id: t.id,
@@ -81,6 +84,9 @@ const SMSettings = {
 
   _renderTab(info) {
     if (this._tab === 'profile') return this._profileTab()
+    if (this._tab === 'legal') return this._legalTab(info)
+    if (this._tab === 'automation') return this._automationTab(info)
+    if (this._tab === 'security') return this._securityTab(info)
     if (this._tab === 'widgets') return this._widgetsTab()
     if (this._tab === 'site') return this._siteTab(info)
     if (this._tab === 'sms') return this._smsTab(info)
@@ -185,6 +191,133 @@ const SMSettings = {
         ${SMUI.formField('شبکه‌های اجتماعی', 'set-social', { value: live.social || '', placeholder: 'اینستاگرام، تلگرام...' })}
         <p style="font-size:.78rem;color:var(--sm-text-muted);margin-top:12px">لوگو در تب «پروفایل» · اتصال سایت در تب «سایت»</p>
       </div></div>
+    </div>`
+  },
+
+  _legalTab(info) {
+    const legal = info.legalSettings || {}
+    return `<div class="sm-settings-grid">
+      <div class="sm-card">
+        <div class="sm-card-head">
+          <div class="sm-card-title"><i class="fas fa-scale-balanced"></i> ضوابط قرارداد و شرایط صنف عکاسان</div>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveLegal()"><i class="fas fa-save"></i> ذخیره ضوابط</button>
+        </div>
+        <div class="sm-card-body">
+          <div class="sm-form-row sm-form-row--2">
+            ${SMUI.formField('درصد کسر در کنسلی تا ۳۰ روز قبل مراسم (٪)', 'legal-cancel-30', { value: legal.cancelRate30 ?? '30', type: 'number' })}
+            ${SMUI.formField('درصد کسر در کنسلی کمتر از ۱۵ روز قبل (٪)', 'legal-cancel-15', { value: legal.cancelRate15 ?? '70', type: 'number' })}
+          </div>
+          <div class="sm-form-row sm-form-row--2">
+            ${SMUI.formField('مدت ضمانت نگهداری آرشیو راش و فایل خام', 'legal-archive-period', { value: legal.archivePeriod || 'یک سال خورشیدی' })}
+            ${SMUI.formField('ساعت پایان استاندارد مراسم در تالار', 'legal-end-hour', { value: legal.standardEndHour || '۲۴:۰۰' })}
+          </div>
+          <div class="sm-form-row sm-form-row--2">
+            ${SMUI.formField('هزینه هر ساعت اضافه‌کاری هر تصویربردار (تومان)', 'legal-overtime-rate', { value: legal.overtimeRate ? String(legal.overtimeRate) : '۵۰۰,۰۰۰' })}
+            ${SMUI.formField('شماره پروانه کسب / شناسه اتحادیه عکاسان', 'legal-license-no', { value: legal.licenseNo || '' })}
+          </div>
+          ${SMUI.formField('متن پیش‌فرض شروط و تعهدات قرارداد', 'legal-terms-text', { type: 'textarea', value: legal.defaultTerms || '۱. تحویل راش و فیلم تدوین‌شده منوط به تسویه‌حساب کامل قرارداد می‌باشد.\n۲. مسئولیت تامین امنیت تجهیزات و تصویربرداران در محل سالن بر عهده کارفرما است.\n۳. استودیو تعهد می‌نماید تمامی پرسنل آفیش پوشش رسمی و استاندارد صنف را رعایت کنند.' })}
+        </div>
+      </div>
+      <div class="sm-card">
+        <div class="sm-card-head"><div class="sm-card-title"><i class="fas fa-signature"></i> مهر و امضای دیجیتال استودیو</div></div>
+        <div class="sm-card-body">
+          <p style="font-size:.84rem;color:var(--sm-text-muted);line-height:1.7">تصویر مهر رسمی یا امضای دیجیتال آتلیه را وارد کنید تا به صورت خودکار در نسخه چاپی و PDF قراردادهای مشتریان درج شود.</p>
+          <div style="display:flex;gap:12px;align-items:center;margin-top:12px">
+            <input type="text" id="legal-signature-img" class="sm-input" placeholder="آدرس تصویر یا دیتا URL مهر..." value="${SM.esc(legal.signatureImg || '')}"/>
+            <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="document.getElementById('legal-sig-file').click()"><i class="fas fa-upload"></i> انتخاب فایل</button>
+            <input type="file" id="legal-sig-file" accept="image/*" style="display:none" onchange="SMSettings.uploadSignature(this)"/>
+          </div>
+          ${legal.signatureImg ? `<div style="margin-top:12px;padding:10px;background:rgba(255,255,255,0.05);border-radius:10px;text-align:center"><img src="${SM.esc(legal.signatureImg)}" style="max-height:80px;object-fit:contain"/></div>` : ''}
+        </div>
+      </div>
+    </div>`
+  },
+
+  _automationTab(info) {
+    const auto = info.smsAutomation || {}
+    return `<div class="sm-settings-grid">
+      <div class="sm-card">
+        <div class="sm-card-head">
+          <div class="sm-card-title"><i class="fas fa-bolt"></i> اتوماسیون هوشمند پیامک و باشگاه مشتریان</div>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveAutomation()"><i class="fas fa-save"></i> ذخیره اتوماسیون</button>
+        </div>
+        <div class="sm-card-body">
+          <div class="sm-toggle-row" style="margin-bottom:14px">
+            <label class="sm-toggle">
+              <input type="checkbox" id="auto-anniversary" ${auto.anniversaryEnabled !== false ? 'checked' : ''}/>
+              <span class="sm-toggle-slider"></span>
+            </label>
+            <div>
+              <strong>ارسال خودکار پیامک تبریک سالگرد ازدواج</strong>
+              <div style="font-size:.78rem;color:var(--sm-text-muted)">سالانه در تاریخ سالگرد مراسم، پیامک تبریک همراه با پیشنهاد عکاسی سالگرد ارسال می‌شود.</div>
+            </div>
+          </div>
+          ${SMUI.formField('متن پیامک تبریک سالگرد', 'auto-anniversary-text', { type: 'textarea', value: auto.anniversaryText || 'عروس و داماد عزیز، سالگرد یکی شدنتان مبارک باد 🌸 به همین مناسبت یک عکس یادگاری با ۳۰٪ تخفیف مهمان استودیو ما باشید.' })}
+
+          <div class="sm-toggle-row" style="margin:20px 0 14px">
+            <label class="sm-toggle">
+              <input type="checkbox" id="auto-remind-installment" ${auto.remindInstallment !== false ? 'checked' : ''}/>
+              <span class="sm-toggle-slider"></span>
+            </label>
+            <div>
+              <strong>ارسال خودکار یادآوری سررسید اقساط و تسویه حساب</strong>
+              <div style="font-size:.78rem;color:var(--sm-text-muted)">۳ روز قبل از موعد سررسید اقساط یا موعد مراسم، پیامک یادآوری محترمانه ارسال می‌گردد.</div>
+            </div>
+          </div>
+          ${SMUI.formField('متن پیامک یادآوری اقساط', 'auto-remind-text', { type: 'textarea', value: auto.remindText || 'مشتری گرامی استودیو، یادآوری موعد تسویه قسط قرارداد مراسم شما در ۳ روز آینده است. جهت هماهنگی با مدیریت تماس حاصل فرمایید.' })}
+
+          <div class="sm-toggle-row" style="margin:20px 0 14px">
+            <label class="sm-toggle">
+              <input type="checkbox" id="auto-notify-clip-ready" ${auto.notifyReady !== false ? 'checked' : ''}/>
+              <span class="sm-toggle-slider"></span>
+            </label>
+            <div>
+              <strong>پیامک اعلام آماده بودن کلیپ و آلبوم</strong>
+              <div style="font-size:.78rem;color:var(--sm-text-muted)">پس از پایان مراحل تدوین و چاپ، لینک تحویل کار به مشتری ارسال می‌شود.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`
+  },
+
+  _securityTab(info) {
+    const sec = info.securityPolicy || {}
+    const sessionTimeout = sec.sessionTimeoutMinutes || 480
+    return `<div class="sm-settings-grid">
+      <div class="sm-card">
+        <div class="sm-card-head">
+          <div class="sm-card-title"><i class="fas fa-shield-halved"></i> سیاست‌های امنیتی و کنترل نشست‌ها</div>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveSecurity()"><i class="fas fa-save"></i> ذخیره تنظیمات امنیت</button>
+        </div>
+        <div class="sm-card-body">
+          <div class="sm-form-row sm-form-row--2">
+            <div class="sm-form-group">
+              <label class="sm-label">زمان انقضای خودکار نشست در صورت عدم فعالیت</label>
+              <select id="sec-timeout" class="sm-select">
+                <option value="15" ${sessionTimeout === 15 ? 'selected' : ''}>۱۵ دقیقه</option>
+                <option value="30" ${sessionTimeout === 30 ? 'selected' : ''}>۳۰ دقیقه</option>
+                <option value="60" ${sessionTimeout === 60 ? 'selected' : ''}>۱ ساعت</option>
+                <option value="480" ${sessionTimeout === 480 ? 'selected' : ''}>۸ ساعت (استاندارد شیفت کاری)</option>
+                <option value="1440" ${sessionTimeout === 1440 ? 'selected' : ''}>۲۴ ساعت</option>
+              </select>
+            </div>
+            <div class="sm-form-group">
+              <label class="sm-label">الزام به تغییر رمزهای پیش‌فرض پرسنل</label>
+              <select id="sec-force-pw-change" class="sm-select">
+                <option value="true" ${sec.forcePwChange !== false ? 'selected' : ''}>فعال (پرسنل در اولین ورود رمز را عوض کنند)</option>
+                <option value="false" ${sec.forcePwChange === false ? 'selected' : ''}>اختیاری</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;padding:16px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:12px">
+            <h4 style="color:#EF4444;margin:0 0 8px"><i class="fas fa-triangle-exclamation"></i> خروج اضطراری از تمام دستگاه‌ها</h4>
+            <p style="font-size:.82rem;color:var(--sm-text-muted);line-height:1.7;margin:0 0 12px">در صورتی که حس کردید حسابی در دستگاه دیگری باز مانده است، با زدن این دکمه نشست تمامی کاربران فوراً باطل می‌شود.</p>
+            <button type="button" class="sm-btn sm-btn-danger sm-btn-sm" onclick="SMSettings.killAllSessions()"><i class="fas fa-power-off"></i> خروج فوری از همه دستگاه‌ها</button>
+          </div>
+        </div>
+      </div>
     </div>`
   },
 
@@ -1007,6 +1140,83 @@ const SMSettings = {
     SMSettings.setTab('backup')
   },
 
+  async saveLegal() {
+    const prev = SM.studio()
+    const legal = {
+      ...(prev.legalRules || {}),
+      cancelRate30: Number(document.getElementById('legal-cancel-30')?.value || 30),
+      cancelRate15: Number(document.getElementById('legal-cancel-15')?.value || 70),
+      archivePeriod: document.getElementById('legal-archive-period')?.value?.trim() || 'یک سال خورشیدی',
+      standardEndHour: document.getElementById('legal-end-hour')?.value?.trim() || '۲۴:۰۰',
+      overtimeRate: document.getElementById('legal-overtime-rate')?.value?.trim() || '۵۰۰,۰۰۰',
+      licenseNo: document.getElementById('legal-license-no')?.value?.trim() || '',
+      defaultTerms: document.getElementById('legal-terms-text')?.value?.trim() || '',
+      signatureImg: document.getElementById('legal-signature-img')?.value?.trim() || ''
+    }
+    await SecureDB.merge('studioInfo', { legalRules: legal })
+    SM.toast('ضوابط صنفی و قرارداد با موفقیت ذخیره شد', 'success')
+    SM.navigate('settings')
+  },
+
+  uploadSignature(input) {
+    const file = input?.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) {
+      SM.toast('حجم تصویر نباید بیشتر از ۲ مگابایت باشد', 'error')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const dataUrl = e.target.result
+      const sigInput = document.getElementById('legal-signature-img')
+      if (sigInput) sigInput.value = dataUrl
+      await this.saveLegal()
+    }
+    reader.readAsDataURL(file)
+  },
+
+  async saveAutomation() {
+    const prev = SM.studio()
+    const auto = {
+      ...(prev.smsAutomation || {}),
+      anniversaryEnabled: !!document.getElementById('auto-anniversary')?.checked,
+      anniversaryText: document.getElementById('auto-anniversary-text')?.value?.trim() || '',
+      remindInstallment: !!document.getElementById('auto-remind-installment')?.checked,
+      remindText: document.getElementById('auto-remind-text')?.value?.trim() || '',
+      notifyReady: !!document.getElementById('auto-notify-clip-ready')?.checked
+    }
+    await SecureDB.merge('studioInfo', { smsAutomation: auto })
+    SM.toast('تنظیمات اتوماسیون هوشمند پیامک ذخیره شد', 'success')
+    SM.navigate('settings')
+  },
+
+  async saveSecurity() {
+    const prev = SM.studio()
+    const sec = {
+      ...(prev.securityPolicy || {}),
+      sessionTimeoutMinutes: Number(document.getElementById('sec-timeout')?.value || 480),
+      forcePwChange: document.getElementById('sec-force-pw-change')?.value === 'true'
+    }
+    await SecureDB.merge('studioInfo', { securityPolicy: sec })
+    SM.toast('تنظیمات و سیاست‌های امنیتی ذخیره شد', 'success')
+    SM.navigate('settings')
+  },
+
+  killAllSessions() {
+    if (!confirm('آیا مطمئن هستید که می‌خواهید از تمام نشست‌ها و دستگاه‌ها خارج شوید؟ نشست فعلی نیز بسته خواهد شد.')) return
+    try {
+      localStorage.removeItem('crm_session_token')
+      localStorage.removeItem('crm_current_user')
+      sessionStorage.clear()
+      SM.toast('تمام نشست‌ها با موفقیت خاتمه یافت. در حال انتقال به صفحه ورود...', 'info')
+      setTimeout(() => {
+        window.location.href = '../index.html'
+      }, 1000)
+    } catch {
+      window.location.href = '../index.html'
+    }
+  },
+
   async downloadBackup(key) {
     const json = await DB.getBackup(key)
     if (!json) return SM.toast('یافت نشد', 'error')
@@ -1032,6 +1242,9 @@ SMModules.settings = {
   setTab(tab) { SMSettings.setTab(tab) },
   render(el) { SMSettings.render(el) },
   saveStudio() { SMSettings.saveStudio() },
+  saveLegal() { SMSettings.saveLegal() },
+  saveAutomation() { SMSettings.saveAutomation() },
+  saveSecurity() { SMSettings.saveSecurity() },
   saveSms() { SMSettings.saveSms() },
   testSms() { SMSettings.testSms() },
   backup() { SMSettings.backupNow() },

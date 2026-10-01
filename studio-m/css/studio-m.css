@@ -2436,3 +2436,30 @@ body.sm-sidebar-open { overflow: hidden; }
   justify-content: space-between;
 }
 .sm-pcontract-stamp { font-weight: 800; margin-top: 24px; }
+
+/* Quick Actions & Onboarding Card */
+.sm-quick-actions-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.sm-quick-actions-bar .sm-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.sm-onboarding-card {
+  transition: all 0.25s ease;
+}
+@media (max-width: 768px) {
+  .sm-quick-actions-bar {
+    gap: 8px;
+  }
+  .sm-quick-actions-bar .sm-btn {
+    font-size: 0.8rem;
+    padding: 7px 12px;
+  }
+}
+
