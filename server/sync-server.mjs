@@ -61,6 +61,62 @@ function writeTenantMeta(tenantKey, revision, lastUpdatedAt) {
   }
 }
 
+function normalizePhone(p) {
+  if (!p) return ''
+  const en = String(p)
+    .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+    .replace(/\D/g, '')
+  if (en.startsWith('98')) return '0' + en.slice(2)
+  if (en.length === 10 && en.startsWith('9')) return '0' + en
+  return en
+}
+
+function findTenantByPhone(targetPhone) {
+  const phone = normalizePhone(targetPhone)
+  if (!phone || phone.length < 10) return null
+
+  try {
+    if (!fs.existsSync(TENANTS_DIR)) return null
+    const files = fs.readdirSync(TENANTS_DIR)
+    for (const f of files) {
+      if (f.endsWith('.json') && !f.endsWith('.meta.json')) {
+        const filePath = path.join(TENANTS_DIR, f)
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8')
+          const data = JSON.parse(content)
+          const users = Array.isArray(data.users) ? data.users : []
+          const personnel = Array.isArray(data.personnel) ? data.personnel : []
+          const contracts = Array.isArray(data.contracts) ? data.contracts : []
+
+          const matchUser = users.find(u => normalizePhone(u.phone) === phone || (u.email && u.email.toLowerCase() === targetPhone.toLowerCase()))
+          const matchPersonnel = personnel.find(p => normalizePhone(p.phone) === phone)
+          const matchContract = contracts.find(c => {
+            const cPhones = [c.groomPhone, c.bridePhone, c.phoneGroom, c.phoneBride, c.phone].map(normalizePhone)
+            return cPhones.includes(phone)
+          })
+
+          if (matchUser || matchPersonnel || matchContract) {
+            const tenantKey = f.replace(/\.json$/, '')
+            const meta = readTenantMeta(tenantKey)
+            return {
+              tenantKey,
+              data,
+              revision: meta.revision,
+              updatedAt: meta.lastUpdatedAt,
+              matchedUser: matchUser || null
+            }
+          }
+        } catch { /* skip corrupted file */ }
+      }
+    }
+  } catch (err) {
+    console.warn('[SyncServer] findTenantByPhone error:', err.message)
+  }
+  return null
+}
+
+
 // Client entry: { res, tenantKey }
 const sseClients = new Set()
 
@@ -149,20 +205,53 @@ const server = http.createServer((req, res) => {
     return
   }
 
+  // Find Studio by Phone or Identifier
+  if (req.method === 'GET' && (url.pathname === '/api/sync/find-studio' || url.pathname === '/api/auth/lookup-studio')) {
+    const phone = url.searchParams.get('phone') || url.searchParams.get('identifier') || ''
+    const match = findTenantByPhone(phone)
+    if (!match) {
+      return sendJson(res, 200, { ok: true, found: false })
+    }
+    return sendJson(res, 200, {
+      ok: true,
+      found: true,
+      studioId: match.tenantKey,
+      revision: match.revision,
+      updatedAt: match.updatedAt,
+      data: match.data
+    })
+  }
+
   // Pull Database
   if (req.method === 'GET' && url.pathname === '/api/sync/pull') {
-    // If client does not specify a studio ID, do not leak other studios' data!
-    if (!tenantKey) {
+    let effectiveTenant = tenantKey
+
+    // اگر tenantKey فرستاده نشده، اما شماره موبایل در پارامتر هست، استودیو را بیاب
+    if (!effectiveTenant) {
+      const phoneParam = url.searchParams.get('phone') || url.searchParams.get('identifier') || ''
+      if (phoneParam) {
+        const found = findTenantByPhone(phoneParam)
+        if (found) {
+          return sendJson(res, 200, {
+            ok: true,
+            revision: found.revision,
+            data: found.data,
+            updatedAt: found.updatedAt,
+            tenant: found.tenantKey,
+            foundByPhone: true
+          })
+        }
+      }
       return sendJson(res, 200, { ok: true, empty: true, data: null, revision: 1, message: 'No studio specified' })
     }
 
-    const meta = readTenantMeta(tenantKey)
+    const meta = readTenantMeta(effectiveTenant)
     const clientRev = Number(url.searchParams.get('rev'))
     if (clientRev && clientRev === meta.revision) {
       return sendJson(res, 200, { ok: true, notModified: true, revision: meta.revision })
     }
 
-    const dbFile = getTenantDbPath(tenantKey)
+    const dbFile = getTenantDbPath(effectiveTenant)
     if (!fs.existsSync(dbFile)) {
       return sendJson(res, 200, { ok: true, revision: meta.revision, data: null, updatedAt: meta.lastUpdatedAt, empty: true })
     }
@@ -170,10 +259,51 @@ const server = http.createServer((req, res) => {
     try {
       const content = fs.readFileSync(dbFile, 'utf-8')
       const parsed = JSON.parse(content)
-      return sendJson(res, 200, { ok: true, revision: meta.revision, data: parsed, updatedAt: meta.lastUpdatedAt, tenant: tenantKey })
+      return sendJson(res, 200, { ok: true, revision: meta.revision, data: parsed, updatedAt: meta.lastUpdatedAt, tenant: effectiveTenant })
     } catch (err) {
       return sendJson(res, 500, { ok: false, error: 'خطا در خواندن داده‌های سرور: ' + err.message })
     }
+  }
+
+  // Server SMS dispatcher (Bypasses client CORS and HTTP restrictions)
+  if (req.method === 'POST' && url.pathname === '/api/sms/send') {
+    let body = ''
+    req.setEncoding('utf-8')
+    req.on('data', chunk => { body += chunk })
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const rawPhones = Array.isArray(payload.phones) ? payload.phones : (payload.phone ? [payload.phone] : [])
+        const phones = rawPhones.map(normalizePhone).filter(p => /^09\d{9}$/.test(p))
+        const text = String(payload.text || '').trim()
+        const apiKey = payload.apiKey || '09e58c2abb4a49188d3a1f5c4a53390f'
+        const lineNumber = payload.lineNumber || '50004001004893'
+
+        if (!phones.length || !text) {
+          return sendJson(res, 400, { ok: false, error: 'شماره موبایل و متن پیامک الزامی است' })
+        }
+
+        try {
+          const results = await Promise.all(phones.map(async phone => {
+            const resp = await fetch(`https://console.melipayamak.com/api/send/simple/${encodeURIComponent(apiKey)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              body: JSON.stringify({ from: lineNumber, to: phone, text })
+            })
+            const data = await resp.json().catch(() => ({}))
+            return { ok: resp.ok, data }
+          }))
+          const allOk = results.every(r => r.ok)
+          return sendJson(res, 200, { ok: allOk, results })
+        } catch (fetchErr) {
+          console.warn('[SyncServer] SMS dispatch warning:', fetchErr.message)
+          return sendJson(res, 200, { ok: false, error: fetchErr.message })
+        }
+      } catch (err) {
+        return sendJson(res, 400, { ok: false, error: err.message })
+      }
+    })
+    return
   }
 
   // Push Database

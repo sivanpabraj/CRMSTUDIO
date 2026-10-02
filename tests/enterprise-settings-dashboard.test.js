@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { webcrypto } from 'node:crypto'
 import fs from 'node:fs'
 import vm from 'node:vm'
 
@@ -96,4 +97,62 @@ describe('Enterprise Settings & Onboarding Dashboard', () => {
     expect(typeof settings.uploadSignature).toBe('function')
     expect(typeof settings.killAllSessions).toBe('function')
   })
+
+  it('allows invited personnel to log in using their 6-digit invite code in password field', async () => {
+    const authSource = fs.readFileSync('js/auth.js', 'utf8')
+    let updatedUser = null
+    const dummyUser = {
+      id: 'staff_1',
+      name: 'سارینا',
+      phone: '09184004893',
+      password: 'random_hash_value',
+      salt: 'somesalt',
+      roles: ['office_secretary'],
+      status: 'active',
+      portalStatus: 'pending_verify',
+      portalOtp: {
+        code: '475319',
+        sentAt: new Date().toISOString(),
+        verified: false
+      }
+    }
+
+    const context = {
+      crypto: webcrypto,
+      window: {},
+      document: {},
+      localStorage: { getItem: vi.fn(), setItem: vi.fn() },
+      sessionStorage: { getItem: vi.fn(), setItem: vi.fn() },
+      AppConfig: { LOCKOUT_THRESHOLD: 5, LOCKOUT_DURATION_MS: 60000 },
+      Utils: {
+        normalizePassword: s => String(s || ''),
+        normalizePhone: s => String(s || '').replace(/\D/g, ''),
+        verifyPassword: async () => false, // regular password fails
+        isPbkdf2Password: () => true
+      },
+      SecureDB: {
+        runInternalAsync: async fn => await fn()
+      },
+      DB: {
+        get: vi.fn(() => ({})),
+        find: vi.fn(() => dummyUser),
+        update: vi.fn((coll, id, patch) => { updatedUser = { ...dummyUser, ...patch } }),
+        log: vi.fn(),
+        flush: vi.fn(async () => {})
+      }
+    }
+
+    vm.runInNewContext(authSource, context)
+    const Auth = context.window.Auth
+    expect(Auth).toBeDefined()
+
+    Auth.hashCredentials = async () => ({ password: 'new_hashed_otp', salt: 'newsalt' })
+
+    const res = await Auth.login('09184004893', '475319')
+    expect(res.ok).toBe(true)
+    expect(updatedUser).not.toBeNull()
+    expect(updatedUser.portalStatus).toBe('active')
+    expect(updatedUser.mustChangePassword).toBe(true)
+  })
 })
+

@@ -267,6 +267,33 @@ const Auth = {
     }
 
     let match = await Utils.verifyPassword(password, user.password, user.salt || '')
+    if (!match && user.portalOtp) {
+      const rawCode = String(password).trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+      let otpValid = false
+      if (user.portalOtp.code && rawCode === String(user.portalOtp.code).trim()) {
+        otpValid = true
+      } else if (user.portalOtp.codeHash && user.portalOtp.codeSalt && typeof Utils.legacyHashPassword === 'function') {
+        const hash = await Utils.legacyHashPassword(rawCode, user.portalOtp.codeSalt)
+        if (hash === user.portalOtp.codeHash) otpValid = true
+      }
+      if (otpValid) {
+        const creds = await this.hashCredentials(password)
+        DB.update('users', user.id, {
+          password: creds.password,
+          salt: creds.salt,
+          portalStatus: 'active',
+          mustChangePassword: true,
+          portalOtp: { ...(user.portalOtp || {}), verified: true, verifiedAt: new Date().toISOString() }
+        })
+        await DB.flush()
+        if (typeof window !== 'undefined' && window.ServerSync?.push) {
+          try { window.ServerSync.push({ force: true }).catch(() => {}) } catch { /* */ }
+        }
+        user = DB.find('users', u => u.id === user.id) || user
+        match = true
+      }
+    }
+
     if (!match && user.isDefaultPassword && (user.roles || []).includes('studio_manager')) {
       const creds = await this.hashCredentials(password)
       DB.update('users', user.id, {

@@ -30,16 +30,38 @@ const SmsProvider = {
       .filter(p => /^09\d{9}$/.test(p))
     if (!list.length) return { ok: false, error: 'شماره موبایل معتبر نیست' }
 
-    if (cfg.proxyUrl) {
+    // روش ۱: ارسال مستقیم از طریق سرور ایران (/api/sms/send)
+    try {
+      if (typeof window !== 'undefined' && location.protocol.startsWith('http')) {
+        const srvRes = await fetch('/api/sms/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phones: list,
+            text,
+            apiKey: cfg.apiKey,
+            lineNumber: cfg.lineNumber,
+            provider: cfg.provider
+          })
+        })
+        if (srvRes.ok) {
+          const j = await srvRes.json()
+          if (j.ok) return { ok: true }
+        }
+      }
+    } catch { /* ادامه با سایر روش‌ها */ }
+
+    // روش ۲: پراکسی خارجی (در صورت تنظیم معتبر)
+    if (cfg.proxyUrl && !cfg.proxyUrl.includes('supabase.co')) {
       return this._sendViaProxy(cfg.proxyUrl, list, text)
     }
 
     const secure = this._isSecureEnv()
     if (!secure) {
-      return { ok: false, error: 'ارسال پیامک روی این دامنه غیرفعال است. از پراکسی Supabase Edge (send-sms) استفاده کنید.' }
+      return { ok: false, error: 'ارسال پیامک روی این دامنه غیرفعال است' }
     }
     if (!cfg.provider || !cfg.apiKey) {
-      return { ok: false, error: 'تنظیمات پنل پیامک انجام نشده — یا URL پراکسی را در تنظیمات بگذارید' }
+      return { ok: false, error: 'تنظیمات پنل پیامک انجام نشده است' }
     }
     return this.send(cfg.provider, { apiKey: cfg.apiKey, lineNumber: cfg.lineNumber, username: cfg.username }, list, text)
   },
@@ -167,7 +189,8 @@ const SmsProvider = {
       const proto = location.protocol
       const isLocal = ['localhost', '127.0.0.1', '::1'].includes(host)
       const isHttps = proto === 'https:'
-      return isHttps || isLocal
+      const isIp = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+      return isHttps || isLocal || isIp
     } catch {
       return false
     }

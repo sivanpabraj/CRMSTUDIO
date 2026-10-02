@@ -701,14 +701,14 @@ const Portal = {
     let resolved = isEmail ? null : UnifiedLogin.resolvePhone(identifier)
     if (!resolved || resolved.kind === 'guest' || !DB.get('users').length) {
       try {
-        if (typeof ServerSync !== 'undefined' && ServerSync.pull) {
-          await ServerSync.pull({ initial: true })
-        } else {
-          const res = await fetch('/api/sync/pull?rev=0', { cache: 'no-store' })
-          if (res.ok) {
-            const j = await res.json()
-            if (j.data && typeof DB !== 'undefined' && DB.importJSON) {
-              await DB.importJSON(JSON.stringify(j.data))
+        const pullUrl = `/api/sync/pull?phone=${encodeURIComponent(identifier)}`
+        const res = await fetch(pullUrl, { cache: 'no-store' })
+        if (res.ok) {
+          const j = await res.json()
+          if (j.data && typeof DB !== 'undefined' && DB.importJSON) {
+            await DB.importJSON(JSON.stringify(j.data))
+            if (typeof ServerSync !== 'undefined' && j.tenant) {
+              ServerSync._localRevision = Number(j.revision) || ServerSync._localRevision
             }
           }
         }
@@ -752,11 +752,29 @@ const Portal = {
     if (!Utils.isValidPhone(phone)) { this._err('شماره موبایل نامعتبر است (مثال: 09121234567)'); return }
 
     this._setBtn(true, '')
+
+    let resolved = UnifiedLogin.resolvePhone(phone)
+    if (!resolved || resolved.kind === 'guest' || !DB.get('users').length) {
+      try {
+        const pullUrl = `/api/sync/pull?phone=${encodeURIComponent(phone)}`
+        const res = await fetch(pullUrl, { cache: 'no-store' })
+        if (res.ok) {
+          const j = await res.json()
+          if (j.data && typeof DB !== 'undefined' && DB.importJSON) {
+            await DB.importJSON(JSON.stringify(j.data))
+            if (typeof ServerSync !== 'undefined' && j.tenant) {
+              ServerSync._localRevision = Number(j.revision) || ServerSync._localRevision
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
     const result = await UnifiedLogin.sendOtp(phone)
     this._setBtn(false, '<i class="fas fa-paper-plane"></i> ارسال کد')
 
     if (!result.ok) { this._err(result.error || 'خطا'); return }
-    if (result.demoCode) Utils.toast(`کد تست: ${result.demoCode}`, 'info', 10000)
+    if (result.demoCode) Utils.toast(`کد ورود: ${result.demoCode}`, 'info', 10000)
 
     this.state.step = 'otp'
     this.state._phone = phone
