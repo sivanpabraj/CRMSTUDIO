@@ -43,15 +43,19 @@ const UnifiedLogin = {
     const user = DB.find('users', u => Utils.normalizePhone(u.phone) === phone)
     if (user && user.status !== 'inactive' && user.status !== 'disabled' && user.status !== 'pending') {
       if (typeof Access !== 'undefined') {
+        if (user.portalType === 'staff' || Access.isStaffOnly(user)) {
+          const roleTitle = (user.roles || []).map(r => typeof getRoleTitle === 'function' ? getRoleTitle(r) : r).join('، ') || 'همکار'
+          return { kind: 'staff', user, label: user.name || 'همکار گرامی', roleTitle }
+        }
         if (Access.isStudioManager(user) || Access.isSystemAdmin(user)) {
-          return { kind: 'manager', user, label: 'مدیر استودیو' }
+          return { kind: 'manager', user, label: user.name || 'مدیر استودیو', roleTitle: 'مدیریت استودیو' }
         }
         if (Access.isManagement(user)) {
-          return { kind: 'admin', user, label: typeof PortalInvite !== 'undefined' ? PortalInvite.portalLabel(user) : 'ادمین' }
+          return { kind: 'admin', user, label: typeof PortalInvite !== 'undefined' ? PortalInvite.portalLabel(user) : (user.name || 'ادمین'), roleTitle: 'مدیریت' }
         }
-        return { kind: 'staff', user, label: 'پرسنل' }
+        return { kind: 'staff', user, label: user.name || 'پرسنل', roleTitle: 'همکار' }
       }
-      return { kind: 'staff', user, label: 'کاربر' }
+      return { kind: 'staff', user, label: user.name || 'کاربر', roleTitle: 'همکار' }
     }
 
     const contracts = this.findContractsByPhone(phone)
@@ -61,11 +65,13 @@ const UnifiedLogin = {
         kind: 'customer',
         contracts,
         contract,
-        label: contract?.couple || 'مشتری'
+        label: contract?.couple || 'مشتری گرامی',
+        roleTitle: 'پیگیری مراسم و عکس‌ها',
+        eventDate: contract?.eventDate || ''
       }
     }
 
-    return { kind: 'guest', phone, label: 'مشتری جدید' }
+    return { kind: 'guest', phone, label: 'مشتری جدید', roleTitle: 'مشاوره و رزرو' }
   },
 
   landingUrl(resolved) {
@@ -371,15 +377,19 @@ const UnifiedLogin = {
   resolveUser(user) {
     if (!user) return { kind: 'guest', label: 'مهمان' }
     if (typeof Access !== 'undefined') {
+      if (user.portalType === 'staff' || Access.isStaffOnly(user)) {
+        const roleTitle = (user.roles || []).map(r => typeof getRoleTitle === 'function' ? getRoleTitle(r) : r).join('، ') || 'همکار'
+        return { kind: 'staff', user, label: user.name || 'همکار گرامی', roleTitle }
+      }
       if (Access.isStudioManager(user) || Access.isSystemAdmin(user)) {
-        return { kind: 'manager', user, label: 'مدیر استودیو' }
+        return { kind: 'manager', user, label: user.name || 'مدیر استودیو', roleTitle: 'مدیریت استودیو' }
       }
       if (Access.isManagement(user)) {
-        return { kind: 'admin', user, label: typeof PortalInvite !== 'undefined' ? PortalInvite.portalLabel(user) : 'ادمین' }
+        return { kind: 'admin', user, label: typeof PortalInvite !== 'undefined' ? PortalInvite.portalLabel(user) : (user.name || 'ادمین'), roleTitle: 'مدیریت' }
       }
-      return { kind: 'staff', user, label: 'پرسنل' }
+      return { kind: 'staff', user, label: user.name || 'پرسنل', roleTitle: 'همکار' }
     }
-    return { kind: 'staff', user, label: 'کاربر' }
+    return { kind: 'staff', user, label: user.name || 'کاربر', roleTitle: 'همکار' }
   },
 
   async loginWithPassword(identifier, password) {

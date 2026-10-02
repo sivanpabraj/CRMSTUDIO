@@ -10,7 +10,10 @@ Object.assign(Portal, {
       window.location.href = 'studio-m/'
       return
     }
-    const personnel = DB.findPersonnelByUserId(user.id) || DB.findPersonnelByPhone(user.phone)
+    let personnel = DB.findPersonnelByUserId(user.id) || DB.findPersonnelByPhone(user.phone)
+    if (!personnel && typeof DB.syncPersonnelFromUser === 'function') {
+      personnel = DB.syncPersonnelFromUser(user)
+    }
     if (!personnel) {
       Auth.logout()
       window.location.href = 'index.html?view=portal'
@@ -32,7 +35,10 @@ Object.assign(Portal, {
   renderPortalShell() {
     const user = this.state.currentUser
     if (!user) return
-    const personnel = DB.findPersonnelByUserId(user.id) || DB.findPersonnelByPhone(user.phone)
+    let personnel = DB.findPersonnelByUserId(user.id) || DB.findPersonnelByPhone(user.phone)
+    if (!personnel && typeof DB.syncPersonnelFromUser === 'function') {
+      personnel = DB.syncPersonnelFromUser(user)
+    }
     if (!personnel) { Auth.logout(); window.location.href = 'index.html?view=portal'; return }
     const displayName = personnel?.name || user.name
     const badge = typeof Access !== 'undefined' ? Access.getRoleBadge(user) : { emoji: '👤', title: 'پرسنل' }

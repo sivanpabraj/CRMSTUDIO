@@ -39,11 +39,10 @@ const Access = {
   isStaffOnly(user) {
     user = user || (typeof Auth !== 'undefined' ? Auth.getUser() : null)
     if (!user) return false
+    if (user.portalType === 'staff') return true
+    if (this.isSystemAdmin(user) || this.isStudioManager(user)) return false
     if (this.isManagement(user)) return false
-    return this.roles(user).some(r => {
-      const t = getRole(r).type
-      return t === 'field' || t === 'office'
-    })
+    return true
   },
 
   getPrimaryRoleLabel(user) {
@@ -69,12 +68,10 @@ const Access = {
   getLandingUrl() {
     if (typeof Auth === 'undefined' || !Auth.isLoggedIn()) return 'index.html'
     const user = Auth.getUser()
+    if (user?.portalType === 'staff') return 'index.html?view=portal'
     if (this.isSystemAdmin(user) || this.isStudioManager(user)) return 'studio-m/'
-    if (this.isManagement(user)) return 'studio-m/'
-    if (this.isStaffOnly(user) || !this.canAccessStudioM(user)) {
-      return 'index.html?view=portal'
-    }
-    return 'studio-m/'
+    if (this.canAccessStudioM(user)) return 'studio-m/'
+    return 'index.html?view=portal'
   },
 
   canManageUsers(user) {
@@ -90,6 +87,10 @@ const Access = {
     user = user || (typeof Auth !== 'undefined' ? Auth.getUser() : null)
     if (!user) return false
     if (this.isSystemAdmin(user) || this.isStudioManager(user)) return true
+    if (user.portalType === 'staff') return false
+    const isPersonnel = typeof DB !== 'undefined' && DB.find &&
+      (DB.findPersonnelByUserId?.(user.id) || DB.findPersonnelByPhone?.(user.phone) || DB.find?.('personnel', p => p.userId === user.id || p.phone === user.phone))
+    if (isPersonnel && user.portalType !== 'admin') return false
     return this.isManagement(user)
   },
 

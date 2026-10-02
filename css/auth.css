@@ -1259,6 +1259,84 @@ body.auth-screen a:focus {
 .auth-cal-day--active { background: var(--glass-accent, #F59E0B); color: #111; }
 .auth-cal-past, .auth-cal-empty { background: transparent; color: rgba(255,255,255,.2); cursor: default; }
 
+/* ── Live Role Detection Chip ── */
+.auth-role-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  margin-top: 10px;
+  font-size: 12px;
+  transition: all 0.3s ease;
+  animation: authFadeUp 0.3s ease both;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+}
+.auth-role-chip.manager {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+}
+.auth-role-chip.manager .auth-chip-icon {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+.auth-role-chip.staff {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #93c5fd;
+}
+.auth-role-chip.staff .auth-chip-icon {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+.auth-role-chip.customer {
+  background: rgba(236, 72, 153, 0.12);
+  border-color: rgba(236, 72, 153, 0.35);
+  color: #f472b6;
+}
+.auth-role-chip.customer .auth-chip-icon {
+  background: rgba(236, 72, 153, 0.2);
+  color: #ec4899;
+}
+.auth-role-chip.guest {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+}
+.auth-role-chip.guest .auth-chip-icon {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+.auth-chip-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.auth-chip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: right;
+  flex: 1;
+}
+.auth-chip-title {
+  font-weight: 700;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.auth-chip-desc {
+  font-size: 11px;
+  opacity: 0.8;
+  line-height: 1.3;
+}
+
 @media (max-width: 480px) {
   .auth-page--unified { padding: 18px 12px; }
   .auth-unified-card { padding: 32px 20px 24px; border-radius: 28px; }

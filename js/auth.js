@@ -453,11 +453,6 @@ const Auth = {
     }
 
     if (!ok) {
-      const user = DB.find('users', u => u.id === session.userId)
-      if (user && session.expiresAt && Date.now() < session.expiresAt) {
-        await this._sessionSetSigned(this.SESSION_KEY, working)
-        return true
-      }
       session._sigInvalid = true
       this.logout()
       return false

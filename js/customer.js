@@ -83,10 +83,10 @@ const CustomerPortal = {
           <div class="customer-queue-list">
             ${queue.sorted.slice(0, Math.min(queue.ahead + 3, 8)).map((item, i) => {
               const isYou = item.id === c.id
-              const name = `${item.bride || ''} و ${item.groom || ''}`
+              const name = isYou ? `${item.bride || ''} و ${item.groom || ''}` : `پروژه #${(item.id || '').slice(-4).toUpperCase()}`
               return `<div class="customer-queue-item ${isYou ? 'is-you' : ''}">
                 <span class="q-pos">${i + 1}</span>
-                <span>${isYou ? '👑 شما — ' : ''}${Utils.escapeHtml(name)} ${isYou ? '' : ''}</span>
+                <span>${isYou ? '👑 نوبت شما — ' + Utils.escapeHtml(name) : 'نوبت تحویل ' + Utils.escapeHtml(name)}</span>
               </div>`
             }).join('')}
           </div>

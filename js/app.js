@@ -301,11 +301,12 @@ const Portal = {
         <label class="auth-label" for="login-identifier">شماره موبایل یا ایمیل</label>
         <div class="auth-input-wrap">
           <i class="fas fa-user-circle"></i>
-          <input type="text" id="login-identifier" class="ltr" dir="ltr" autocomplete="username" placeholder="0912... یا name@gmail.com" autofocus/>
+          <input type="text" id="login-identifier" class="ltr" dir="ltr" autocomplete="username" placeholder="0912... یا name@gmail.com" autofocus oninput="Portal.onIdentifierInput(this.value)"/>
         </div>
+        <div id="login-role-chip" class="auth-role-chip" style="display:none"></div>
       </div>
       ${isPw ? `
-      <div class="auth-field">
+      <div class="auth-field" id="login-pw-field">
         <label class="auth-label" for="login-password">رمز عبور</label>
         <div class="auth-input-wrap">
           <i class="fas fa-lock"></i>
@@ -317,7 +318,7 @@ const Portal = {
       </div>` : ''}
       <div class="auth-error" id="login-error"></div>
       <button type="button" class="auth-btn auth-btn-primary" id="login-btn" onclick="Portal.${isPw ? 'loginPassword' : 'sendOtp'}()">
-        <i class="fas fa-${isPw ? 'sign-in-alt' : 'paper-plane'}"></i> ${isPw ? 'ورود به پنل استودیو' : 'ارسال کد پیامکی'}
+        <i class="fas fa-${isPw ? 'sign-in-alt' : 'paper-plane'}"></i> <span id="login-btn-label">${isPw ? 'ورود به پنل استودیو' : 'ارسال کد پیامکی'}</span>
       </button>
 
       <div style="display:flex;justify-content:center;align-items:center;margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.07)">
@@ -593,11 +594,124 @@ const Portal = {
       </div>`
   },
 
+  _resolveTimer: null,
+  onIdentifierInput(val) {
+    clearTimeout(this._resolveTimer)
+    const chip = document.getElementById('login-role-chip')
+    const btnLabel = document.getElementById('login-btn-label')
+    const raw = String(val || '').trim()
+    if (!raw || raw.includes('@') || raw.replace(/\D/g, '').length < 10) {
+      if (chip) { chip.style.display = 'none'; chip.innerHTML = '' }
+      if (btnLabel) {
+        btnLabel.textContent = this.state.loginMethod === 'password' ? 'ورود به پنل استودیو' : 'ارسال کد پیامکی'
+      }
+      return
+    }
+
+    const phone = Utils.normalizePhone(raw)
+    this._resolveTimer = setTimeout(async () => {
+      let resolved = typeof UnifiedLogin !== 'undefined' ? UnifiedLogin.resolvePhone(phone) : null
+      if ((!resolved || resolved.kind === 'guest') && phone.length === 11) {
+        try {
+          const res = await fetch(`/api/sync/pull?phone=${encodeURIComponent(phone)}`, { cache: 'no-store' })
+          if (res.ok) {
+            const j = await res.json()
+            if (j.data && typeof DB !== 'undefined' && DB.importJSON) {
+              await DB.importJSON(JSON.stringify(j.data))
+              resolved = UnifiedLogin.resolvePhone(phone)
+            }
+          }
+        } catch { /* ignore */ }
+      }
+      this._renderRoleChip(resolved, phone)
+    }, 200)
+  },
+
+  _renderRoleChip(resolved, _phone) {
+    const chip = document.getElementById('login-role-chip')
+    const btnLabel = document.getElementById('login-btn-label')
+    if (!chip) return
+
+    if (!resolved || resolved.kind === 'guest') {
+      chip.className = 'auth-role-chip guest'
+      chip.innerHTML = `
+        <div class="auth-chip-icon"><i class="fas fa-sparkles"></i></div>
+        <div class="auth-chip-info">
+          <div class="auth-chip-title">شماره جدید</div>
+          <div class="auth-chip-desc">دریافت مشاوره و رزرو مراسم در استودیو</div>
+        </div>
+      `
+      chip.style.display = 'flex'
+      if (btnLabel) btnLabel.textContent = 'درخواست مشاوره / کد ورود'
+      return
+    }
+
+    if (resolved.kind === 'manager' || resolved.kind === 'admin') {
+      chip.className = 'auth-role-chip manager'
+      chip.innerHTML = `
+        <div class="auth-chip-icon"><i class="fas fa-crown"></i></div>
+        <div class="auth-chip-info">
+          <div class="auth-chip-title">خوش آمدید، ${Utils.escapeHtml(resolved.label)}</div>
+          <div class="auth-chip-desc">مدیریت استودیو — پنل جامع سازمانی</div>
+        </div>
+      `
+      chip.style.display = 'flex'
+      if (btnLabel) btnLabel.textContent = 'ورود به مدیریت استودیو'
+      return
+    }
+
+    if (resolved.kind === 'staff') {
+      chip.className = 'auth-role-chip staff'
+      chip.innerHTML = `
+        <div class="auth-chip-icon"><i class="fas fa-id-badge"></i></div>
+        <div class="auth-chip-info">
+          <div class="auth-chip-title">خوش آمدید، ${Utils.escapeHtml(resolved.label)}</div>
+          <div class="auth-chip-desc">داشبورد پرسنل (${Utils.escapeHtml(resolved.roleTitle || 'همکار')})</div>
+        </div>
+      `
+      chip.style.display = 'flex'
+      if (btnLabel) btnLabel.textContent = 'ورود به پورتال پرسنل'
+      return
+    }
+
+    if (resolved.kind === 'customer') {
+      chip.className = 'auth-role-chip customer'
+      chip.innerHTML = `
+        <div class="auth-chip-icon"><i class="fas fa-gem"></i></div>
+        <div class="auth-chip-info">
+          <div class="auth-chip-title">مراجع محترم: ${Utils.escapeHtml(resolved.label)}</div>
+          <div class="auth-chip-desc">داشبورد پیگیری مراسم و آلبوم عکس‌ها</div>
+        </div>
+      `
+      chip.style.display = 'flex'
+      if (btnLabel) btnLabel.textContent = 'ورود به پیگیری مراسم'
+
+      if (this.state.loginMethod === 'password') {
+        const errEl = document.getElementById('login-error')
+        if (errEl) {
+          errEl.innerHTML = `
+            <div style="font-size:12px;color:#60a5fa;display:flex;align-items:center;gap:6px">
+              <i class="fas fa-info-circle"></i>
+              ورود مراجعین با کد پیامک است.
+              <a href="javascript:void(0)" onclick="Portal.setLoginMethod('sms')" style="color:#93c5fd;text-decoration:underline;font-weight:700">تغییر به ورود پیامکی</a>
+            </div>
+          `
+        }
+      }
+    }
+  },
+
   setLoginMethod(method) {
+    const prevVal = document.getElementById('login-identifier')?.value || ''
     this.state.loginMethod = method
     const loginView = document.getElementById('auth-login-view')
     if (loginView) {
       loginView.innerHTML = this._loginFields()
+      const idInput = document.getElementById('login-identifier')
+      if (idInput && prevVal) {
+        idInput.value = prevVal
+        this.onIdentifierInput(prevVal)
+      }
       const subTextEl = document.getElementById('auth-sub-text') || document.querySelector('.auth-sub')
       if (subTextEl && this.state.authTab === 'login') {
         subTextEl.textContent = method === 'password' ? 'شماره موبایل و رمز عبور خود را وارد کنید' : 'با شماره موبایل و کد پیامک وارد شوید'
@@ -717,8 +831,10 @@ const Portal = {
     }
 
     if (resolved && resolved.kind === 'customer') {
-      this._setBtn(false, '<i class="fas fa-sign-in-alt"></i> ورود به پنل استودیو')
-      this._err('حساب‌های مشتریان با پیامک وارد می‌شوند — تب «ورود با پیامک» را انتخاب کنید')
+      this.setLoginMethod('sms')
+      const idInput = document.getElementById('login-identifier')
+      if (idInput) idInput.value = identifier
+      await this.sendOtp()
       return
     }
 
@@ -731,8 +847,9 @@ const Portal = {
     }
 
     const finish = () => {
-      const safe = Utils.safeAppRedirect?.(result.url)
-      window.location.href = safe || result.url || 'studio-m/'
+      const target = result.url || (resolved ? UnifiedLogin.landingUrl(resolved) : 'index.html')
+      const safe = Utils.safeAppRedirect?.(target)
+      window.location.href = safe || target || 'index.html'
     }
     if (typeof PortalInvite !== 'undefined' && PortalInvite.needsOtpVerification(result.user)) {
       PortalInvite.gateAfterLogin(result.user, finish)
