@@ -432,7 +432,7 @@ const SMEmployees = {
             <div class="sm-pcontract-highlight">
               <strong>نحوه پرداخت مصوب:</strong> ${SM.esc(paySummary)}
             </div>
-            <p style="font-size:0.85rem;margin-top:6px;color:var(--sm-text-muted)">تسویه حساب پس از اتمام موفق کار، تحویل کلیه فایل‌های خام (Raw) یا ادیت‌شده و تأیید ناظر کیفی استودیو انجام می‌گردد.</p>
+            <p class="sm-pcontract-subnote">تسویه حساب پس از اتمام موفق کار، تحویل کلیه فایل‌های خام (Raw) یا ادیت‌شده و تأیید ناظر کیفی استودیو انجام می‌گردد.</p>
           </div>
 
           <div class="sm-pcontract-section">
@@ -452,14 +452,14 @@ const SMEmployees = {
                 <div>امضا و مهر طرف اول (مدیریت استودیو):</div>
                 <div class="sm-pcontract-stamp">
                   <strong>${SM.esc(studioName)}</strong>
-                  <div style="font-size:11px;color:var(--sm-text-muted)">${SM.esc(managerName)}</div>
+                  <div class="sm-pcontract-stamp-sub">${SM.esc(managerName)}</div>
                 </div>
               </div>
               <div class="sm-pcontract-sign-box">
                 <div>امضا و اثر انگشت طرف دوم (همکار):</div>
                 <div class="sm-pcontract-stamp">
                   <strong>${SM.esc(p.name)}</strong>
-                  <div style="font-size:11px;color:var(--sm-text-muted)">${contract?.verification?.verified ? 'تأییدشده دیجیتالی با پیامک' : 'امضای دستی / دیجیتال'}</div>
+                  <div class="sm-pcontract-stamp-sub">${contract?.verification?.verified ? 'تأییدشده دیجیتالی با پیامک' : 'امضای دستی / دیجیتال'}</div>
                 </div>
               </div>
             </div>
