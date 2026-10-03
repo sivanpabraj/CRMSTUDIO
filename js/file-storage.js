@@ -41,14 +41,38 @@ const FileStorage = {
     })
     if (error) return { ok: false, error: error.message }
 
-    const { data: urlData } = c.storage.from(this.BUCKET).getPublicUrl(path)
+    let fileUrl = ''
+    try {
+      const { data: signedData } = await c.storage.from(this.BUCKET).createSignedUrl(path, 86400)
+      if (signedData?.signedUrl) fileUrl = signedData.signedUrl
+    } catch { /* fallback to public */ }
+
+    if (!fileUrl) {
+      const { data: urlData } = c.storage.from(this.BUCKET).getPublicUrl(path)
+      fileUrl = urlData?.publicUrl || ''
+    }
+
     return {
       ok: true,
       path,
       storagePath: path,
       mime: file.type,
       size: file.size,
-      url: urlData?.publicUrl || ''
+      url: fileUrl
+    }
+  },
+
+  async getSignedUrl(storagePath, expiresIn = 3600) {
+    if (!storagePath || !this.isAvailable()) return ''
+    try {
+      const c = await Cloud.client()
+      if (!c) return ''
+      const { data, error } = await c.storage.from(this.BUCKET).createSignedUrl(storagePath, expiresIn)
+      if (!error && data?.signedUrl) return data.signedUrl
+      const { data: pub } = c.storage.from(this.BUCKET).getPublicUrl(storagePath)
+      return pub?.publicUrl || ''
+    } catch {
+      return ''
     }
   },
 

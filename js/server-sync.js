@@ -193,7 +193,18 @@ export const ServerSync = {
         })
       })
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) {
+        if (res.status === 409) {
+          const conflictData = await res.json().catch(() => ({}))
+          console.warn('[ServerSync] تداخل همزمان کشف شد. دریافت آخرین ویرایش از سرور:', conflictData)
+          if (typeof Utils !== 'undefined' && Utils.toast) {
+            Utils.toast('تغییرات جدیدتر از سایر دستگاه‌ها دریافت شد', 'info')
+          }
+          await this.pull({ remoteRevision: conflictData.serverRevision || (this._localRevision + 1) })
+          return
+        }
+        throw new Error(`HTTP ${res.status}`)
+      }
 
       const json = await res.json()
       if (json.ok) {

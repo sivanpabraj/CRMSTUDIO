@@ -5,8 +5,9 @@
 const MessagingShared = {
   CHANNELS: {
     sms: { label: 'پیامک (SMS)', icon: 'fa-sms', color: '#0071E3' },
-    email: { label: 'ایمیل', icon: 'fa-envelope', color: '#5856D6' },
     whatsapp: { label: 'واتساپ', icon: 'fa-brands fa-whatsapp', color: '#25D366' },
+    telegram: { label: 'تلگرام', icon: 'fa-brands fa-telegram', color: '#229ED9' },
+    email: { label: 'ایمیل', icon: 'fa-envelope', color: '#5856D6' },
     social: { label: 'فضای مجازی', icon: 'fa-share-nodes', color: '#FF9500' }
   },
 

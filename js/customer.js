@@ -15,7 +15,27 @@ const CustomerPortal = {
     const session = typeof CustomerSession !== 'undefined' ? await CustomerSession.get() : null
     if (session?.contract) {
       // اعتبارسنجی جلسه: باید قرارداد واقعی و فعال باشد
-      const live = DB.find('contracts', c => c.id === session.contract.id)
+      let live = DB.find('contracts', c => c.id === session.contract.id)
+      if (!live) {
+        try {
+          const sid = session.studioId || (typeof DB !== 'undefined' && DB.get('studioInfo')?.id) || ''
+          const res = await fetch(`/api/portal/customer-data?contractId=${encodeURIComponent(session.contract.id)}${sid ? `&studioId=${encodeURIComponent(sid)}` : ''}`)
+          if (res.ok) {
+            const d = await res.json()
+            if (d.ok && d.contract) {
+              live = d.contract
+              if (typeof DB !== 'undefined') {
+                if (d.studioInfo) DB.set('studioInfo', { ...(DB.get('studioInfo') || {}), ...d.studioInfo })
+                const curContracts = (DB.get('contracts') || []).filter(c => c.id !== live.id)
+                DB.set('contracts', [...curContracts, live])
+                if (Array.isArray(d.persProjects)) DB.set('persProjects', d.persProjects)
+                if (Array.isArray(d.customerRequests)) DB.set('customerRequests', d.customerRequests)
+                if (Array.isArray(d.transactions)) DB.set('transactions', d.transactions)
+              }
+            }
+          }
+        } catch { /* ignore network error, fallback to check */ }
+      }
       if (!live || live.status === 'cancelled') {
         CustomerSession.clear()
         window.location.replace('index.html')

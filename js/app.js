@@ -613,12 +613,19 @@ const Portal = {
       let resolved = typeof UnifiedLogin !== 'undefined' ? UnifiedLogin.resolvePhone(phone) : null
       if ((!resolved || resolved.kind === 'guest') && phone.length === 11) {
         try {
-          const res = await fetch(`/api/sync/pull?phone=${encodeURIComponent(phone)}`, { cache: 'no-store' })
+          const res = await fetch(`/api/auth/lookup?phone=${encodeURIComponent(phone)}`, { cache: 'no-store' })
           if (res.ok) {
             const j = await res.json()
-            if (j.data && typeof DB !== 'undefined' && DB.importJSON) {
-              await DB.importJSON(JSON.stringify(j.data))
-              resolved = UnifiedLogin.resolvePhone(phone)
+            if (j.ok && j.found) {
+              resolved = {
+                kind: j.userKind || 'guest',
+                label: j.displayName || 'کاربر گرامی',
+                roleTitle: j.roleTitle || 'استودیو',
+                studioId: j.studioId,
+                studioName: j.studioName,
+                contractId: j.contractId,
+                eventDate: j.eventDate
+              }
             }
           }
         } catch { /* ignore */ }
@@ -815,18 +822,23 @@ const Portal = {
     let resolved = isEmail ? null : UnifiedLogin.resolvePhone(identifier)
     if (!resolved || resolved.kind === 'guest' || !DB.get('users').length) {
       try {
-        const pullUrl = `/api/sync/pull?phone=${encodeURIComponent(identifier)}`
-        const res = await fetch(pullUrl, { cache: 'no-store' })
+        const lookupUrl = `/api/auth/lookup?phone=${encodeURIComponent(identifier)}`
+        const res = await fetch(lookupUrl, { cache: 'no-store' })
         if (res.ok) {
           const j = await res.json()
-          if (j.data && typeof DB !== 'undefined' && DB.importJSON) {
-            await DB.importJSON(JSON.stringify(j.data))
-            if (typeof ServerSync !== 'undefined' && j.tenant) {
-              ServerSync._localRevision = Number(j.revision) || ServerSync._localRevision
+          if (j.ok && j.found) {
+            resolved = {
+              kind: j.userKind || 'guest',
+              label: j.displayName || 'کاربر گرامی',
+              roleTitle: j.roleTitle || 'استودیو',
+              studioId: j.studioId,
+              studioName: j.studioName,
+              contractId: j.contractId,
+              eventDate: j.eventDate
             }
           }
         }
-        resolved = isEmail ? null : UnifiedLogin.resolvePhone(identifier)
+        if (!resolved) resolved = isEmail ? null : UnifiedLogin.resolvePhone(identifier)
       } catch { /* ignore */ }
     }
 
@@ -873,14 +885,19 @@ const Portal = {
     let resolved = UnifiedLogin.resolvePhone(phone)
     if (!resolved || resolved.kind === 'guest' || !DB.get('users').length) {
       try {
-        const pullUrl = `/api/sync/pull?phone=${encodeURIComponent(phone)}`
-        const res = await fetch(pullUrl, { cache: 'no-store' })
+        const lookupUrl = `/api/auth/lookup?phone=${encodeURIComponent(phone)}`
+        const res = await fetch(lookupUrl, { cache: 'no-store' })
         if (res.ok) {
           const j = await res.json()
-          if (j.data && typeof DB !== 'undefined' && DB.importJSON) {
-            await DB.importJSON(JSON.stringify(j.data))
-            if (typeof ServerSync !== 'undefined' && j.tenant) {
-              ServerSync._localRevision = Number(j.revision) || ServerSync._localRevision
+          if (j.ok && j.found) {
+            resolved = {
+              kind: j.userKind || 'guest',
+              label: j.displayName || 'کاربر گرامی',
+              roleTitle: j.roleTitle || 'استودیو',
+              studioId: j.studioId,
+              studioName: j.studioName,
+              contractId: j.contractId,
+              eventDate: j.eventDate
             }
           }
         }

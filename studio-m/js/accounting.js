@@ -687,8 +687,28 @@ const SMAccounting = {
         SM.toast(invId ? 'ثبت شد و در فاکتورها قرار گرفت' : 'تراکنش ثبت شد', 'success')
         SMH.refresh('accounting')
       },
-      onDelete: item ? () => {
-        if (item.invoiceId) DB.delete('invoices', item.invoiceId)
+      onDelete: item ? async () => {
+        if (item.bankId) {
+          const revType = item.type === 'deposit' ? 'withdrawal' : 'deposit'
+          await this._applyBankDelta(item.bankId, revType, item.amount)
+        }
+        if (item.invoiceId) {
+          await SecureDB.update('invoices', item.invoiceId, { status: 'void', voidedAt: new Date().toISOString() })
+        }
+        const actor = typeof Auth !== 'undefined' ? Auth.getUser() : null
+        DB.insert('auditLogs', {
+          entity: 'transactions',
+          entityId: item.id,
+          action: 'delete_transaction',
+          amount: item.amount,
+          type: item.type,
+          contractId: item.contractId || null,
+          bankId: item.bankId || null,
+          actorId: actor?.id || 'system',
+          actorName: actor?.name || 'مدیر',
+          timestamp: new Date().toISOString(),
+          reason: 'حذف تراکنش از پنل حسابداری'
+        })
         SMH.remove('transactions', item.id, 'accounting')
       } : null,
       width: 540

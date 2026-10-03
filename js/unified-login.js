@@ -161,13 +161,20 @@ const UnifiedLogin = {
     let resolved = this.resolvePhone(phone)
     if (!resolved || resolved.kind === 'guest' || !DB.get('users').length) {
       try {
-        const pullUrl = `/api/sync/pull?phone=${encodeURIComponent(phone)}`
-        const res = await fetch(pullUrl, { cache: 'no-store' })
+        const lookupUrl = `/api/auth/lookup?phone=${encodeURIComponent(phone)}`
+        const res = await fetch(lookupUrl, { cache: 'no-store' })
         if (res.ok) {
           const j = await res.json()
-          if (j.data && typeof DB !== 'undefined' && DB.importJSON) {
-            await DB.importJSON(JSON.stringify(j.data))
-            resolved = this.resolvePhone(phone)
+          if (j.ok && j.found) {
+            resolved = {
+              kind: j.userKind || 'guest',
+              label: j.displayName || 'کاربر گرامی',
+              roleTitle: j.roleTitle || 'استودیو',
+              studioId: j.studioId,
+              studioName: j.studioName,
+              contractId: j.contractId,
+              eventDate: j.eventDate
+            }
           }
         }
       } catch { /* ignore */ }
