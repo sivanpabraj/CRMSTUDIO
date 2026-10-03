@@ -447,7 +447,7 @@ const Portal = {
           slug: studioName.replace(/\s+/g, '-').slice(0, 24),
           address: '', social: '', logo: '',
           setupCompleted: true,
-          smsProxyUrl: 'https://gfzfmecglamyxevvttji.supabase.co/functions/v1/send-sms'
+          smsProxyUrl: ''
         })
 
         if (!DB.get('banks').length) {

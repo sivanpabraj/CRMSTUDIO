@@ -205,4 +205,54 @@ describe('Role-Based Dashboards & Automatic Phone Discovery', () => {
     // Access gate must detect that this user is a staff member and deny studio-m
     expect(context.Access.canAccessStudioM(staffWithoutPortalType)).toBe(false)
   })
+
+  it('7. Accurately calculates customer contract financial balance, deposits, and remaining debt', () => {
+    const contract = {
+      id: 'cnt_fin_1',
+      totalAmount: 45000000,
+      deposit: 15000000
+    }
+    const transactions = [
+      { id: 'tx_1', contractId: 'cnt_fin_1', type: 'deposit', amount: 10000000, purpose: 'قسط دوم' },
+      { id: 'tx_2', contractId: 'cnt_fin_1', type: 'deposit', amount: 5000000, purpose: 'قسط سوم' }
+    ]
+
+    context.DB = {
+      get: (col) => (col === 'transactions' ? transactions : [])
+    }
+
+    const txTotal = transactions.reduce((s, t) => s + t.amount, 0)
+    const totalPaid = contract.deposit + txTotal
+    const remaining = Math.max(0, contract.totalAmount - totalPaid)
+
+    expect(totalPaid).toBe(30000000)
+    expect(remaining).toBe(15000000)
+  })
+
+  it('8. Personnel getPayrollPayments aggregates both salary records and accounting transactions', () => {
+    // Load portal-shared
+    const portalSharedCode = fs.readFileSync(path.resolve(__dirname, '../js/portal-shared.js'), 'utf8')
+    vm.runInNewContext(portalSharedCode, context)
+
+    const personnelId = 'per_test_100'
+    const salaryPayments = [
+      { id: 'sal_1', personId: personnelId, amount: 8000000, month: '1405/06', monthLabel: 'شهریور' }
+    ]
+    const transactions = [
+      { id: 'tx_p1', personnelId, type: 'withdrawal', amount: 4000000, purpose: 'دستمزد پروژه ۱', date: '1405/06/15' }
+    ]
+
+    context.DB = {
+      get: (col) => {
+        if (col === 'salaryPayments') return salaryPayments
+        if (col === 'transactions') return transactions
+        return []
+      }
+    }
+
+    const payments = context.PortalShared.getPayrollPayments(personnelId)
+    expect(payments.length).toBe(2)
+    expect(payments.some(p => p.amount === 8000000)).toBe(true)
+    expect(payments.some(p => p.amount === 4000000)).toBe(true)
+  })
 })

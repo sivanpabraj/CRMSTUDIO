@@ -139,6 +139,8 @@ const CustomerPortal = {
             </div>
           </div>
 
+          ${this._renderFinancialSection(c)}
+
           ${queuePreview}
 
           <div class="customer-card" style="max-width:none;margin-bottom:16px">
@@ -227,6 +229,265 @@ const CustomerPortal = {
     await DB.flush()
     Utils.toast('✅ درخواست ثبت شد. پس از تأیید مدیر اطلاع‌رسانی می‌شود.', 'success')
     this.renderDashboard()
+  },
+
+  _renderFinancialSection(c) {
+    const contractTx = (typeof DB !== 'undefined' && DB.get ? DB.get('transactions') : []).filter(t => t.contractId === c.id && (t.type === 'deposit' || t.direction === 'in'))
+    const txTotal = contractTx.reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+    const baseDeposit = Number(c.deposit) || 0
+    const hasDepositInTx = contractTx.some(t => t.purposeCategory === 'contract_deposit' || String(t.purpose || t.desc || '').includes('بیعانه'))
+    const totalPaid = hasDepositInTx ? txTotal : (baseDeposit + txTotal)
+    const totalAmount = Number(c.finalAmount || c.totalAmount || c.total || 0)
+    const remaining = Math.max(0, totalAmount - totalPaid)
+    const paidPercent = totalAmount > 0 ? Math.min(100, Math.round((totalPaid / totalAmount) * 100)) : (totalPaid > 0 ? 100 : 0)
+
+    const paymentsList = []
+    if (baseDeposit > 0 && !hasDepositInTx) {
+      paymentsList.push({
+        id: 'deposit_initial',
+        amount: baseDeposit,
+        date: c.date || c.createdAt || '—',
+        purpose: 'بیعانه و پیش‌پرداخت اولیه قرارداد',
+        method: 'پیش‌پرداخت'
+      })
+    }
+    contractTx.forEach(t => {
+      paymentsList.push({
+        id: t.id,
+        amount: Number(t.amount) || 0,
+        date: t.date || '—',
+        purpose: t.purpose || t.desc || 'واریز علی‌الحساب قرارداد',
+        method: t.paymentMethod ? (t.paymentMethod === 'pos' ? 'کارت‌خوان' : t.paymentMethod === 'card' ? 'کارت به کارت' : t.paymentMethod === 'transfer' ? 'حواله بانکی / پایا' : t.paymentMethod) : 'واریز بانکی'
+      })
+    })
+
+    const services = Array.isArray(c.items) && c.items.length ? c.items : (Array.isArray(c.services) ? c.services : [])
+
+    return `
+      <div class="customer-card" style="max-width:none;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h1 style="font-size:16px;text-align:right;margin:0">💳 وضعیت مالی و حسابداری قرارداد</h1>
+          <span style="font-size:12px;padding:3px 8px;border-radius:6px;background:${remaining === 0 ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.15)'};color:${remaining === 0 ? '#4ade80' : '#fbbf24'};font-weight:700">
+            ${remaining === 0 ? '✓ تسویه کامل' : '⏳ در جریان تسویه'}
+          </span>
+        </div>
+
+        <div class="customer-finance-grid">
+          <div class="customer-fin-stat">
+            <div class="customer-fin-lbl">کل مبلغ قرارداد</div>
+            <div class="customer-fin-num">${Utils.fmtNum(totalAmount)} <span style="font-size:11px;font-weight:normal;opacity:0.6">تومان</span></div>
+          </div>
+          <div class="customer-fin-stat paid">
+            <div class="customer-fin-lbl">مجموع پرداختی‌ها</div>
+            <div class="customer-fin-num">${Utils.fmtNum(totalPaid)} <span style="font-size:11px;font-weight:normal;opacity:0.6">تومان</span></div>
+          </div>
+          <div class="customer-fin-stat remaining ${remaining === 0 ? 'settled' : ''}">
+            <div class="customer-fin-lbl">مانده تسویه نشده</div>
+            <div class="customer-fin-num">${Utils.fmtNum(remaining)} <span style="font-size:11px;font-weight:normal;opacity:0.6">تومان</span></div>
+          </div>
+        </div>
+
+        <div class="customer-progress-box">
+          <div class="customer-progress-head">
+            <span>درصد پرداخت شده:</span>
+            <span style="font-weight:700;color:#4ade80">${paidPercent}٪</span>
+          </div>
+          <div class="customer-progress-bar-bg">
+            <div class="customer-progress-bar-fill" style="width:${paidPercent}%"></div>
+          </div>
+        </div>
+
+        ${services.length ? `
+        <div style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.06);padding-top:12px">
+          <h2 style="font-size:13px;color:#fff;margin:0 0 8px;font-weight:700">📋 خدمات و تعهدات مندرج در قرارداد:</h2>
+          <table class="customer-services-table">
+            <thead>
+              <tr>
+                <th>شرح خدمات</th>
+                <th style="text-align:center;width:60px">تعداد</th>
+                <th style="text-align:left;width:110px">مبلغ (تومان)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${services.map(s => `
+                <tr>
+                  <td>${Utils.escapeHtml(s.name || s.title || s.desc || 'خدمت استودیو')}</td>
+                  <td style="text-align:center">${Utils.fmtNum(s.qty || s.count || 1)}</td>
+                  <td style="text-align:left;direction:ltr">${Utils.fmtNum(s.price || s.amount || 0)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>` : ''}
+
+        <div style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.06);padding-top:12px">
+          <h2 style="font-size:13px;color:#fff;margin:0 0 8px;font-weight:700">💰 ریز واریزی‌ها و پرداخت‌های شما:</h2>
+          ${paymentsList.length ? `
+            <div class="customer-payments-list">
+              ${paymentsList.map(p => `
+                <div class="customer-payment-item">
+                  <div class="customer-pay-right">
+                    <div class="customer-pay-purpose">${Utils.escapeHtml(p.purpose)}</div>
+                    <div class="customer-pay-meta">تاریخ: ${Utils.escapeHtml(p.date)} · شیوه: ${Utils.escapeHtml(p.method)}</div>
+                  </div>
+                  <div class="customer-pay-left">
+                    <div class="customer-pay-amount">+ ${Utils.fmtNum(p.amount)} تومان</div>
+                    <span class="customer-pay-badge">✓ ثبت شد</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>` : `
+            <div style="text-align:center;padding:16px;color:rgba(255,255,255,0.4);font-size:12px">
+              هنوز پرداختی در سامانه ثبت نشده است. پس از واریز بیعانه یا اقساط، رسیدهای شما در اینجا درج خواهد شد.
+            </div>`
+          }
+        </div>
+
+        <div class="customer-inv-actions">
+          <button type="button" class="customer-btn-invoice" onclick="CustomerPortal.openInvoicePrint()">
+            <i class="fas fa-print"></i> مشاهده و چاپ فاکتور رسمی مراسم
+          </button>
+        </div>
+      </div>
+    `
+  },
+
+  openInvoicePrint() {
+    const c = this.state.contract
+    if (!c) return
+    const studio = (typeof DB !== 'undefined' && DB.get ? DB.get('studioInfo') : {}) || {}
+    const studioName = studio.name || 'استودیو عکاسی و فیلمبرداری'
+    const studioPhone = studio.phone || ''
+    const studioAddress = studio.address || ''
+
+    const contractTx = (typeof DB !== 'undefined' && DB.get ? DB.get('transactions') : []).filter(t => t.contractId === c.id && (t.type === 'deposit' || t.direction === 'in'))
+    const txTotal = contractTx.reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+    const baseDeposit = Number(c.deposit) || 0
+    const hasDepositInTx = contractTx.some(t => t.purposeCategory === 'contract_deposit' || String(t.purpose || t.desc || '').includes('بیعانه'))
+    const totalPaid = hasDepositInTx ? txTotal : (baseDeposit + txTotal)
+    const totalAmount = Number(c.finalAmount || c.totalAmount || c.total || 0)
+    const remaining = Math.max(0, totalAmount - totalPaid)
+    const services = Array.isArray(c.items) && c.items.length ? c.items : (Array.isArray(c.services) ? c.services : [])
+
+    const printWin = window.open('', '_blank', 'width=850,height=950')
+    if (!printWin) {
+      Utils.toast('لطفاً اجازه باز شدن پنجره چاپ (Pop-up) را در مرورگر بدهید', 'error')
+      return
+    }
+
+    const html = `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <title>فاکتور رسمی مراسم — #${Utils.escapeHtml(c.contractNum || '—')}</title>
+  <style>
+    body { font-family: Tahoma, Vazirmatn, sans-serif; margin: 0; padding: 24px; color: #1e293b; background: #fff; font-size: 13px; line-height: 1.6; }
+    .inv-container { max-width: 800px; margin: 0 auto; border: 2px solid #0f172a; padding: 24px; border-radius: 8px; }
+    .inv-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #cbd5e1; padding-bottom: 16px; margin-bottom: 16px; }
+    .inv-brand h1 { margin: 0; font-size: 20px; color: #0f172a; font-weight: 800; }
+    .inv-brand p { margin: 4px 0 0; color: #64748b; font-size: 12px; }
+    .inv-meta { text-align: left; font-size: 12px; }
+    .inv-meta strong { color: #0f172a; }
+    .inv-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 16px; margin-bottom: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .table-title { font-weight: 700; font-size: 13px; margin: 16px 0 8px; color: #0f172a; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    th { background: #f1f5f9; color: #334155; padding: 8px 10px; text-align: right; border: 1px solid #cbd5e1; font-size: 12px; }
+    td { padding: 8px 10px; border: 1px solid #e2e8f0; font-size: 12px; }
+    .num { direction: ltr; text-align: left; }
+    .summary-box { display: flex; justify-content: flex-end; margin-top: 16px; }
+    .summary-table { width: 320px; border-collapse: collapse; }
+    .summary-table td { padding: 6px 10px; }
+    .summary-table tr.total td { font-weight: 800; font-size: 14px; background: #f8fafc; border-top: 2px solid #0f172a; }
+    .inv-footer { margin-top: 32px; display: flex; justify-content: space-between; padding-top: 16px; border-top: 1px dashed #cbd5e1; font-size: 11px; color: #64748b; }
+    .stamp-box { width: 160px; height: 70px; border: 1px dashed #94a3b8; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #94a3b8; }
+    @media print {
+      body { padding: 0; }
+      .inv-container { border: none; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="inv-container">
+    <div class="no-print" style="text-align:left;margin-bottom:12px">
+      <button onclick="window.print()" style="background:#0f172a;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700">🖨️ چاپ فاکتور / ذخیره PDF</button>
+    </div>
+    <div class="inv-header">
+      <div class="inv-brand">
+        <h1>${Utils.escapeHtml(studioName)}</h1>
+        <p>${Utils.escapeHtml(studioAddress)} ${studioPhone ? '— تلفن: ' + Utils.escapeHtml(studioPhone) : ''}</p>
+      </div>
+      <div class="inv-meta">
+        <div><strong>صورت‌حساب رسمی قرارداد خدمات مراسم</strong></div>
+        <div>شماره قرارداد: <strong>${Utils.escapeHtml(c.contractNum || '—')}</strong></div>
+        <div>تاریخ صدور: <strong>${Utils.todayJalali()}</strong></div>
+      </div>
+    </div>
+
+    <div class="inv-box">
+      <div><strong>طرف اول (استودیو):</strong> ${Utils.escapeHtml(studioName)}</div>
+      <div><strong>طرف دوم (مراجعین):</strong> ${Utils.escapeHtml(c.bride || 'عروس')} و ${Utils.escapeHtml(c.groom || 'داماد')}</div>
+      <div><strong>تاریخ مراسم:</strong> ${Utils.escapeHtml(c.eventDate || '—')}</div>
+      <div><strong>شماره تماس:</strong> ${Utils.escapeHtml(c.groomPhone || c.bridePhone || '—')}</div>
+    </div>
+
+    <div class="table-title">خدمات و تعهدات قرارداد:</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40px;text-align:center">ردیف</th>
+          <th>شرح خدمت / پکیج</th>
+          <th style="width:60px;text-align:center">تعداد</th>
+          <th style="width:130px;text-align:left">مبلغ (تومان)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${services.length ? services.map((s, idx) => `
+          <tr>
+            <td style="text-align:center">${idx + 1}</td>
+            <td>${Utils.escapeHtml(s.name || s.title || s.desc || 'خدمات عکاسی و تصویربرداری')}</td>
+            <td style="text-align:center">${Utils.fmtNum(s.qty || s.count || 1)}</td>
+            <td class="num">${Utils.fmtNum(s.price || s.amount || 0)}</td>
+          </tr>
+        `).join('') : `
+          <tr>
+            <td style="text-align:center">۱</td>
+            <td>پکیج جامع تصویربرداری و عکاسی مراسم (${Utils.escapeHtml(c.bride || '')} و ${Utils.escapeHtml(c.groom || '')})</td>
+            <td style="text-align:center">۱</td>
+            <td class="num">${Utils.fmtNum(totalAmount)}</td>
+          </tr>
+        `}
+      </tbody>
+    </table>
+
+    <div class="summary-box">
+      <table class="summary-table">
+        <tr>
+          <td>کل مبلغ قرارداد:</td>
+          <td class="num">${Utils.fmtNum(totalAmount)} تومان</td>
+        </tr>
+        <tr>
+          <td style="color:#16a34a">مجموع واریزی‌ها و بیعانه:</td>
+          <td class="num" style="color:#16a34a">${Utils.fmtNum(totalPaid)} تومان</td>
+        </tr>
+        <tr class="total">
+          <td style="color:${remaining === 0 ? '#16a34a' : '#ea580c'}">${remaining === 0 ? 'وضعیت تسویه:' : 'مانده بدهی:'}</td>
+          <td class="num" style="color:${remaining === 0 ? '#16a34a' : '#ea580c'}">${remaining === 0 ? 'تسویه کامل ✓' : Utils.fmtNum(remaining) + ' تومان'}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="inv-footer">
+      <div>امضای مراجع / عروس و داماد</div>
+      <div class="stamp-box">محل مهر و امضای استودیو</div>
+    </div>
+  </div>
+</body>
+</html>`
+
+    printWin.document.open()
+    printWin.document.write(html)
+    printWin.document.close()
   }
 }
 

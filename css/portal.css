@@ -461,6 +461,169 @@
   display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;
 }
 
+/* ── Customer Financial & Invoice Dashboard ── */
+.customer-finance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 14px 0 10px;
+}
+.customer-fin-stat {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 12px 8px;
+  text-align: center;
+}
+.customer-fin-stat.paid {
+  border-color: rgba(34, 197, 94, 0.25);
+  background: rgba(34, 197, 94, 0.06);
+}
+.customer-fin-stat.remaining {
+  border-color: rgba(245, 158, 11, 0.25);
+  background: rgba(245, 158, 11, 0.06);
+}
+.customer-fin-lbl {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 6px;
+}
+.customer-fin-num {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  direction: ltr;
+}
+.customer-fin-stat.paid .customer-fin-num { color: #4ade80; }
+.customer-fin-stat.remaining .customer-fin-num { color: #fbbf24; }
+.customer-fin-stat.settled .customer-fin-num { color: #38bdf8; }
+
+.customer-progress-box {
+  margin: 10px 0 16px;
+}
+.customer-progress-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.65);
+}
+.customer-progress-bar-bg {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.customer-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #10b981);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.customer-payments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.customer-payment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+}
+.customer-pay-right {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: right;
+}
+.customer-pay-purpose {
+  font-weight: 700;
+  color: #fff;
+  font-size: 13px;
+}
+.customer-pay-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+.customer-pay-left {
+  text-align: left;
+}
+.customer-pay-amount {
+  font-weight: 800;
+  color: #4ade80;
+  font-size: 14px;
+  direction: ltr;
+}
+.customer-pay-badge {
+  display: inline-block;
+  font-size: 10px;
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+  padding: 2px 6px;
+  border-radius: 6px;
+  margin-top: 2px;
+}
+
+.customer-services-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+.customer-services-table th {
+  text-align: right;
+  padding: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-weight: 600;
+}
+.customer-services-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.customer-inv-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.customer-btn-invoice {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(201, 169, 110, 0.4);
+  background: rgba(201, 169, 110, 0.12);
+  color: #f6d89b;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+.customer-btn-invoice:hover {
+  background: rgba(201, 169, 110, 0.2);
+  border-color: #c9a96e;
+}
+
+@media (max-width: 480px) {
+  .customer-finance-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pipeline-dot,
   .portal-nav-item,

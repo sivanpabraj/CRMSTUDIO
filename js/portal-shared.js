@@ -261,9 +261,29 @@ const PortalShared = {
   },
 
   getPayrollPayments(personnelId) {
-    return (DB.get('salaryPayments') || [])
-      .filter(p => p.personId === personnelId)
-      .sort((a, b) => String(b.month || '').localeCompare(String(a.month || '')))
+    const fromSalary = (DB.get('salaryPayments') || [])
+      .filter(p => p.personId === personnelId || p.personnelId === personnelId)
+      .map(p => ({
+        id: p.id,
+        amount: p.amount || 0,
+        month: p.month || '',
+        monthLabel: p.monthLabel || p.month || 'حقوق',
+        date: p.date || p.paidAt || '',
+        source: 'salary'
+      }))
+
+    const fromTx = (DB.get('transactions') || [])
+      .filter(t => t.personnelId === personnelId && t.type === 'withdrawal' && t.amount > 0)
+      .map(t => ({
+        id: t.id,
+        amount: t.amount || 0,
+        month: t.periodMonth || '',
+        monthLabel: t.purpose || t.desc || 'پرداخت دستمزد',
+        date: t.date || '',
+        source: 'transaction'
+      }))
+
+    return [...fromSalary, ...fromTx].sort((a, b) => String(b.date || b.month || '').localeCompare(String(a.date || a.month || '')))
   }
 }
 
