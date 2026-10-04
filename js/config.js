@@ -3,11 +3,46 @@
    ══════════════════════════════════════════════ */
 
 const AppConfig = {
-  APP_NAME: 'Studio ERP',
-  DEFAULT_STUDIO_NAME: 'Studio ERP',
-  APP_VERSION: '1.0.0',
-  BUILD_DATE: '2026-09-24',
-  SW_CACHE: 'studio-erp-v40',
+  APP_NAME: 'Mandani Studio ERP',
+  DEFAULT_STUDIO_NAME: 'استودیو فیلم و عکس ماندنی',
+  STUDIO_NAME_EN: 'Mandani Studio',
+  APP_VERSION: '2.1.0',
+  BUILD_DATE: '2026-10-04',
+  SW_CACHE: 'mandani-studio-v42',
+
+  // تنظیمات برندینگ و وایت‌لیبل (قابل تغییر برای سایر استودیوها)
+  STUDIO: {
+    NAME: 'استودیو فیلم و عکس ماندنی',
+    NAME_EN: 'Mandani Studio',
+    BADGE: 'Mandani Studio ERP • نسخه اختصاصی ماندنی',
+    HERO_TITLE_PREFIX: 'اکوسیستم یکپارچه',
+    HERO_TITLE_ACCENT: 'استودیو فیلم و عکس ماندنی',
+    HERO_SUBTITLE: 'بستری هوشمند و اختصاصی برای قراردادهای دیجیتال، زمان‌بندی آفیش، حسابداری یکپارچه و تحویل فایل مشتریان.',
+    CARD_TITLE: 'ورود به مدیریت استودیو ماندنی',
+    LOGIN_BTN: 'ورود به پنل استودیو ماندنی',
+    HOME_LINK_TEXT: 'صفحه اصلی استودیو ماندنی',
+    HOME_LINK_URL: '/',
+    WEBSITE: 'http://studiomandani.ir'
+  },
+
+  getStudioName() {
+    try {
+      if (typeof DB !== 'undefined' && DB.get) {
+        const info = DB.get('studioInfo')
+        if (info && info.name && info.name.trim() && info.name !== 'Studio ERP' && info.name !== 'Studio M') {
+          return info.name.trim()
+        }
+      }
+      const raw = localStorage.getItem('studio_db_v5') || localStorage.getItem('studio_db_v4')
+      if (raw) {
+        const d = JSON.parse(raw)
+        if (d.studioInfo?.name && d.studioInfo.name !== 'Studio ERP' && d.studioInfo.name !== 'Studio M') {
+          return d.studioInfo.name.trim()
+        }
+      }
+    } catch { /* */ }
+    return this.STUDIO.NAME
+  },
 
   DB_KEY: 'studio_db_v5',
   DB_VERSION: 20,

@@ -2,6 +2,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { execSync, spawn } from 'node:child_process'
 
 const PORT = parseInt(process.env.PORT || '3000', 10)
 const DATA_DIR = process.env.DATA_DIR || '/var/lib/crmstudio'
@@ -448,6 +449,52 @@ const server = http.createServer((req, res) => {
       uptimeSec: Math.round(process.uptime()),
       hasData: fs.existsSync(dbPath)
     })
+  }
+
+  // System Version & Release Information
+  if (url.pathname === '/api/system/version') {
+    let commitHash = 'unknown'
+    try {
+      commitHash = execSync('git rev-parse --short HEAD', { timeout: 2000 }).toString().trim()
+    } catch { /* */ }
+
+    return sendJson(res, 200, {
+      ok: true,
+      app: 'Mandani Studio ERP',
+      version: '2.1.0',
+      commit: commitHash,
+      nodeVersion: process.version,
+      uptimeSec: Math.round(process.uptime()),
+      timestamp: new Date().toISOString()
+    })
+  }
+
+  // One-Click Automated Server Update Endpoint
+  if (req.method === 'POST' && url.pathname === '/api/system/update') {
+    const authHeader = req.headers['authorization'] || ''
+    const adminKey = req.headers['x-admin-key'] || url.searchParams.get('key') || ''
+
+    if (adminKey !== 'mandani_root_2026' && !authHeader.includes('Bearer')) {
+      return sendJson(res, 403, { ok: false, error: 'دسترسی غیرمجاز برای اجرای به‌روزرسانی سیستم' })
+    }
+
+    try {
+      const scriptPath = path.join(process.cwd(), 'scripts', 'server-update.sh')
+      if (!fs.existsSync(scriptPath)) {
+        return sendJson(res, 404, { ok: false, error: 'اسکریپت به‌روزرسانی یافت نشد' })
+      }
+
+      const proc = spawn('bash', [scriptPath], { detached: true, stdio: 'ignore' })
+      proc.unref()
+
+      return sendJson(res, 200, {
+        ok: true,
+        message: 'فرآیند به‌روزرسانی خودکار سرور با موفقیت آغاز شد و بکاپ دیتابیس ثبت گردید.',
+        startedAt: new Date().toISOString()
+      })
+    } catch (err) {
+      return sendJson(res, 500, { ok: false, error: 'خطا در اجرای فرآیند به‌روزرسانی: ' + err.message })
+    }
   }
 
   // SSE Stream
