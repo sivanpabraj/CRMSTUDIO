@@ -411,7 +411,35 @@ const UnifiedLogin = {
       const phone = Utils.normalizePhone(rawId)
       if (!Utils.isValidPhone(phone)) return { ok: false, error: 'شماره موبایل نامعتبر است' }
     }
-    if (!password) return { ok: false, error: 'رمز عبور را وارد کنید' }
+    if (!isEmail) {
+      const phone = Utils.normalizePhone(rawId)
+      const contracts = this.findContractsByPhone(phone)
+      if (contracts.length) {
+        const cleanPw = String(password).trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).toLowerCase()
+        const match = contracts.find(c => {
+          const cNum = String(c.contractNum || '').trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).toLowerCase()
+          const cId = String(c.id || '').trim().toLowerCase()
+          const cCode = String(c.trackingCode || c.accessCode || c.code || '').trim().toLowerCase()
+          return (cNum && cleanPw === cNum) ||
+                 (cCode && cleanPw === cCode) ||
+                 (cId && (cleanPw === cId || cId.endsWith(cleanPw))) ||
+                 (cleanPw.length >= 4 && cNum.endsWith(cleanPw))
+        })
+        if (match) {
+          const session = CustomerSession.create(match, phone)
+          await CustomerSession.save(session)
+          await DB.flush?.()
+          const coupleName = match.couple || `${match.bride || ''} و ${match.groom || ''}`.trim() || 'مشتری گرامی'
+          return {
+            ok: true,
+            userKind: 'customer',
+            url: 'customer.html',
+            user: { id: 'cust_' + match.id, name: coupleName, phone, portalType: 'customer', contractId: match.id },
+            contract: match
+          }
+        }
+      }
+    }
 
     const result = await Auth.login(rawId, password)
     if (!result.ok) return result

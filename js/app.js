@@ -865,24 +865,26 @@ const Portal = {
         <div class="auth-chip-icon"><i class="fas fa-gem"></i></div>
         <div class="auth-chip-info">
           <div class="auth-chip-title">مراجع محترم: ${Utils.escapeHtml(resolved.label)}</div>
-          <div class="auth-chip-desc">داشبورد پیگیری مراسم و آلبوم عکس‌ها</div>
+          <div class="auth-chip-desc">داشبورد پیگیری مراسم و آلبوم عکس‌ها (${Utils.escapeHtml(resolved.eventDate || 'ثبت‌شده')})</div>
         </div>
       `
       chip.style.display = 'flex'
-      if (btnLabel) btnLabel.textContent = 'ورود به پیگیری مراسم'
+      if (btnLabel) btnLabel.textContent = 'ورود با شماره قرارداد'
+      const pwInput = document.getElementById('login-password')
+      if (pwInput) pwInput.placeholder = 'شماره قرارداد (مثلاً ۱۰۰۱ یا کد پیگیری)'
 
-      if (this.state.loginMethod === 'password') {
-        const errEl = document.getElementById('login-error')
-        if (errEl) {
-          errEl.innerHTML = `
-            <div style="font-size:12px;color:#60a5fa;display:flex;align-items:center;gap:6px">
-              <i class="fas fa-info-circle"></i>
-              ورود مراجعین با کد پیامک است.
-              <a href="javascript:void(0)" onclick="Portal.setLoginMethod('sms')" style="color:#93c5fd;text-decoration:underline;font-weight:700">تغییر به ورود پیامکی</a>
-            </div>
-          `
-        }
+      const errEl = document.getElementById('login-error')
+      if (errEl) {
+        errEl.innerHTML = `
+          <div style="font-size:12px;color:rgba(255,255,255,0.75);display:flex;align-items:center;gap:6px">
+            <i class="fas fa-info-circle" style="color:var(--glass-accent,#F59E0B)"></i>
+            ورود با <strong>شماره قرارداد</strong> یا
+            <a href="javascript:void(0)" onclick="Portal.setLoginMethod('sms')" style="color:var(--glass-accent,#F59E0B);text-decoration:underline;font-weight:700">ارسال کد پیامکی</a>
+          </div>
+        `
+        errEl.style.display = 'block'
       }
+      return
     }
   },
 
@@ -1020,7 +1022,7 @@ const Portal = {
       } catch { /* ignore */ }
     }
 
-    if (resolved && resolved.kind === 'customer') {
+    if (resolved && resolved.kind === 'customer' && !password) {
       this.setLoginMethod('sms')
       const idInput = document.getElementById('login-identifier')
       if (idInput) idInput.value = identifier
@@ -1030,7 +1032,7 @@ const Portal = {
 
     let result = await UnifiedLogin.loginWithPassword(identifier, password)
 
-    // Fallback: If client-side DB has no user or password was invite code, verify via server-authoritative API
+    // Fallback: If client-side DB has no user or password was invite code or contract number, verify via server-authoritative API
     if (!result.ok) {
       try {
         const srvRes = await fetch('/api/auth/login', {
@@ -1040,7 +1042,7 @@ const Portal = {
         })
         if (srvRes.ok) {
           const srvJson = await srvRes.json()
-          if (srvJson.ok && srvJson.user) {
+          if (srvJson.ok) {
             if (srvJson.fullData && typeof DB !== 'undefined' && DB.importJSON) {
               await DB.importJSON(JSON.stringify(srvJson.fullData))
             }
@@ -1051,19 +1053,33 @@ const Portal = {
                 window.ServerSync.setStudioId(srvJson.tenantKey)
               }
             }
-            const csrf = Auth._regenerateCsrf ? Auth._regenerateCsrf() : 'csrf_' + Date.now()
-            await Auth._sessionSetSigned?.(Auth.SESSION_KEY, {
-              userId: srvJson.user.id,
-              loginAt: Date.now(),
-              expiresAt: Date.now() + Auth.SESSION_TIMEOUT_MS,
-              csrf
-            })
-            try { sessionStorage.setItem(Auth.CSRF_KEY, csrf) } catch { /* */ }
-            DB.log?.('login', srvJson.user.name)
-            result = {
-              ok: true,
-              user: srvJson.user,
-              url: srvJson.user.portalType === 'staff' ? 'index.html?view=portal' : (Access?.canAccessStudioM?.(srvJson.user) ? 'studio-m/' : 'index.html?view=portal')
+
+            if (srvJson.userKind === 'customer' || srvJson.contract) {
+              if (typeof CustomerSession !== 'undefined' && srvJson.contract) {
+                const session = CustomerSession.create(srvJson.contract, identifier)
+                await CustomerSession.save(session)
+              }
+              result = {
+                ok: true,
+                userKind: 'customer',
+                user: srvJson.user,
+                url: 'customer.html'
+              }
+            } else if (srvJson.user) {
+              const csrf = Auth._regenerateCsrf ? Auth._regenerateCsrf() : 'csrf_' + Date.now()
+              await Auth._sessionSetSigned?.(Auth.SESSION_KEY, {
+                userId: srvJson.user.id,
+                loginAt: Date.now(),
+                expiresAt: Date.now() + Auth.SESSION_TIMEOUT_MS,
+                csrf
+              })
+              try { sessionStorage.setItem(Auth.CSRF_KEY, csrf) } catch { /* */ }
+              DB.log?.('login', srvJson.user.name)
+              result = {
+                ok: true,
+                user: srvJson.user,
+                url: srvJson.user.portalType === 'staff' ? 'index.html?view=portal' : (Access?.canAccessStudioM?.(srvJson.user) ? 'studio-m/' : 'index.html?view=portal')
+              }
             }
           }
         } else {

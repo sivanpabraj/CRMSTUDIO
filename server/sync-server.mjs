@@ -648,6 +648,52 @@ const server = http.createServer((req, res) => {
               }
               // If not matched in this tenant, DO NOT abort immediately! Check next tenant file
             }
+
+            // Check: Customer contract lookup by Groom/Bride Phone + Contract Number / Code
+            const contracts = Array.isArray(data.contracts) ? data.contracts : []
+            const matchCustomerContract = contracts.find(c => {
+              if (c.status === 'cancelled') return false
+              const cPhones = [c.groomPhone, c.bridePhone, c.phoneGroom, c.phoneBride, c.phone]
+                .map(normalizePhone)
+                .filter(Boolean)
+              if (!cPhones.includes(phone)) return false
+
+              const cleanPw = String(rawPw).trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).toLowerCase()
+              const cNum = String(c.contractNum || '').trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).toLowerCase()
+              const cId = String(c.id || '').trim().toLowerCase()
+              const cCode = String(c.trackingCode || c.code || c.accessCode || '').trim().toLowerCase()
+
+              return (cNum && cleanPw === cNum) ||
+                     (cCode && cleanPw === cCode) ||
+                     (cId && (cleanPw === cId || cId.endsWith(cleanPw))) ||
+                     (cleanPw.length >= 4 && cNum.endsWith(cleanPw))
+            })
+
+            if (matchCustomerContract) {
+              const tenantKey = f.replace(/\.json$/, '')
+              const coupleName = matchCustomerContract.couple ||
+                `${matchCustomerContract.bride || ''} و ${matchCustomerContract.groom || ''}`.trim() ||
+                'مشتری گرامی'
+
+              const safeUser = {
+                id: 'cust_' + matchCustomerContract.id,
+                name: coupleName,
+                phone,
+                portalType: 'customer',
+                contractId: matchCustomerContract.id,
+                contractNum: matchCustomerContract.contractNum || ''
+              }
+
+              return sendJson(res, 200, {
+                ok: true,
+                userKind: 'customer',
+                user: safeUser,
+                contract: matchCustomerContract,
+                tenantKey,
+                studioInfo: data.studioInfo || {},
+                fullData: data
+              })
+            }
           } catch { /* skip corrupted file */ }
         }
 
@@ -767,6 +813,46 @@ const server = http.createServer((req, res) => {
                 return sendJson(res, 200, {
                   ok: true,
                   user: safeUser,
+                  tenantKey,
+                  studioInfo: data.studioInfo || {},
+                  fullData: data
+                })
+              }
+            }
+
+            // Check contracts for customer verification
+            const contracts = Array.isArray(data.contracts) ? data.contracts : []
+            const matchCust = contracts.find(c => {
+              if (c.status === 'cancelled') return false
+              const cPhones = [c.groomPhone, c.bridePhone, c.phoneGroom, c.phoneBride, c.phone]
+                .map(normalizePhone)
+                .filter(Boolean)
+              return cPhones.includes(phone)
+            })
+
+            if (matchCust) {
+              foundAnyUser = true
+              const cleanCode = code.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).toLowerCase()
+              const cNum = String(matchCust.contractNum || '').trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).toLowerCase()
+              const cId = String(matchCust.id || '').trim().toLowerCase()
+              const cCode = String(matchCust.trackingCode || matchCust.accessCode || matchCust.code || '').trim().toLowerCase()
+
+              if (cleanCode === cNum || cleanCode === cCode || cleanCode === cId || (cleanCode.length >= 4 && (cNum.endsWith(cleanCode) || cId.endsWith(cleanCode)))) {
+                const tenantKey = f.replace(/\.json$/, '')
+                const coupleName = matchCust.couple || `${matchCust.bride || ''} و ${matchCust.groom || ''}`.trim() || 'مشتری گرامی'
+                const safeUser = {
+                  id: 'cust_' + matchCust.id,
+                  name: coupleName,
+                  phone,
+                  portalType: 'customer',
+                  contractId: matchCust.id,
+                  contractNum: matchCust.contractNum || ''
+                }
+                return sendJson(res, 200, {
+                  ok: true,
+                  userKind: 'customer',
+                  user: safeUser,
+                  contract: matchCust,
                   tenantKey,
                   studioInfo: data.studioInfo || {},
                   fullData: data
