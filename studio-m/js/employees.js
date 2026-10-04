@@ -61,11 +61,80 @@ const SMEmployees = {
   },
 
   _listHtml() {
-    const personnel = SMH.filterBySearch(DB.get('personnel'), ['name', 'phone', 'notes'], 'employees')
-    if (!personnel.length) {
+    const allPersonnel = DB.get('personnel') || []
+    const pendingRequests = allPersonnel.filter(p => p.status === 'pending_approval' || p.status === 'pending')
+    const activePersonnel = SMH.filterBySearch(allPersonnel.filter(p => p.status !== 'pending_approval' && p.status !== 'pending'), ['name', 'phone', 'notes'], 'employees')
+
+    let pendingHtml = ''
+    if (pendingRequests.length) {
+      pendingHtml = `
+        <div class="sm-card" style="margin-bottom:20px;border:1px solid #f59e0b;background:linear-gradient(180deg, rgba(245,158,11,0.08) 0%, rgba(20,20,24,0.6) 100%)">
+          <div class="sm-card-head" style="border-bottom:1px solid rgba(245,158,11,0.2)">
+            <div class="sm-card-title" style="color:#f59e0b;display:flex;align-items:center;gap:8px">
+              <i class="fas fa-user-clock"></i> درخواست‌های جدید اتصال پرسنل (تأیید دوطرفه)
+            </div>
+            <span class="sm-badge sm-badge-warning">${pendingRequests.length} درخواست</span>
+          </div>
+          <div class="sm-card-body" style="display:flex;flex-direction:column;gap:12px">
+            ${pendingRequests.map(p => `
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:12px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid rgba(255,255,255,0.08)">
+                <div>
+                  <strong style="font-size:1rem">${SM.esc(p.name)}</strong>
+                  <div style="font-size:12px;color:var(--sm-text-muted);margin-top:4px">
+                    <span dir="ltr">${SM.esc(p.phone || '—')}</span> · نقش انتخابی: <strong>${SM.esc(p.role || (p.roles || []).join('، ') || 'همکار')}</strong>
+                  </div>
+                  <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px">ثبت‌نام با کد اختصاصی استودیو</div>
+                </div>
+                <div style="display:flex;gap:8px">
+                  <button type="button" class="sm-btn sm-btn-primary sm-btn-sm" onclick="SMEmployees.approvePendingStaff('${p.id}')">
+                    <i class="fas fa-check"></i> تأیید اتصال و عضویت
+                  </button>
+                  <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" style="color:#ef4444" onclick="SMEmployees.rejectPendingStaff('${p.id}')">
+                    <i class="fas fa-times"></i> رد
+                  </button>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>
+      `
+    }
+
+    if (!activePersonnel.length && !pendingRequests.length) {
       return SMUI.empty('fa-users', 'پرسنلی ثبت نشده', 'نام، موبایل، نقش‌ها و نحوه پرداخت را اضافه کنید')
     }
-    return `<div class="sm-emp-list">${personnel.map((p, i) => this._card(p, i)).join('')}</div>`
+    return pendingHtml + `<div class="sm-emp-list">${activePersonnel.map((p, i) => this._card(p, i)).join('')}</div>`
+  },
+
+  async approvePendingStaff(personnelId) {
+    const p = DB.find('personnel', x => x.id === personnelId)
+    if (!p) return SM.toast('همکار یافت نشد', 'error')
+
+    await SecureDB.update('personnel', p.id, { status: 'active', approvedAt: Utils.todayJalali() })
+    const user = DB.find('users', u => u.phone && Utils.normalizePhone(u.phone) === Utils.normalizePhone(p.phone))
+    if (user) {
+      await SecureDB.update('users', user.id, { status: 'active', portalStatus: 'active' })
+    }
+    if (typeof window !== 'undefined' && window.ServerSync?.pushNow) {
+      window.ServerSync.pushNow().catch(() => {})
+    }
+    SM.toast(`همکار گرامی «${p.name}» تأیید و فعال شد ✓`, 'success')
+    SM.navigate('employees')
+  },
+
+  async rejectPendingStaff(personnelId) {
+    if (!confirm('آیا از رد این درخواست اتصال مطمئن هستید؟')) return
+    const p = DB.find('personnel', x => x.id === personnelId)
+    if (!p) return
+    await SecureDB.remove('personnel', p.id)
+    const user = DB.find('users', u => u.phone && Utils.normalizePhone(u.phone) === Utils.normalizePhone(p.phone))
+    if (user && (user.status === 'pending_approval' || user.status === 'pending')) {
+      await SecureDB.remove('users', user.id)
+    }
+    if (typeof window !== 'undefined' && window.ServerSync?.pushNow) {
+      window.ServerSync.pushNow().catch(() => {})
+    }
+    SM.toast('درخواست اتصال رد شد', 'info')
+    SM.navigate('employees')
   },
 
   _card(p, i) {
@@ -346,7 +415,7 @@ const SMEmployees = {
 
     const contractBody = `قرارداد همکاری بین ${studio} و ${p.name} — نقش: ${roleList} — ${paySummary}`
 
-    const contract = DB.insert('persContracts', {
+    const contract = await SecureDB.insert('persContracts', {
       type: 'employment',
       personnelId: p.id,
       personnelName: p.name,
@@ -364,19 +433,40 @@ const SMEmployees = {
       verification: { code, sentAt: today, verified: false, phone: p.phone }
     })
 
-    const smsText = `${studio}: قرارداد همکاری شما ثبت شد. کد تأیید: ${code}`
-    if (typeof SmsProvider !== 'undefined' && SmsProvider.isConfigured()) {
-      const res = await SmsProvider.sendStudio(p.phone, smsText)
-      if (!res.ok) {
-        SM.toast(res.error || 'خطا در SMS', 'error')
-        return
-      }
-    } else {
-      SM.toast(`SMS تنظیم نشده — کد تست: ${code}`, 'info')
+    // Ensure user record exists with portal credentials
+    let empUser = DB.find('users', u => u.phone && Utils.normalizePhone(u.phone) === Utils.normalizePhone(p.phone))
+    if (!empUser && typeof PortalInvite !== 'undefined') {
+      try {
+        const inv = await PortalInvite.createForPersonnel(p)
+        if (inv?.user) empUser = inv.user
+      } catch { /* ignore */ }
+    }
+    if (empUser) {
+      await SecureDB.update('users', empUser.id, {
+        portalOtp: {
+          code,
+          sentAt: new Date().toISOString(),
+          phone: p.phone,
+          verified: false
+        }
+      })
     }
 
-    DB.update('persContracts', contract.id, { status: 'sms_sent' })
-    SM.toast('قرارداد به پنل پرسنل ارسال شد', 'success')
+    // Try sending SMS in background without blocking contract registration
+    const smsText = `${studio}: قرارداد همکاری شما ثبت شد. کد ورود پورتال: ${code}\nجهت بررسی و امضای دیجیتال وارد پنل شوید:\nhttp://studiomandani.ir/app/index.html?view=portal`
+    if (typeof SmsProvider !== 'undefined' && SmsProvider.isConfigured()) {
+      SmsProvider.sendStudio(p.phone, smsText)
+        .then(res => {
+          if (!res?.ok) console.warn('[SMS] contract notification warning:', res?.error)
+        })
+        .catch(err => console.warn('[SMS] error:', err))
+    }
+
+    if (typeof window !== 'undefined' && window.ServerSync?.pushNow) {
+      window.ServerSync.pushNow().catch(() => {})
+    }
+
+    SM.toast('قرارداد همکاری با موفقیت در پنل پرسنل ثبت شد ✓', 'success')
     if (SM.state.viewStack.length) {
       SM.state.viewStack.pop()
       this.view(personnelId)

@@ -146,30 +146,51 @@ const PortalDashboard = {
 
     let html = ''
     if (pending.length) {
-      html += `<div class="portal-section"><h2>📄 قرارداد همکاری با استودیو</h2>`
+      html += `<div class="portal-section"><h2>📄 قرارداد رسمی همکاری با استودیو</h2>`
       html += pending.map(c => `
-        <div class="invite-card employment-contract-card">
-          <div class="project-card-title">${Utils.escapeHtml(c.studioName || 'استودیو')} — قرارداد همکاری</div>
-          <div class="project-card-meta" style="margin:8px 0">
-            <span>📅 ${Utils.escapeHtml(c.sentAt || '—')}</span>
+        <div class="invite-card employment-contract-card" style="border:1px solid rgba(255,85,0,0.3);background:linear-gradient(180deg, rgba(255,85,0,0.06) 0%, rgba(20,20,24,0.85) 100%)">
+          <div class="project-card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <span>${Utils.escapeHtml(c.studioName || 'استودیو')} — قرارداد همکاری</span>
+            <span style="font-size:11px;padding:3px 8px;border-radius:6px;background:rgba(255,170,0,0.2);color:#ffaa00">در انتظار امضا و تأیید شما</span>
           </div>
-          <p style="font-size:13px;line-height:1.6;margin:0 0 10px">${Utils.escapeHtml(c.paySummary || '')}</p>
-          <p style="font-size:12px;color:rgba(255,255,255,0.55);margin:0 0 12px">با تأیید پیامکی، همکاری شما با استودیو رسمی می‌شود.</p>
-          <div class="profile-form" style="margin-bottom:10px">
-            <input class="profile-input ltr" id="emp-contract-code-${c.id}" placeholder="کد ۶ رقمی SMS" inputmode="numeric" maxlength="6"/>
+          <div class="project-card-meta" style="margin:8px 0;font-size:12px;color:rgba(255,255,255,0.6)">
+            <span>📅 تاریخ ارسال: ${Utils.escapeHtml(c.sentAt || '—')}</span>
           </div>
-          <div class="actions">
-            <button class="accept" onclick="Portal.verifyEmploymentContract('${c.id}')">✓ تأیید با کد SMS</button>
-            <button class="reject" onclick="Portal.rejectEmploymentContract('${c.id}')">✕ رد</button>
+          <div style="background:rgba(255,255,255,0.04);padding:10px 14px;border-radius:8px;margin:10px 0;border-right:3px solid var(--clr-primary,#ff5500)">
+            <strong style="color:var(--clr-primary,#ff5500);font-size:12px;display:block;margin-bottom:4px">شرایط مالی و دستمزد مصوب:</strong>
+            <p style="font-size:13px;line-height:1.6;margin:0">${Utils.escapeHtml(c.paySummary || 'بر اساس آفیش‌ها و توافق طرفین')}</p>
+          </div>
+
+          <div style="margin:12px 0">
+            <button type="button" class="portal-btn portal-btn-ghost" style="width:auto;display:inline-flex;align-items:center;gap:6px;padding:7px 14px;font-size:12px" onclick="PortalDashboard.openContractModal('${c.id}')">
+              <i class="fas fa-file-contract"></i> مشاهده متن کامل و تعهدات قرارداد
+            </button>
+          </div>
+
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;line-height:1.7;margin:14px 0 16px;background:rgba(255,255,255,0.06);padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.12)">
+            <input type="checkbox" id="emp-contract-agree-${c.id}" style="width:19px;height:19px;accent-color:#10b981;margin-top:2px;cursor:pointer"/>
+            <span>کلیه مفاد، تعهدات کاری، حفظ محرمانگی راش‌ها و تصاویر و شرایط مالی قرارداد را مطالعه نموده و <strong>می‌پذیرم</strong>.</span>
+          </label>
+
+          <div class="actions" style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="accept" onclick="Portal.acceptEmploymentContract('${c.id}')" style="background:#10b981;color:#fff;font-weight:700;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+              <i class="fas fa-check-circle"></i> تأیید و امضای دیجیتال قرارداد (می‌پذیرم)
+            </button>
+            <button class="reject" onclick="Portal.rejectEmploymentContract('${c.id}')" style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);padding:10px 16px;border-radius:8px;cursor:pointer">
+              ✕ رد قرارداد
+            </button>
           </div>
         </div>`).join('')
       html += '</div>'
     }
     if (verified.length) {
       const c = verified[0]
-      html += `<div class="portal-section"><div class="portal-hero" style="margin-bottom:0">
-        <h2>✓ قرارداد همکاری تأیید شد</h2>
-        <p>${Utils.escapeHtml(c.studioName || '')} — ${Utils.escapeHtml(c.verification?.verifiedAt || c.sentAt || '')}</p>
+      html += `<div class="portal-section"><div class="portal-hero" style="margin-bottom:0;background:linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(20,20,24,0.9) 100%);border:1px solid rgba(16,185,129,0.3)">
+        <h2 style="color:#10b981">✓ قرارداد رسمی همکاری فعال است</h2>
+        <p style="margin:4px 0 10px">${Utils.escapeHtml(c.studioName || '')} — ${Utils.escapeHtml(c.verification?.verifiedAt || c.sentAt || '')}</p>
+        <button type="button" class="portal-btn portal-btn-ghost" style="width:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:6px 12px" onclick="PortalDashboard.openContractModal('${c.id}')">
+          <i class="fas fa-file-contract"></i> مشاهده متن قرارداد تأییدشده
+        </button>
       </div></div>`
     }
     return html
@@ -388,6 +409,54 @@ const PortalDashboard = {
   closeModal() {
     document.getElementById('portal-project-modal')?.remove()
     this._selectedStatus = null
+  },
+
+  openContractModal(contractId) {
+    document.getElementById('portal-contract-modal')?.remove()
+    const c = DB.find('persContracts', x => x.id === contractId)
+    if (!c) { Utils.toast('قرارداد یافت نشد', 'error'); return }
+
+    const studio = DB.get('studioInfo') || {}
+    const studioName = c.studioName || studio.name || 'استودیو ماندنی'
+    const roles = Array.isArray(c.roles) ? c.roles.map(r => typeof getRoleTitle === 'function' ? getRoleTitle(r) : r).join('، ') : 'همکار'
+
+    const overlay = document.createElement('div')
+    overlay.className = 'portal-modal-overlay open'
+    overlay.id = 'portal-contract-modal'
+    overlay.innerHTML = `
+      <div class="portal-modal" style="max-width:680px;text-align:right" onclick="event.stopPropagation()">
+        <button type="button" class="portal-modal-close" onclick="PortalDashboard.closeContractModal()" title="بستن (X)">✕</button>
+        <div style="text-align:center;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:12px">
+          <h3 style="margin:0 0 6px;color:var(--clr-primary,#ff5500);font-size:1.15rem">متن قرارداد رسمی همکاری تخصصی استودیو</h3>
+          <div style="font-size:12px;color:rgba(255,255,255,0.5)">${Utils.escapeHtml(studioName)} · شماره رهگیری: ${Utils.escapeHtml(c.id.slice(-8).toUpperCase())}</div>
+        </div>
+        <div style="max-height:60vh;overflow-y:auto;padding-left:8px;font-size:13px;line-height:1.8;color:rgba(255,255,255,0.85)">
+          <p><strong>طرف اول (کارفرما / مدیریت):</strong> ${Utils.escapeHtml(studioName)}</p>
+          <p><strong>طرف دوم (همکار / مجری):</strong> ${Utils.escapeHtml(c.personnelName || 'همکار گرامی')} با سمت تخصصی <strong>«${Utils.escapeHtml(roles)}»</strong></p>
+          <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:12px 0"/>
+          <h4 style="color:#f5d17a;margin:8px 0">ماده ۱: شرایط مالی و حق‌الزحمه مصوب</h4>
+          <p style="background:rgba(255,255,255,0.04);padding:8px 12px;border-radius:8px">${Utils.escapeHtml(c.paySummary || 'پرداخت بر اساس تعرفه آفیش و پروژه‌ها')}</p>
+          <h4 style="color:#f5d17a;margin:12px 0 6px">ماده ۲: تعهدات تخصصی و محرمانگی</h4>
+          <ul style="padding-right:20px;margin:0 0 12px">
+            <li><strong>حفظ حریم خصوصی:</strong> تمامی راش‌ها، فیلم‌ها و عکس‌های مراجعین محرمانه بوده و انتشار یا کپی بر روی حافظه شخصی ممنوع است.</li>
+            <li><strong>امانت‌داری تجهیزات:</strong> طرف دوم موظف به حفظ و نگهداری کامل وسایل، دوربین و لنزهای تحویلی استودیو است.</li>
+            <li><strong>تحویل فایل‌ها:</strong> فایل‌ها باید حداکثر ظرف مهلت تعیین‌شده در سامانه به استودیو تحویل داده شوند.</li>
+          </ul>
+          <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);padding:10px 14px;border-radius:8px;margin-top:14px">
+            <strong>وضعیت قرارداد:</strong> ${c.status === 'verified' ? '<span style="color:#10b981">✓ تأیید و امضا شده</span>' : '<span style="color:#ffaa00">⏳ در انتظار تأیید همکار</span>'}
+            ${c.verification?.verifiedAt ? `<div style="font-size:11px;margin-top:4px">امضا شده در تاریخ: ${Utils.escapeHtml(c.verification.verifiedAt)}</div>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px">
+          <button type="button" class="portal-btn portal-btn-ghost" onclick="PortalDashboard.closeContractModal()">بستن</button>
+        </div>
+      </div>`
+    overlay.onclick = e => { if (e.target === overlay) PortalDashboard.closeContractModal() }
+    document.body.appendChild(overlay)
+  },
+
+  closeContractModal() {
+    document.getElementById('portal-contract-modal')?.remove()
   }
 }
 

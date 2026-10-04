@@ -164,11 +164,10 @@ const SMSettings = {
     const formatted = typeof Studio !== 'undefined' ? Studio.formatCode(code) : code
     return `<div class="sm-settings-grid">
       <div class="sm-card sm-settings-full">
-        <div class="sm-card-head"><div class="sm-card-title">کد عضویت استودیو</div></div>
+        <div class="sm-card-head"><div class="sm-card-title"><i class="fas fa-key" style="color:var(--sm-accent)"></i> کد اختصاصی اتصال پرسنل به استودیو (اتصال دوطرفه)</div></div>
         <div class="sm-card-body">
-          <p style="font-size:.82rem;color:var(--sm-text-muted);line-height:1.7;margin:0 0 14px">
-            این کد مخصوص استودیو است و در <strong>تنظیمات</strong> نگه داشته می‌شود.
-            برای پرسنل از «مدیریت پرتال → + پرسنل» استفاده کنید تا <strong>کد ورود شخصی</strong> بسازید.
+          <p style="font-size:.84rem;color:var(--sm-text-muted);line-height:1.8;margin:0 0 14px">
+            این کد اختصاصی و یکتای استودیو شماست. آن را در اختیار پرسنل، عکاسان، تدوین‌گران و همکاران قرار دهید تا هنگام ثبت‌نام در سامانه، در زبانه <strong>«عضویت پرسنل (اتصال به استودیو)»</strong> این کد را وارد کنند. پس از ارسال درخواست توسط همکار، کارت درخواست اتصال در بخش <strong>«پرسنل»</strong> ظاهر شده و با تأیید شما حساب همکار فعال و رسمی می‌گردد.
           </p>
           <div style="text-align:center;padding:20px;border:2px dashed var(--sm-border);border-radius:14px;margin-bottom:12px">
             <div style="font-size:.75rem;color:var(--sm-text-muted)">کد عضویت</div>

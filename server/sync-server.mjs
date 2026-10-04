@@ -170,6 +170,33 @@ function verifyOtpSync(code, portalOtp) {
   return false
 }
 
+function hashPasswordSync(password) {
+  const salt = crypto.randomBytes(16).toString('hex')
+  const cleanPw = String(password).trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+  const iterations = 100000
+  const saltBytes = Buffer.from(salt, 'hex')
+  const derived = crypto.pbkdf2Sync(cleanPw, saltBytes, iterations, 32, 'sha256').toString('hex')
+  return {
+    password: `pbkdf2$${iterations}$${derived}`,
+    salt
+  }
+}
+
+function getSortedTenantFiles() {
+  if (!fs.existsSync(TENANTS_DIR)) return []
+  return fs.readdirSync(TENANTS_DIR)
+    .filter(f => f.endsWith('.json') && !f.endsWith('.meta.json'))
+    .map(f => {
+      try {
+        return { name: f, time: fs.statSync(path.join(TENANTS_DIR, f)).mtimeMs }
+      } catch {
+        return { name: f, time: 0 }
+      }
+    })
+    .sort((a, b) => b.time - a.time)
+    .map(f => f.name)
+}
+
 /**
  * Scans tenant databases and returns SAFE sanitized metadata.
  * NEVER returns raw database, passwords, or unrelated tenant records.
@@ -180,9 +207,8 @@ function findTenantSafe(targetPhone) {
 
   try {
     if (!fs.existsSync(TENANTS_DIR)) return null
-    const files = fs.readdirSync(TENANTS_DIR)
+    const files = getSortedTenantFiles()
     for (const f of files) {
-      if (f.endsWith('.json') && !f.endsWith('.meta.json')) {
         const filePath = path.join(TENANTS_DIR, f)
         try {
           const content = fs.readFileSync(filePath, 'utf-8')
@@ -247,7 +273,6 @@ function findTenantSafe(targetPhone) {
           }
         } catch { /* skip corrupted file */ }
       }
-    }
   } catch (err) {
     console.warn('[SyncServer] findTenantSafe error:', err.message)
   }
@@ -505,68 +530,133 @@ const server = http.createServer((req, res) => {
           return sendJson(res, 404, { ok: false, error: 'پایگاه داده یافت نشد' })
         }
 
-        const files = fs.readdirSync(TENANTS_DIR)
+        const files = getSortedTenantFiles()
+        let foundAnyUser = false
+        let pendingApproval = false
+
         for (const f of files) {
-          if (f.endsWith('.json') && !f.endsWith('.meta.json')) {
-            const filePath = path.join(TENANTS_DIR, f)
-            try {
-              const content = fs.readFileSync(filePath, 'utf-8')
-              const data = JSON.parse(content)
-              const users = Array.isArray(data.users) ? data.users : []
+          const filePath = path.join(TENANTS_DIR, f)
+          try {
+            const content = fs.readFileSync(filePath, 'utf-8')
+            const data = JSON.parse(content)
+            const users = Array.isArray(data.users) ? data.users : []
+            const personnel = Array.isArray(data.personnel) ? data.personnel : []
+            const persContracts = Array.isArray(data.persContracts) ? data.persContracts : []
 
-              const userIndex = users.findIndex(u =>
-                (phone && u.phone && normalizePhone(u.phone) === phone) ||
-                (isEmail && u.email && u.email.toLowerCase() === email)
-              )
+            let userIndex = users.findIndex(u =>
+              (phone && u.phone && normalizePhone(u.phone) === phone) ||
+              (isEmail && u.email && u.email.toLowerCase() === email)
+            )
 
-              if (userIndex !== -1) {
-                const user = users[userIndex]
-                const tenantKey = f.replace(/\.json$/, '')
+            const matchPersonnel = personnel.find(p => phone && p.phone && normalizePhone(p.phone) === phone)
 
-                let match = false
-                let usedOtp = false
+            if (userIndex !== -1 || matchPersonnel) {
+              foundAnyUser = true
+              let user = userIndex !== -1 ? users[userIndex] : null
 
-                if (user.password && user.salt) {
-                  try {
-                    match = verifyPasswordSync(rawPw, user.password, user.salt)
-                  } catch { /* ignore */ }
+              // If personnel exists without user, create provisional user object
+              if (!user && matchPersonnel) {
+                user = {
+                  id: matchPersonnel.id || ('user_' + Date.now()),
+                  name: matchPersonnel.name,
+                  phone: matchPersonnel.phone,
+                  roles: matchPersonnel.roles || (matchPersonnel.role ? [matchPersonnel.role] : ['photographer']),
+                  portalType: 'staff',
+                  status: matchPersonnel.status || 'active',
+                  createdAt: matchPersonnel.createdAt || new Date().toISOString()
                 }
+                users.push(user)
+                userIndex = users.length - 1
+                data.users = users
+              }
 
-                if (!match && user.portalOtp) {
-                  usedOtp = verifyOtpSync(rawPw, user.portalOtp)
-                  if (usedOtp) match = true
-                }
+              if (user.status === 'pending_approval' || (matchPersonnel && matchPersonnel.status === 'pending_approval')) {
+                pendingApproval = true
+                continue
+              }
 
-                if (match) {
-                  if (usedOtp) {
-                    user.portalStatus = 'active'
-                    user.portalOtp = {
-                      ...(user.portalOtp || {}),
-                      verified: true,
-                      verifiedAt: new Date().toISOString(),
-                      verifiedVia: 'server_auth_login'
-                    }
-                    data.users[userIndex] = user
-                    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
-                    const meta = readTenantMeta(tenantKey)
-                    writeTenantMeta(tenantKey, meta.revision + 1, new Date().toISOString(), meta.syncToken)
-                    broadcastTenantUpdate(tenantKey, meta.revision + 1, new Date().toISOString())
+              const tenantKey = f.replace(/\.json$/, '')
+              let match = false
+              let usedOtp = false
+
+              // Check 1: pbkdf2 password
+              if (user.password && user.salt) {
+                try {
+                  match = verifyPasswordSync(rawPw, user.password, user.salt)
+                } catch { /* ignore */ }
+              }
+
+              // Check 2: user portalOtp
+              if (!match && user.portalOtp) {
+                usedOtp = verifyOtpSync(rawPw, user.portalOtp)
+                if (usedOtp) match = true
+              }
+
+              // Check 3: Check persContracts verification codes for this personnel/phone
+              if (!match && persContracts.length && phone) {
+                const matchingContract = persContracts.find(c => {
+                  const cPhone = c.verification?.phone ? normalizePhone(c.verification.phone) : ''
+                  const cCode = String(c.verification?.code || '').trim()
+                  const cleanPw = rawPw.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+                  return (cPhone === phone || c.personnelId === user.id) && cCode && (cCode === cleanPw)
+                })
+                if (matchingContract) {
+                  match = true
+                  usedOtp = true
+                  matchingContract.verification = {
+                    ...(matchingContract.verification || {}),
+                    verified: true,
+                    verifiedAt: new Date().toISOString()
                   }
-
-                  const { password: _p, salt: _s, ...safeUser } = user
-                  return sendJson(res, 200, {
-                    ok: true,
-                    user: safeUser,
-                    tenantKey,
-                    studioInfo: data.studioInfo || {},
-                    fullData: data
-                  })
-                } else {
-                  return sendJson(res, 401, { ok: false, error: 'رمز عبور یا کد ورود نادرست است' })
+                  matchingContract.status = 'verified'
                 }
               }
-            } catch { /* skip corrupted file */ }
-          }
+
+              if (match) {
+                let shouldSave = false
+                if (usedOtp) {
+                  user.portalStatus = 'active'
+                  user.portalOtp = {
+                    ...(user.portalOtp || {}),
+                    verified: true,
+                    verifiedAt: new Date().toISOString(),
+                    verifiedVia: 'server_auth_login'
+                  }
+                  shouldSave = true
+                }
+
+                if (userIndex !== -1) {
+                  data.users[userIndex] = user
+                  shouldSave = true
+                }
+
+                if (shouldSave) {
+                  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+                  const meta = readTenantMeta(tenantKey)
+                  writeTenantMeta(tenantKey, meta.revision + 1, new Date().toISOString(), meta.syncToken)
+                  broadcastTenantUpdate(tenantKey, meta.revision + 1, new Date().toISOString())
+                }
+
+                const { password: _p, salt: _s, ...safeUser } = user
+                return sendJson(res, 200, {
+                  ok: true,
+                  user: safeUser,
+                  tenantKey,
+                  studioInfo: data.studioInfo || {},
+                  fullData: data
+                })
+              }
+              // If not matched in this tenant, DO NOT abort immediately! Check next tenant file
+            }
+          } catch { /* skip corrupted file */ }
+        }
+
+        if (pendingApproval) {
+          return sendJson(res, 403, { ok: false, error: 'درخواست عضویت شما هنوز توسط مدیریت استودیو تأیید نشده است.' })
+        }
+
+        if (foundAnyUser) {
+          return sendJson(res, 401, { ok: false, error: 'رمز عبور یا کد ورود نادرست است' })
         }
 
         return sendJson(res, 404, { ok: false, error: 'حسابی با این شماره موبایل یا ایمیل یافت نشد' })
@@ -604,51 +694,211 @@ const server = http.createServer((req, res) => {
           return sendJson(res, 404, { ok: false, error: 'پایگاه داده یافت نشد' })
         }
 
-        const files = fs.readdirSync(TENANTS_DIR)
+        const files = getSortedTenantFiles()
+        let foundAnyUser = false
+
         for (const f of files) {
-          if (f.endsWith('.json') && !f.endsWith('.meta.json')) {
-            const filePath = path.join(TENANTS_DIR, f)
-            try {
-              const content = fs.readFileSync(filePath, 'utf-8')
-              const data = JSON.parse(content)
-              const users = Array.isArray(data.users) ? data.users : []
+          const filePath = path.join(TENANTS_DIR, f)
+          try {
+            const content = fs.readFileSync(filePath, 'utf-8')
+            const data = JSON.parse(content)
+            const users = Array.isArray(data.users) ? data.users : []
+            const personnel = Array.isArray(data.personnel) ? data.personnel : []
+            const persContracts = Array.isArray(data.persContracts) ? data.persContracts : []
 
-              const userIndex = users.findIndex(u => u.phone && normalizePhone(u.phone) === phone)
-              if (userIndex !== -1) {
-                const user = users[userIndex]
-                const tenantKey = f.replace(/\.json$/, '')
+            let userIndex = users.findIndex(u => u.phone && normalizePhone(u.phone) === phone)
+            const matchPersonnel = personnel.find(p => p.phone && normalizePhone(p.phone) === phone)
 
-                const ok = verifyOtpSync(code, user.portalOtp)
-                if (ok) {
-                  user.portalStatus = 'active'
-                  user.portalOtp = {
-                    ...(user.portalOtp || {}),
+            if (userIndex !== -1 || matchPersonnel) {
+              foundAnyUser = true
+              let user = userIndex !== -1 ? users[userIndex] : null
+
+              if (!user && matchPersonnel) {
+                user = {
+                  id: matchPersonnel.id || ('user_' + Date.now()),
+                  name: matchPersonnel.name,
+                  phone: matchPersonnel.phone,
+                  roles: matchPersonnel.roles || (matchPersonnel.role ? [matchPersonnel.role] : ['photographer']),
+                  portalType: 'staff',
+                  status: matchPersonnel.status || 'active',
+                  createdAt: matchPersonnel.createdAt || new Date().toISOString()
+                }
+                users.push(user)
+                userIndex = users.length - 1
+                data.users = users
+              }
+
+              const tenantKey = f.replace(/\.json$/, '')
+              let ok = verifyOtpSync(code, user.portalOtp)
+
+              if (!ok && persContracts.length) {
+                const matchContract = persContracts.find(c => {
+                  const cPhone = c.verification?.phone ? normalizePhone(c.verification.phone) : ''
+                  const cCode = String(c.verification?.code || '').trim()
+                  const cleanCode = code.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+                  return (cPhone === phone || c.personnelId === user.id) && cCode && (cCode === cleanCode)
+                })
+                if (matchContract) {
+                  ok = true
+                  matchContract.verification = {
+                    ...(matchContract.verification || {}),
                     verified: true,
-                    verifiedAt: new Date().toISOString(),
-                    verifiedVia: 'server_auth_verify_code'
+                    verifiedAt: new Date().toISOString()
                   }
-                  data.users[userIndex] = user
-                  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
-                  const meta = readTenantMeta(tenantKey)
-                  writeTenantMeta(tenantKey, meta.revision + 1, new Date().toISOString(), meta.syncToken)
-                  broadcastTenantUpdate(tenantKey, meta.revision + 1, new Date().toISOString())
-
-                  const { password: _p, salt: _s, ...safeUser } = user
-                  return sendJson(res, 200, {
-                    ok: true,
-                    user: safeUser,
-                    tenantKey,
-                    studioInfo: data.studioInfo || {},
-                    fullData: data
-                  })
-                } else {
-                  return sendJson(res, 401, { ok: false, error: 'کد وارد‌شده نادرست است' })
+                  matchContract.status = 'verified'
                 }
               }
-            } catch { /* skip */ }
-          }
+
+              if (ok) {
+                user.portalStatus = 'active'
+                user.portalOtp = {
+                  ...(user.portalOtp || {}),
+                  verified: true,
+                  verifiedAt: new Date().toISOString(),
+                  verifiedVia: 'server_auth_verify_code'
+                }
+                data.users[userIndex] = user
+                fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+                const meta = readTenantMeta(tenantKey)
+                writeTenantMeta(tenantKey, meta.revision + 1, new Date().toISOString(), meta.syncToken)
+                broadcastTenantUpdate(tenantKey, meta.revision + 1, new Date().toISOString())
+
+                const { password: _p, salt: _s, ...safeUser } = user
+                return sendJson(res, 200, {
+                  ok: true,
+                  user: safeUser,
+                  tenantKey,
+                  studioInfo: data.studioInfo || {},
+                  fullData: data
+                })
+              }
+            }
+          } catch { /* skip */ }
         }
-        return sendJson(res, 404, { ok: false, error: 'کاربر یافت نشد' })
+
+        if (foundAnyUser) {
+          return sendJson(res, 401, { ok: false, error: 'کد وارد‌شده نادرست است' })
+        }
+        return sendJson(res, 404, { ok: false, error: 'حسابی با این شماره موبایل یافت نشد' })
+      } catch (err) {
+        return sendJson(res, 400, { ok: false, error: err.message })
+      }
+    })
+    return
+  }
+
+  // Register Staff (Two-way Connection via Studio Join Code)
+  if (req.method === 'POST' && url.pathname === '/api/auth/register-staff') {
+    const check = authLimiter.check(clientIp)
+    if (!check.allowed) {
+      return sendJson(res, 429, { ok: false, error: `تعداد درخواست بیش از حد مجاز. لطفاً ${check.retryAfterSec} ثانیه دیگر تلاش کنید.` })
+    }
+
+    let body = ''
+    req.setEncoding('utf-8')
+    req.on('data', chunk => {
+      body += chunk
+      if (body.length > 32 * 1024) req.destroy()
+    })
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const name = String(payload.name || '').trim()
+        const rawPhone = String(payload.phone || '').trim()
+        const phone = normalizePhone(rawPhone)
+        const password = String(payload.password || '').trim()
+        const role = String(payload.role || 'photographer').trim()
+        const joinCode = String(payload.joinCode || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+        if (!name) return sendJson(res, 400, { ok: false, error: 'نام و نام‌خانوادگی الزامی است' })
+        if (!phone || phone.length < 10) return sendJson(res, 400, { ok: false, error: 'شماره موبایل معتبر الزامی است' })
+        if (!password || password.length < 4) return sendJson(res, 400, { ok: false, error: 'رمز عبور حداقل باید ۴ کاراکتر باشد' })
+        if (!joinCode) return sendJson(res, 400, { ok: false, error: 'کد اختصاصی استودیو الزامی است' })
+
+        if (!fs.existsSync(TENANTS_DIR)) {
+          return sendJson(res, 404, { ok: false, error: 'پایگاه داده یافت نشد' })
+        }
+
+        const files = getSortedTenantFiles()
+        let targetFile = null
+        let targetData = null
+        let targetTenantKey = null
+
+        for (const f of files) {
+          const filePath = path.join(TENANTS_DIR, f)
+          try {
+            const content = fs.readFileSync(filePath, 'utf-8')
+            const data = JSON.parse(content)
+            const studioCode = String(data.studioInfo?.joinCode || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+            const studioId = String(data.studioInfo?.id || '').trim().toUpperCase()
+            if ((studioCode && studioCode === joinCode) || (studioId && studioId === joinCode)) {
+              targetFile = filePath
+              targetData = data
+              targetTenantKey = f.replace(/\.json$/, '')
+              break
+            }
+          } catch { /* skip */ }
+        }
+
+        if (!targetFile || !targetData) {
+          return sendJson(res, 400, { ok: false, error: 'استودیویی با این کد اتصال یافت نشد. لطفاً کد را از مدیر استودیو بررسی کنید.' })
+        }
+
+        if (!Array.isArray(targetData.personnel)) targetData.personnel = []
+        if (!Array.isArray(targetData.users)) targetData.users = []
+
+        const existingUser = targetData.users.find(u => u.phone && normalizePhone(u.phone) === phone)
+        if (existingUser && existingUser.status !== 'pending_approval' && existingUser.status !== 'pending') {
+          return sendJson(res, 400, { ok: false, error: 'این شماره قبلاً در این استودیو ثبت شده است. لطفاً از بخش ورود وارد شوید.' })
+        }
+
+        const empId = existingUser?.id || ('emp_' + Date.now())
+        const hashed = hashPasswordSync(password)
+
+        // Add or update personnel
+        const pIdx = targetData.personnel.findIndex(p => p.phone && normalizePhone(p.phone) === phone)
+        const pRecord = {
+          id: empId,
+          name,
+          phone,
+          roles: [role],
+          role,
+          status: 'pending_approval',
+          registeredVia: 'staff_join_code',
+          createdAt: targetData.personnel[pIdx]?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+        if (pIdx >= 0) targetData.personnel[pIdx] = { ...targetData.personnel[pIdx], ...pRecord }
+        else targetData.personnel.push(pRecord)
+
+        // Add or update users
+        const uIdx = targetData.users.findIndex(u => u.phone && normalizePhone(u.phone) === phone)
+        const uRecord = {
+          id: empId,
+          name,
+          phone,
+          password: hashed.password,
+          salt: hashed.salt,
+          roles: [role],
+          portalType: 'staff',
+          status: 'pending_approval',
+          createdAt: targetData.users[uIdx]?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+        if (uIdx >= 0) targetData.users[uIdx] = { ...targetData.users[uIdx], ...uRecord }
+        else targetData.users.push(uRecord)
+
+        fs.writeFileSync(targetFile, JSON.stringify(targetData, null, 2), 'utf-8')
+        const meta = readTenantMeta(targetTenantKey)
+        const nextRev = (meta.revision || 0) + 1
+        writeTenantMeta(targetTenantKey, nextRev, new Date().toISOString(), meta.syncToken)
+        broadcastTenantUpdate(targetTenantKey, nextRev, new Date().toISOString())
+
+        return sendJson(res, 200, {
+          ok: true,
+          message: `درخواست عضویت شما برای «${targetData.studioInfo?.name || 'استودیو'}» ارسال شد. به محض تأیید مدیر استودیو، حساب شما فعال خواهد شد.`,
+          studioName: targetData.studioInfo?.name || 'استودیو'
+        })
       } catch (err) {
         return sendJson(res, 400, { ok: false, error: err.message })
       }

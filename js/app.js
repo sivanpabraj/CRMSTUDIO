@@ -1,6 +1,6 @@
 /* Studio M — ورود واحد · شناسایی خودکار از DB */
 const Portal = {
-  state: { currentUser: null, currentSection: 'overview', authTab: 'login', step: 'login', loginMethod: 'password', _phone: '' },
+  state: { currentUser: null, currentSection: 'overview', authTab: 'login', step: 'login', loginMethod: 'password', regType: 'studio', _phone: '' },
 
   async init() {
     const params = new URLSearchParams(location.search)
@@ -332,69 +332,159 @@ const Portal = {
     return `<div class="auth-form">${this._loginFields()}</div>`
   },
 
+  setRegType(type) {
+    this.state.regType = type
+    const regView = document.getElementById('auth-register-view') || document.querySelector('.auth-form')
+    if (regView && this.state.authTab === 'register') {
+      regView.innerHTML = this._registerFields()
+      return
+    }
+    this.renderAuth(true)
+  },
+
   _registerFields() {
+    const isStaff = this.state.regType === 'staff'
     return `
-      <div class="auth-grid-2col">
-        <div class="auth-field">
-          <label class="auth-label" for="reg-studio-name">نام استودیو / آتلیه</label>
-          <div class="auth-input-wrap">
-            <i class="fas fa-store"></i>
-            <input type="text" id="reg-studio-name" placeholder="مثلاً استودیو ماندگار" autofocus/>
-          </div>
-        </div>
-        <div class="auth-field">
-          <label class="auth-label" for="reg-manager-name">نام و نام خانوادگی مدیر</label>
-          <div class="auth-input-wrap">
-            <i class="fas fa-user-tie"></i>
-            <input type="text" id="reg-manager-name" placeholder="مثلاً علی محمدی"/>
-          </div>
-        </div>
+      <div style="display:flex;gap:6px;margin-bottom:16px;background:rgba(255,255,255,0.05);padding:4px;border-radius:10px;border:1px solid rgba(255,255,255,0.08)">
+        <button type="button" class="auth-method-tab ${!isStaff ? 'auth-method-tab--active' : ''}" onclick="Portal.setRegType('studio')" style="flex:1;font-size:12px;padding:8px;border-radius:7px;display:flex;align-items:center;justify-content:center;gap:6px">
+          <i class="fas fa-crown"></i> ثبت استودیو جدید
+        </button>
+        <button type="button" class="auth-method-tab ${isStaff ? 'auth-method-tab--active' : ''}" onclick="Portal.setRegType('staff')" style="flex:1;font-size:12px;padding:8px;border-radius:7px;display:flex;align-items:center;justify-content:center;gap:6px">
+          <i class="fas fa-id-badge"></i> عضویت پرسنل (اتصال به استودیو)
+        </button>
       </div>
 
-      <div class="auth-grid-2col">
-        <div class="auth-field">
-          <label class="auth-label" for="reg-phone">شماره همراه مدیر (جهت ورود)</label>
-          <div class="auth-input-wrap">
-            <i class="fas fa-mobile-alt"></i>
-            <input type="tel" id="reg-phone" class="ltr" dir="ltr" inputmode="numeric" placeholder="09121234567"/>
+      ${isStaff ? `
+        <!-- فرم عضویت پرسنل و همکار -->
+        <div class="auth-grid-2col">
+          <div class="auth-field">
+            <label class="auth-label" for="reg-staff-name">نام و نام‌خانوادگی همکار</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-user"></i>
+              <input type="text" id="reg-staff-name" placeholder="مثلاً سارینا طهمازی" autofocus/>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-staff-phone">شماره همراه همکار (جهت ورود)</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-mobile-alt"></i>
+              <input type="tel" id="reg-staff-phone" class="ltr" dir="ltr" inputmode="numeric" placeholder="09121234567"/>
+            </div>
           </div>
         </div>
-        <div class="auth-field">
-          <label class="auth-label" for="reg-email">ایمیل / جیمیل <small style="opacity:0.65">(جهت بکاپ)</small></label>
-          <div class="auth-input-wrap">
-            <i class="fas fa-envelope"></i>
-            <input type="email" id="reg-email" class="ltr" dir="ltr" placeholder="name@gmail.com"/>
-          </div>
-        </div>
-      </div>
 
-      <div class="auth-grid-2col">
-        <div class="auth-field">
-          <label class="auth-label" for="reg-password">رمز عبور مدیر</label>
-          <div class="auth-input-wrap">
-            <i class="fas fa-lock"></i>
-            <input type="password" id="reg-password" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="حداقل ۶ کاراکتر"/>
-            <button type="button" class="auth-pw-toggle" onclick="Portal.togglePasswordVisibility('reg-password', 'reg-pw-eye-icon')" title="نمایش رمز" tabindex="-1">
-              <i class="fas fa-eye" id="reg-pw-eye-icon"></i>
-            </button>
+        <div class="auth-grid-2col">
+          <div class="auth-field">
+            <label class="auth-label" for="reg-staff-role">نقش و تخصص در استودیو</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-camera"></i>
+              <select id="reg-staff-role" style="background:transparent;border:none;color:#fff;width:100%;outline:none;font-family:inherit;font-size:13px;padding:8px 4px">
+                <option value="photographer" style="background:#1e1e24;color:#fff">عکاس (آتلیه و مراسم)</option>
+                <option value="videographer" style="background:#1e1e24;color:#fff">تصویربردار / فیلمبردار</option>
+                <option value="editor" style="background:#1e1e24;color:#fff">تدوین‌گر و ادیتور فیلم</option>
+                <option value="album_designer" style="background:#1e1e24;color:#fff">طراح آلبوم ژورنال</option>
+                <option value="colorist" style="background:#1e1e24;color:#fff">اصلاح رنگ و نور (داوینچی)</option>
+                <option value="office_secretary" style="background:#1e1e24;color:#fff">مسئول دفتر و پذیرش مراجعین</option>
+              </select>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-staff-code" style="color:#f59e0b">کد اختصاصی اتصال به استودیو</label>
+            <div class="auth-input-wrap" style="border-color:rgba(245,158,11,0.5)">
+              <i class="fas fa-key" style="color:#f59e0b"></i>
+              <input type="text" id="reg-staff-code" class="ltr uppercase" dir="ltr" maxlength="12" placeholder="مثلاً R543WD" style="letter-spacing:2px;font-weight:700;color:#f59e0b"/>
+            </div>
           </div>
         </div>
-        <div class="auth-field">
-          <label class="auth-label" for="reg-password-confirm">تکرار رمز عبور</label>
-          <div class="auth-input-wrap">
-            <i class="fas fa-shield-alt"></i>
-            <input type="password" id="reg-password-confirm" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="تکرار رمز عبور"/>
+
+        <div class="auth-grid-2col">
+          <div class="auth-field">
+            <label class="auth-label" for="reg-staff-password">رمز عبور دلخواه همکار</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-lock"></i>
+              <input type="password" id="reg-staff-password" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="حداقل ۴ کاراکتر"/>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-staff-password-confirm">تکرار رمز عبور</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-shield-alt"></i>
+              <input type="password" id="reg-staff-password-confirm" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="تکرار رمز عبور"/>
+            </div>
           </div>
         </div>
-      </div>
-      ${typeof PasswordSecurity !== 'undefined' && PasswordSecurity.meterHtml ? PasswordSecurity.meterHtml('reg') : ''}
-      <div class="auth-error" id="reg-error"></div>
-      <button type="button" class="auth-btn auth-btn-primary" id="reg-btn" onclick="Portal.submitRegister()" style="margin-top:6px">
-        <i class="fas fa-rocket"></i> ساخت و ثبت استودیو
-      </button>
+
+        <div style="font-size:11.5px;color:rgba(255,255,255,0.55);margin:-4px 0 10px;line-height:1.6">
+          <i class="fas fa-info-circle" style="color:#f59e0b"></i> کد اختصاصی استودیو را از مدیریت استودیو دریافت نمایید. درخواست عضویت شما مستقیماً برای مدیر ارسال می‌شود.
+        </div>
+        <div class="auth-error" id="reg-error"></div>
+        <button type="button" class="auth-btn auth-btn-primary" id="reg-btn" onclick="Portal.submitRegisterStaff()" style="margin-top:6px;background:linear-gradient(135deg, #f59e0b 0%, #d97706 100%)">
+          <i class="fas fa-paper-plane"></i> ارسال درخواست اتصال به استودیو
+        </button>
+      ` : `
+        <!-- فرم ساخت استودیو جدید -->
+        <div class="auth-grid-2col">
+          <div class="auth-field">
+            <label class="auth-label" for="reg-studio-name">نام استودیو / آتلیه</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-store"></i>
+              <input type="text" id="reg-studio-name" placeholder="مثلاً استودیو ماندگار" autofocus/>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-manager-name">نام و نام خانوادگی مدیر</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-user-tie"></i>
+              <input type="text" id="reg-manager-name" placeholder="مثلاً علی محمدی"/>
+            </div>
+          </div>
+        </div>
+
+        <div class="auth-grid-2col">
+          <div class="auth-field">
+            <label class="auth-label" for="reg-phone">شماره همراه مدیر (جهت ورود)</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-mobile-alt"></i>
+              <input type="tel" id="reg-phone" class="ltr" dir="ltr" inputmode="numeric" placeholder="09121234567"/>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-email">ایمیل / جیمیل <small style="opacity:0.65">(جهت بکاپ)</small></label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-envelope"></i>
+              <input type="email" id="reg-email" class="ltr" dir="ltr" placeholder="name@gmail.com"/>
+            </div>
+          </div>
+        </div>
+
+        <div class="auth-grid-2col">
+          <div class="auth-field">
+            <label class="auth-label" for="reg-password">رمز عبور مدیر</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-lock"></i>
+              <input type="password" id="reg-password" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="حداقل ۶ کاراکتر"/>
+              <button type="button" class="auth-pw-toggle" onclick="Portal.togglePasswordVisibility('reg-password', 'reg-pw-eye-icon')" title="نمایش رمز" tabindex="-1">
+                <i class="fas fa-eye" id="reg-pw-eye-icon"></i>
+              </button>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-password-confirm">تکرار رمز عبور</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-shield-alt"></i>
+              <input type="password" id="reg-password-confirm" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="تکرار رمز عبور"/>
+            </div>
+          </div>
+        </div>
+        ${typeof PasswordSecurity !== 'undefined' && PasswordSecurity.meterHtml ? PasswordSecurity.meterHtml('reg') : ''}
+        <div class="auth-error" id="reg-error"></div>
+        <button type="button" class="auth-btn auth-btn-primary" id="reg-btn" onclick="Portal.submitRegister()" style="margin-top:6px">
+          <i class="fas fa-rocket"></i> ساخت و ثبت استودیو
+        </button>
+      `}
 
       <div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.07);text-align:center;font-size:13px">
-        <span style="color:rgba(255,255,255,0.65)">قبلاً استودیو ساخته‌اید؟ </span>
+        <span style="color:rgba(255,255,255,0.65)">قبلاً ثبت‌نام کرده‌اید؟ </span>
         <a href="javascript:void(0)" onclick="Portal.setAuthTab('login')" style="color:var(--glass-accent, #F59E0B);font-weight:800;text-decoration:none">
           <i class="fas fa-sign-in-alt"></i> ورود به سیستم
         </a>
@@ -403,6 +493,74 @@ const Portal = {
 
   _registerStep() {
     return `<div class="auth-form">${this._registerFields()}</div>`
+  },
+
+  async submitRegisterStaff() {
+    const errEl = document.getElementById('reg-error')
+    const showErr = m => { if (errEl) { errEl.textContent = m; errEl.style.display = 'block' } }
+    if (errEl) errEl.style.display = 'none'
+
+    const name = document.getElementById('reg-staff-name')?.value?.trim()
+    const phone = Utils.normalizePhone(document.getElementById('reg-staff-phone')?.value)
+    const role = document.getElementById('reg-staff-role')?.value || 'photographer'
+    const joinCode = (document.getElementById('reg-staff-code')?.value || '').trim().toUpperCase()
+    const password = Utils.normalizePassword(document.getElementById('reg-staff-password')?.value)
+    const passwordConfirm = Utils.normalizePassword(document.getElementById('reg-staff-password-confirm')?.value)
+
+    if (!name) { showErr('نام و نام‌خانوادگی الزامی است'); return }
+    if (!Utils.isValidPhone(phone)) { showErr('شماره موبایل نامعتبر است (مثال: 09121234567)'); return }
+    if (!joinCode) { showErr('کد اختصاصی اتصال به استودیو الزامی است'); return }
+    if (!password || password.length < 4) { showErr('رمز عبور باید حداقل ۴ کاراکتر باشد'); return }
+    if (passwordConfirm && passwordConfirm !== password) { showErr('تکرار رمز عبور مطابقت ندارد'); return }
+
+    const btn = document.getElementById('reg-btn')
+    if (btn) {
+      btn.disabled = true
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال ارسال درخواست...'
+    }
+
+    try {
+      const res = await fetch('/api/auth/register-staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone, role, joinCode, password })
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || !j.ok) {
+        showErr(j.error || 'خطا در ثبت درخواست')
+        if (btn) {
+          btn.disabled = false
+          btn.innerHTML = '<i class="fas fa-paper-plane"></i> ارسال درخواست اتصال به استودیو'
+        }
+        return
+      }
+
+      Utils.toast(j.message || 'درخواست عضویت شما با موفقیت ثبت شد', 'success', 10000)
+      this.state.authTab = 'login'
+      this.state.loginMethod = 'password'
+      this.renderAuth(true)
+      setTimeout(() => {
+        const idInput = document.getElementById('login-identifier')
+        if (idInput) {
+          idInput.value = phone
+          this.onIdentifierInput(phone)
+        }
+        const errElLogin = document.getElementById('login-error')
+        if (errElLogin) {
+          errElLogin.innerHTML = `
+            <div style="font-size:12px;color:#10b981;padding:8px 12px;background:rgba(16,185,129,0.1);border-radius:8px;border:1px solid rgba(16,185,129,0.25)">
+              <i class="fas fa-check-circle"></i> درخواست عضویت شما برای «${Utils.escapeHtml(j.studioName || 'استودیو')}» ارسال شد. به محض تأیید مدیر استودیو، می‌توانید با رمز عبور خود وارد شوید.
+            </div>`
+          errElLogin.style.display = 'block'
+        }
+      }, 100)
+    } catch (e) {
+      showErr(e.message || 'خطا در برقراری ارتباط با سرور')
+      if (btn) {
+        btn.disabled = false
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> ارسال درخواست اتصال به استودیو'
+      }
+    }
   },
 
   async submitRegister() {
@@ -908,6 +1066,11 @@ const Portal = {
               url: srvJson.user.portalType === 'staff' ? 'index.html?view=portal' : (Access?.canAccessStudioM?.(srvJson.user) ? 'studio-m/' : 'index.html?view=portal')
             }
           }
+        } else {
+          const srvErr = await srvRes.json().catch(() => ({}))
+          if (srvErr.error) {
+            result = { ok: false, error: srvErr.error }
+          }
         }
       } catch { /* ignore */ }
     }
@@ -1037,6 +1200,11 @@ const Portal = {
               user: srvJson.user,
               url: srvJson.user.portalType === 'staff' ? 'index.html?view=portal' : (Access?.canAccessStudioM?.(srvJson.user) ? 'studio-m/' : 'index.html?view=portal')
             }
+          }
+        } else {
+          const srvErr = await srvRes.json().catch(() => ({}))
+          if (srvErr.error) {
+            result = { ok: false, error: srvErr.error }
           }
         }
       } catch { /* ignore */ }

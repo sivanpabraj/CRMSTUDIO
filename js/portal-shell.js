@@ -188,36 +188,62 @@ Object.assign(Portal, {
     this.showSection('overview')
   },
 
-  async verifyEmploymentContract(contractId) {
+  async acceptEmploymentContract(contractId) {
     const user = this.state.currentUser
     const personnel = DB.findPersonnelByUserId(user?.id) || DB.findPersonnelByPhone(user?.phone)
     const c = DB.find('persContracts', x => x.id === contractId)
-    if (!c || c.personnelId !== personnel?.id) {
+    if (!c || (personnel && c.personnelId && c.personnelId !== personnel?.id)) {
       Utils.toast('دسترسی ندارید', 'error')
       return
     }
-    const input = document.getElementById(`emp-contract-code-${contractId}`)
-    const code = (input?.value || '').replace(/\D/g, '')
-    const expected = c.verification?.code || ''
-    if (!code || code !== expected) {
-      Utils.toast('کد تأیید نادرست است', 'error')
+
+    const agreeCheck = document.getElementById(`emp-contract-agree-${contractId}`)
+    if (agreeCheck && !agreeCheck.checked) {
+      Utils.toast('لطفاً تیک «شرایط و تعهدات قرارداد را می‌پذیرم» را فعال کنید', 'warning')
       return
     }
+
+    const today = Utils.todayJalali()
     await SecureDB.update('persContracts', contractId, {
       status: 'verified',
-      verification: { ...c.verification, verified: true, verifiedAt: Utils.todayJalali() }
+      verification: {
+        ...(c.verification || {}),
+        verified: true,
+        verifiedAt: today,
+        verifiedBy: user?.name || personnel?.name || 'همکار',
+        acceptedText: 'شرایط و تعهدات قرارداد را می‌پذیرم'
+      }
     })
-    DB.log('employment_contract_verified', contractId)
-    Utils.toast('قرارداد همکاری تأیید شد', 'success')
+
+    if (personnel?.id) {
+      await SecureDB.update('personnel', personnel.id, { status: 'active' })
+    }
+    if (user?.id) {
+      await SecureDB.update('users', user.id, { status: 'active', portalStatus: 'active' })
+    }
+
+    if (typeof window !== 'undefined' && window.ServerSync?.pushNow) {
+      window.ServerSync.pushNow().catch(() => {})
+    }
+
+    DB.log('employment_contract_accepted', contractId)
+    Utils.toast('قرارداد همکاری با موفقیت تأیید و امضا شد ✓', 'success')
     this.showSection('overview')
+  },
+
+  async verifyEmploymentContract(contractId) {
+    return this.acceptEmploymentContract(contractId)
   },
 
   async rejectEmploymentContract(contractId) {
     const user = this.state.currentUser
     const personnel = DB.findPersonnelByUserId(user?.id) || DB.findPersonnelByPhone(user?.phone)
     const c = DB.find('persContracts', x => x.id === contractId)
-    if (!c || c.personnelId !== personnel?.id) return
+    if (!c || (personnel && c.personnelId && c.personnelId !== personnel?.id)) return
     await SecureDB.update('persContracts', contractId, { status: 'rejected', rejectedAt: Utils.todayJalali() })
+    if (typeof window !== 'undefined' && window.ServerSync?.pushNow) {
+      window.ServerSync.pushNow().catch(() => {})
+    }
     Utils.toast('قرارداد رد شد', 'info')
     this.showSection('overview')
   },

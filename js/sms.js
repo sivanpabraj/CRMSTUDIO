@@ -190,9 +190,10 @@ const SmsProvider = {
       const isLocal = ['localhost', '127.0.0.1', '::1'].includes(host)
       const isHttps = proto === 'https:'
       const isIp = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
-      return isHttps || isLocal || isIp
+      const isDomain = Boolean(host && host.includes('.'))
+      return isHttps || isLocal || isIp || isDomain
     } catch {
-      return false
+      return true
     }
   }
 }
