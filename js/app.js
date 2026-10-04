@@ -321,7 +321,22 @@ const Portal = {
         <i class="fas fa-${isPw ? 'sign-in-alt' : 'paper-plane'}"></i> <span id="login-btn-label">${isPw ? 'ورود به پنل استودیو' : 'ارسال کد پیامکی'}</span>
       </button>
 
-      <div style="display:flex;justify-content:center;align-items:center;margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.07)">
+      <div style="display:flex;align-items:center;margin:14px 0 10px;gap:8px">
+        <div style="flex:1;height:1px;background:rgba(255,255,255,0.08)"></div>
+        <span style="font-size:11px;color:rgba(255,255,255,0.45)">یا ارسال خودکار کد ورود به:</span>
+        <div style="flex:1;height:1px;background:rgba(255,255,255,0.08)"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <button type="button" class="portal-btn" style="background:rgba(27,116,228,0.14);border:1px solid rgba(27,116,228,0.3);color:#60a5fa;padding:8px 6px;border-radius:9px;font-size:11.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px" onclick="Portal.requestMessengerOtp('bale')">
+          <i class="fas fa-paper-plane"></i> دریافت کد در بله
+        </button>
+        <button type="button" class="portal-btn" style="background:rgba(37,211,102,0.14);border:1px solid rgba(37,211,102,0.3);color:#4ade80;padding:8px 6px;border-radius:9px;font-size:11.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px" onclick="Portal.requestMessengerOtp('whatsapp')">
+          <i class="fab fa-whatsapp"></i> دریافت کد در واتساپ
+        </button>
+      </div>
+
+      <div style="display:flex;justify-content:center;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.07)">
         <button type="button" class="auth-sms-chip" onclick="Portal.setLoginMethod('${isPw ? 'sms' : 'password'}')">
           ${isPw ? '<i class="fas fa-sms"></i> ورود با پیامک یک‌بار مصرف' : '<i class="fas fa-key"></i> ورود با رمز عبور'}
         </button>
@@ -924,14 +939,34 @@ const Portal = {
   _otpStep(phone) {
     const mask = phone ? `${phone.slice(0, 4)}•••${phone.slice(-4)}` : ''
     const pending = UnifiedLogin?.getPending?.()
+    const channelName = this.state._otpChannel === 'bale' ? 'پیام‌رسان بله' : this.state._otpChannel === 'whatsapp' ? 'واتساپ' : 'پیامک'
     return `
       <div class="auth-form">
-        <p class="auth-otp-meta">کد به <strong dir="ltr">${Utils.escapeHtml(mask)}</strong>${pending?.label ? ` · ${Utils.escapeHtml(pending.label)}` : ''}</p>
+        <p class="auth-otp-meta">
+          کد ورود به <strong dir="ltr">${Utils.escapeHtml(mask)}</strong> (${channelName}) ارسال شد.
+        </p>
+
+        ${this.state._otpChannel === 'bale' && this.state._baleBotUrl ? `
+          <div style="text-align:center;margin-bottom:12px">
+            <a href="${this.state._baleBotUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#60a5fa;text-decoration:none;padding:6px 14px;background:rgba(27,116,228,0.15);border:1px solid rgba(27,116,228,0.3);border-radius:8px">
+              <i class="fas fa-external-link-alt"></i> باز کردن ربات بله استودیو ماندنی
+            </a>
+          </div>
+        ` : ''}
+
+        ${this.state._otpChannel === 'whatsapp' && this.state._whatsAppUrl ? `
+          <div style="text-align:center;margin-bottom:12px">
+            <a href="${this.state._whatsAppUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#4ade80;text-decoration:none;padding:6px 14px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.3);border-radius:8px">
+              <i class="fab fa-whatsapp"></i> باز کردن واتساپ استودیو
+            </a>
+          </div>
+        ` : ''}
+
         <div class="auth-field">
-          <label class="auth-label" for="login-otp">کد ۶ رقمی</label>
+          <label class="auth-label" for="login-otp">کد ۶ رقمی دریافتی</label>
           <div class="auth-input-wrap">
             <i class="fas fa-key"></i>
-            <input type="text" id="login-otp" class="ltr auth-otp-input" dir="ltr" inputmode="numeric" maxlength="6" placeholder="123456" autofocus/>
+            <input type="text" id="login-otp" class="ltr auth-otp-input" dir="ltr" inputmode="numeric" maxlength="6" placeholder="123456" autofocus oninput="if(this.value.length===6)Portal.verifyOtp()"/>
           </div>
         </div>
         <div class="auth-error" id="login-error"></div>
@@ -1390,6 +1425,51 @@ const Portal = {
     this.renderAuth()
   },
 
+  async requestMessengerOtp(channel = 'bale') {
+    this._clearErr()
+    const rawId = (document.getElementById('login-identifier')?.value || '').trim()
+    const phone = Utils.normalizePhone(rawId)
+    if (!phone || !/^09\d{9}$/.test(phone)) {
+      this._err('لطفاً ابتدا شماره موبایل معتبر ۱۱ رقمی خود را وارد فرمایید (مثال: 09121234567)')
+      document.getElementById('login-identifier')?.focus()
+      return
+    }
+
+    this._setBtn(true, '<i class="fas fa-spinner fa-spin"></i> در حال ارتباط با ' + (channel === 'bale' ? 'بله...' : 'واتساپ...'))
+
+    try {
+      const res = await fetch('/api/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, channel })
+      })
+      const data = await res.json().catch(() => ({}))
+      this._setBtn(false, '')
+
+      if (!res.ok || !data.ok) {
+        this._err(data.error || 'خطا در ارسال کد تایید')
+        return
+      }
+
+      this.state.step = 'otp'
+      this.state._phone = phone
+      this.state._otpChannel = channel
+      this.state._baleBotUrl = data.baleBotUrl
+      this.state._whatsAppUrl = data.whatsAppUrl
+
+      if (data.demoCode) {
+        Utils.toast(`کد ورود: ${data.demoCode}`, 'info', 12000)
+      } else {
+        Utils.toast(data.message || 'کد تایید با موفقیت ارسال شد', 'success')
+      }
+
+      this.renderAuth()
+    } catch (e) {
+      this._setBtn(false, '')
+      this._err('عدم اتصال به سرور: ' + e.message)
+    }
+  },
+
   async verifyOtp() {
     this._clearErr()
     const phone = this.state._phone || UnifiedLogin.getPending()?.phone || Utils.normalizePhone(document.getElementById('login-identifier')?.value)
@@ -1399,14 +1479,21 @@ const Portal = {
     this._setBtn(true, '')
     let result = await UnifiedLogin.verifyOtp(phone, code)
 
-    // Fallback: If local verify failed or code wasn't matching local pending, check server-authoritative verify
+    // Fallback: Check server-authoritative verify (via /api/auth/otp/verify or /api/auth/verify-code)
     if (!result.ok) {
       try {
-        const srvRes = await fetch('/api/auth/verify-code', {
+        let srvRes = await fetch('/api/auth/otp/verify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone, code })
         })
+        if (!srvRes.ok) {
+          srvRes = await fetch('/api/auth/verify-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, code })
+          })
+        }
         if (srvRes.ok) {
           const srvJson = await srvRes.json()
           if (srvJson.ok && srvJson.user) {
@@ -1429,10 +1516,24 @@ const Portal = {
             })
             try { sessionStorage.setItem(Auth.CSRF_KEY, csrf) } catch { /* */ }
             DB.log?.('login', srvJson.user.name)
-            result = {
-              ok: true,
-              user: srvJson.user,
-              url: srvJson.user.portalType === 'staff' ? 'index.html?view=portal' : (Access?.canAccessStudioM?.(srvJson.user) ? 'studio-m/' : 'index.html?view=portal')
+
+            if (srvJson.userKind === 'customer' || srvJson.contract) {
+              if (typeof CustomerSession !== 'undefined' && srvJson.contract) {
+                const session = CustomerSession.create(srvJson.contract, phone)
+                await CustomerSession.save(session)
+              }
+              result = {
+                ok: true,
+                userKind: 'customer',
+                user: srvJson.user,
+                url: 'customer.html'
+              }
+            } else {
+              result = {
+                ok: true,
+                user: srvJson.user,
+                url: srvJson.user.portalType === 'staff' ? 'index.html?view=portal' : (Access?.canAccessStudioM?.(srvJson.user) ? 'studio-m/' : 'index.html?view=portal')
+              }
             }
           }
         } else {

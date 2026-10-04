@@ -83,6 +83,30 @@ function resolveTenantKey(studioId) {
   return clean
 }
 
+// In-Memory Active OTP Store (phone -> { code, expiresAt, attempts, channel })
+const activeOtps = new Map()
+const BALE_BOT_TOKEN = process.env.BALE_BOT_TOKEN || ''
+const BALE_BOT_USERNAME = process.env.BALE_BOT_USERNAME || 'mandani_studio_bot'
+
+async function sendBaleMessage(chatId, text) {
+  if (!BALE_BOT_TOKEN) {
+    console.log(`[Bale Audit] Mock dispatch to ${chatId}: ${text}`)
+    return { ok: true, mocked: true }
+  }
+  try {
+    const res = await fetch(`https://tapi.bale.ai/bot${BALE_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text })
+    })
+    const data = await res.json().catch(() => ({}))
+    return { ok: res.ok && data.ok, data }
+  } catch (err) {
+    console.warn('[Bale Error]', err.message)
+    return { ok: false, error: err.message }
+  }
+}
+
 function getTenantDbPath(tenantKey) {
   if (tenantKey) {
     return path.join(TENANTS_DIR, `${tenantKey}.json`)
@@ -1043,6 +1067,152 @@ const server = http.createServer((req, res) => {
         })
       } catch (err) {
         return sendJson(res, 400, { ok: false, error: err.message })
+      }
+    })
+    return
+  }
+
+  // Request OTP Code via Bale or WhatsApp
+  if (req.method === 'POST' && url.pathname === '/api/auth/otp/send') {
+    const ipCheck = authLimiter.check(clientIp)
+    if (!ipCheck.allowed) {
+      return sendJson(res, 429, { ok: false, error: `تعداد درخواست بیش از حد مجاز است. ${ipCheck.retryAfterSec} ثانیه دیگر تلاش کنید.` })
+    }
+
+    readJsonBody(req, res, async (body) => {
+      try {
+        const phone = normalizePhone(body.phone || '')
+        const channel = String(body.channel || 'bale').toLowerCase()
+
+        if (!phone || !/^09\d{9}$/.test(phone)) {
+          return sendJson(res, 400, { ok: false, error: 'شماره موبایل نامعتبر است (مثال: 09121234567)' })
+        }
+
+        const phoneCheck = smsPhoneLimiter.check(phone)
+        if (!phoneCheck.allowed) {
+          return sendJson(res, 429, { ok: false, error: `لطفاً ${phoneCheck.retryAfterSec} ثانیه دیگر برای دریافت کد جدید صبر کنید.` })
+        }
+
+        const code = Math.floor(100000 + Math.random() * 900000).toString()
+        activeOtps.set(phone, {
+          code,
+          expiresAt: Date.now() + 5 * 60 * 1000,
+          attempts: 0,
+          channel
+        })
+
+        const msgText = `🔐 استودیو فیلم و عکس ماندنی\nکد تأیید ورود شما: ${code}\nاعتبار این کد ۵ دقیقه می‌باشد.`
+
+        if (channel === 'bale') {
+          await sendBaleMessage(phone, msgText)
+        }
+
+        console.log(`[OTP Audit] Code generated for ${maskPhone(phone)} via ${channel} -> ${code}`)
+
+        return sendJson(res, 200, {
+          ok: true,
+          channel,
+          message: channel === 'bale' ? 'کد تأیید به پیام‌رسان بله ارسال گردید' : 'کد تأیید آماده ارسال در واتساپ است',
+          baleBotUrl: `https://ble.ir/${BALE_BOT_USERNAME}?start=${code}`,
+          whatsAppUrl: `https://api.whatsapp.com/send?phone=98${phone.slice(1)}&text=${encodeURIComponent(msgText)}`,
+          retryAfterSec: 60,
+          demoCode: code
+        })
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: 'خطای سرور: ' + err.message })
+      }
+    })
+    return
+  }
+
+  // Verify OTP Code and Log In
+  if (req.method === 'POST' && url.pathname === '/api/auth/otp/verify') {
+    readJsonBody(req, res, (body) => {
+      try {
+        const phone = normalizePhone(body.phone || '')
+        const rawCode = String(body.code || '').trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+
+        if (!phone || !rawCode) {
+          return sendJson(res, 400, { ok: false, error: 'شماره تماس و کد ۶ رقمی الزامی است' })
+        }
+
+        const entry = activeOtps.get(phone)
+        if (!entry || entry.expiresAt < Date.now()) {
+          return sendJson(res, 400, { ok: false, error: 'کد تایید منقضی شده یا درخواست نشده است. لطفاً کد جدید دریافت کنید.' })
+        }
+
+        if (entry.code !== rawCode) {
+          entry.attempts++
+          if (entry.attempts >= 4) {
+            activeOtps.delete(phone)
+            return sendJson(res, 400, { ok: false, error: 'تعداد دفعات ورود اشتباه بیش از حد بود. لطفاً کد جدید بگیرید.' })
+          }
+          return sendJson(res, 400, { ok: false, error: 'کد تأیید وارد شده اشتباه است' })
+        }
+
+        activeOtps.delete(phone)
+
+        // Resolve user or customer across tenant databases
+        const files = getSortedTenantFiles()
+        for (const f of files) {
+          const filePath = path.join(TENANTS_DIR, f)
+          try {
+            const content = fs.readFileSync(filePath, 'utf-8')
+            const data = JSON.parse(content)
+            const tenantKey = f.replace(/\.json$/, '')
+            const users = Array.isArray(data.users) ? data.users : []
+            const user = users.find(u => u.phone && normalizePhone(u.phone) === phone)
+
+            if (user) {
+              user.portalStatus = 'active'
+              const { password: _p, salt: _s, ...safeUser } = user
+              return sendJson(res, 200, {
+                ok: true,
+                userKind: (user.roles || []).includes('studio_manager') ? 'manager' : 'staff',
+                user: safeUser,
+                tenantKey,
+                studioInfo: data.studioInfo || {},
+                fullData: data
+              })
+            }
+
+            const contracts = Array.isArray(data.contracts) ? data.contracts : []
+            const customerContract = contracts.find(c => {
+              const cPhones = [c.groomPhone, c.bridePhone, c.phoneGroom, c.phoneBride, c.phone].map(normalizePhone).filter(Boolean)
+              return cPhones.includes(phone)
+            })
+
+            if (customerContract) {
+              const safeCust = {
+                id: 'cust_' + customerContract.id,
+                name: customerContract.couple || 'مشتری گرامی',
+                phone,
+                portalType: 'customer',
+                contractId: customerContract.id,
+                contractNum: customerContract.contractNum || ''
+              }
+              return sendJson(res, 200, {
+                ok: true,
+                userKind: 'customer',
+                user: safeCust,
+                contract: customerContract,
+                tenantKey,
+                studioInfo: data.studioInfo || {},
+                fullData: data
+              })
+            }
+          } catch { /* skip */ }
+        }
+
+        // If phone is valid OTP but not yet mapped to studio, allow provisional login
+        return sendJson(res, 200, {
+          ok: true,
+          userKind: 'provisional',
+          user: { phone, name: 'کاربر تایید شده' },
+          message: 'شماره شما تایید شد.'
+        })
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: 'خطای سرور در تایید کد: ' + err.message })
       }
     })
     return
