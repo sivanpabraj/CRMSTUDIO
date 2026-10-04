@@ -131,14 +131,25 @@ export const ServerSync = {
           await DB.importJSON(JSON.stringify(raw))
           this._localRevision = serverRev
           
-          if (!initial && typeof Utils !== 'undefined' && Utils.toast) {
-            Utils.toast('اطلاعات زنده از سایر دستگاه‌ها به‌روزرسانی شد', 'info')
+          if (!initial) {
+            if (typeof AudioNotifier !== 'undefined') {
+              try { AudioNotifier.playIncoming() } catch { /* */ }
+            }
+            if (typeof Utils !== 'undefined' && Utils.toast) {
+              Utils.toast('اطلاعات زنده و پیام‌های جدید دریافت شد', 'info')
+            }
           }
           
           // بازخوانی صفحات و ماژول‌ها
           window.dispatchEvent(new CustomEvent('sm-server-sync', { detail: { revision: serverRev } }))
           if (typeof SM !== 'undefined' && typeof SM.renderCurrentView === 'function') {
             SM.renderCurrentView()
+          }
+          if (typeof CustomerPortal !== 'undefined' && typeof CustomerPortal.renderDashboard === 'function' && CustomerPortal.state?.contract) {
+            CustomerPortal.renderDashboard()
+          }
+          if (typeof Portal !== 'undefined' && Portal.state?.currentSection === 'messages' && typeof Portal.showSection === 'function') {
+            Portal.showSection('messages')
           }
         } finally {
           this._suppressPush = false

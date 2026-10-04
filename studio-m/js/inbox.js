@@ -1,4 +1,7 @@
-/* Studio M — صندوق مشتری (مدیر): زوج‌به‌زوج · تاریخ · گفتگو */
+/* ═════════════════════════════════════════════════════════════════
+   Studio M — صندوق پیام و تبادل اطلاعات (مدیر و ادمین)
+   پشتیبانی از تیک‌های دوگانه، کارت اطلاعات قرارداد و اعلان صوتی
+   ═════════════════════════════════════════════════════════════════ */
 
 const SMInbox = {
   _tab: 'all',
@@ -34,22 +37,27 @@ const SMInbox = {
     const pending = all.filter(r => r.status === 'pending').length
 
     el.innerHTML = `
-      ${SMUI.sectionHead('صندوق مشتری', 'درخواست‌ها زوج‌به‌زوج — مشتری، مدیر و پرسنل', pending ? SMUI.badge(`${pending} منتظر`, 'warning') : '')}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        ${SMUI.sectionHead('صندوق پیام و ارتباطات', 'تبادل پیام و اطلاعات قرارداد بین مشتری، پرسنل و مدیر', pending ? SMUI.badge(`${pending} منتظر`, 'warning') : '')}
+        <div style="display:flex;align-items:center;gap:6px">
+          ${typeof AudioNotifier !== 'undefined' ? AudioNotifier.renderToggleButton('sm-btn sm-btn-ghost sm-btn-sm') : ''}
+        </div>
+      </div>
       ${SMUI.statCards([
-        { label: 'کل گفتگو', value: SM.fmt(all.length), color: 'var(--sm-accent)' },
-        { label: 'منتظر مدیر', value: SM.fmt(pending), color: 'var(--sm-warning)' },
+        { label: 'کل گفتگوها', value: SM.fmt(all.length), color: 'var(--sm-accent)' },
+        { label: 'منتظر پاسخ مدیر', value: SM.fmt(pending), color: 'var(--sm-warning)' },
         { label: 'زوج / قرارداد', value: SM.fmt(InboxShared.groupByCouple(all).length), color: 'var(--sm-info)' },
-        { label: 'تأیید‌شده', value: SM.fmt(all.filter(r => r.status === 'sent_to_editing').length), color: 'var(--sm-success)' }
+        { label: 'تأییدشده و فعال', value: SM.fmt(all.filter(r => r.status === 'sent_to_editing').length), color: 'var(--sm-success)' }
       ])}
       ${SMUI.tabs([
-        { id: 'all', fa: 'همه', en: 'All', icon: 'fa-inbox', onclick: "SMInbox.setTab('all')" },
+        { id: 'all', fa: 'همه پیام‌ها', en: 'All', icon: 'fa-inbox', onclick: "SMInbox.setTab('all')" },
         { id: 'pending', fa: 'منتظر تأیید', en: 'Pending', icon: 'fa-clock', onclick: "SMInbox.setTab('pending')" },
         { id: 'done', fa: 'تأییدشده', en: 'Approved', icon: 'fa-check', onclick: "SMInbox.setTab('done')" },
         { id: 'rejected', fa: 'رد شده', en: 'Rejected', icon: 'fa-times', onclick: "SMInbox.setTab('rejected')" }
       ], this._tab)}
       ${SMUI.moduleSearch('inbox', 'جستجو — نام زوج، قرارداد، متن...')}
       <div style="margin-top:16px">${groups.length ? groups.map(g => this._coupleCard(g)).join('') :
-        SMUI.empty('fa-inbox', 'درخواستی نیست', 'مشتری از پورتال درخواست می‌دهد — اینجا برای مدیر نمایش داده می‌شود')}</div>`
+        SMUI.empty('fa-inbox', 'پیامی وجود ندارد', 'مشتری و پرسنل از پورتال خود پیام می‌دهند — پیام‌ها با تیک دوگانه و نوتیفیکیشن صوتی اینجا نمایش داده می‌شوند')}</div>`
   },
 
   _coupleCard(g) {
@@ -70,7 +78,7 @@ const SMInbox = {
         </div>
         <div class="sm-inbox-couple-side">
           ${g.pending ? SMUI.badge(`${g.pending} جدید`, 'warning') : ''}
-          ${SMUI.badge(`${g.requests.length} درخواست`, 'info')}
+          ${SMUI.badge(`${g.requests.length} پیام`, 'info')}
         </div>
       </div>
       <div class="sm-inbox-couple-preview">
@@ -94,11 +102,20 @@ const SMInbox = {
     const g = InboxShared.groupByCouple(reqs)[0]
     if (!g) return
 
+    // علامت‌گذاری خودکار پیام‌ها به عنوان خوانده شده توسط مدیر (جهت فعال‌سازی تیک دوگانه برای مشتری و پرسنل)
+    reqs.forEach(r => {
+      InboxShared.markThreadRead(r.id, 'manager')
+    })
+
     SM.pushSubView(g.couple, () => `
-      <div class="sm-inbox-detail-head">
+      <div class="sm-inbox-detail-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:10px">
         <div>
-          <h2>${SM.esc(g.couple)}</h2>
-          <p>قرارداد ${SM.esc(g.contractNum || '—')}${g.eventDate ? ` · مراسم ${SM.esc(g.eventDate)}` : ''}</p>
+          <h2 style="margin:0 0 4px 0">${SM.esc(g.couple)}</h2>
+          <p style="margin:0;color:var(--sm-text-muted);font-size:12px">قرارداد ${SM.esc(g.contractNum || '—')}${g.eventDate ? ` · تاریخ مراسم: ${SM.esc(g.eventDate)}` : ''}</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          ${typeof AudioNotifier !== 'undefined' ? AudioNotifier.renderToggleButton('sm-btn sm-btn-ghost sm-btn-sm') : ''}
+          ${g.contractId ? `<button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMInbox.sendContractInfoToCouple('${g.contractId}')"><i class="fas fa-file-contract"></i> ارسال کارت قرارداد به گفتگو</button>` : ''}
         </div>
       </div>
       ${g.requests.map(r => this._requestBlock(r)).join('')}`)
@@ -110,20 +127,36 @@ const SMInbox = {
     const thread = InboxShared.ensureThread(r)
     const canManage = SM.can('view_all')
 
-    return `<div class="sm-inbox-request">
-      <div class="sm-inbox-request-head">
-        <span>${type.icon} ${SM.esc(type.label)}</span>
-        ${SMUI.badge(st.label, st.badge)}
-        <span class="sm-inbox-when">${SM.esc(InboxShared.formatWhen(r.createdAt, r.createdTime))}</span>
+    return `<div class="sm-inbox-request" style="margin-bottom:18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px">
+      <div class="sm-inbox-request-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span>${type.icon} ${SM.esc(type.label)}</span>
+          ${SMUI.badge(st.label, st.badge)}
+        </div>
+        <span class="sm-inbox-when" style="font-size:11px;color:var(--sm-text-muted)">${SM.esc(InboxShared.formatWhen(r.createdAt, r.createdTime))}</span>
       </div>
       <div class="sm-inbox-thread">
         ${thread.map(t => this._threadLine(t)).join('')}
       </div>
-      ${canManage ? `<div class="sm-inbox-actions">
-        ${r.status === 'pending' ? `
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMInbox.approve('${r.id}')">تأیید → تدوین</button>
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMInbox.reject('${r.id}')">رد</button>` : ''}
-        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMInbox.reply('${r.id}')"><i class="fas fa-reply"></i> پاسخ مدیر</button>
+
+      <!-- نوار پاسخ سریع مدیر و ارسال اطلاعات قرارداد -->
+      <div class="sm-inbox-quick-reply" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <textarea id="reply-text-${r.id}" class="sm-input" rows="2" placeholder="پاسخ مستقیم مدیر (برای مشتری و پرسنل ارسال می‌شود)..." style="flex:1;resize:none;font-size:12.5px;padding:8px 10px;background:rgba(0,0,0,0.3)"></textarea>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMInbox.sendInlineReply('${r.id}')" style="min-width:90px">
+              <i class="fas fa-paper-plane"></i> ارسال
+            </button>
+            <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMInbox.sendContractCardDirect('${r.id}')" title="ارسال کارت وضعیت قرارداد به مشتری و پرسنل" style="font-size:11px">
+              <i class="fas fa-file-invoice"></i> کارت قرارداد
+            </button>
+          </div>
+        </div>
+      </div>
+
+      ${canManage && r.status === 'pending' ? `<div class="sm-inbox-actions" style="margin-top:10px;display:flex;gap:6px">
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMInbox.approve('${r.id}')"><i class="fas fa-check"></i> تأیید → ارجاع به تدوین</button>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMInbox.reject('${r.id}')"><i class="fas fa-times"></i> رد درخواست</button>
       </div>` : ''}
     </div>`
   },
@@ -134,13 +167,104 @@ const SMInbox = {
     const actionNote = t.action === 'approve' ? ' · تأیید'
       : t.action === 'reject' ? ' · رد'
       : t.action === 'staff_read' ? ' · مشاهده پرسنل' : ''
-    return `<div class="sm-inbox-msg sm-inbox-msg--${cls}">
-      <div class="sm-inbox-msg-head">
+
+    const ticks = InboxShared.renderTicks(t, 'manager')
+    const contractCard = t.contractInfo ? InboxShared.renderContractCard(t.contractInfo) : ''
+
+    return `<div class="sm-inbox-msg sm-inbox-msg--${cls}" style="margin-bottom:8px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,0.04);border-inline-start:3px solid ${cls === 'customer' ? '#38bdf8' : cls === 'staff' ? '#4ade80' : '#f59e0b'}">
+      <div class="sm-inbox-msg-head" style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px">
         <strong>${SM.esc(t.authorName || author)}</strong>
-        <span>${SM.esc(InboxShared.formatWhen(t.date, t.time))}${actionNote}</span>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span>${SM.esc(InboxShared.formatWhen(t.date, t.time))}${actionNote}</span>
+          ${ticks}
+        </div>
       </div>
-      <p>${SM.esc(t.text || '')}</p>
+      ${t.text ? `<p style="margin:0;font-size:12.5px;color:rgba(255,255,255,0.85);line-height:1.6">${SM.esc(t.text)}</p>` : ''}
+      ${contractCard}
     </div>`
+  },
+
+  sendInlineReply(id) {
+    const input = document.getElementById(`reply-text-${id}`)
+    const text = input?.value?.trim()
+    if (!text) return SM.toast('متن پاسخ را وارد کنید', 'error')
+
+    const user = SM.user()
+    InboxShared.appendThread(id, {
+      author: 'manager',
+      authorName: user?.name || 'مدیریت استودیو',
+      authorRole: 'مدیر استودیو',
+      text,
+      action: 'reply'
+    })
+
+    input.value = ''
+    SM.toast('پاسخ ارسال شد و برای طرفین ثبت گردید', 'success')
+    this._refreshView(id)
+  },
+
+  sendContractCardDirect(requestId) {
+    const req = DB.find('customerRequests', r => r.id === requestId)
+    if (!req) return
+    const contract = req.contractId ? DB.find('contracts', c => c.id === req.contractId) : null
+    if (!contract) return SM.toast('قراردادی برای این درخواست یافت نشد', 'error')
+
+    const snippet = InboxShared.buildContractSnippet(contract)
+    const user = SM.user()
+
+    InboxShared.appendThread(requestId, {
+      author: 'manager',
+      authorName: user?.name || 'مدیریت استودیو',
+      authorRole: 'مدیر استودیو',
+      text: `خلاصه اطلاعات و وضعیت اجرای قرارداد شماره ${snippet.contractNum} جهت بررسی طرفین ضمیمه شد.`,
+      action: 'contract_share',
+      contractInfo: snippet
+    })
+
+    SM.toast('کارت اطلاعات قرارداد با موفقیت در گفتگو ارسال شد', 'success')
+    this._refreshView(requestId)
+  },
+
+  sendContractInfoToCouple(contractId) {
+    const contract = DB.find('contracts', c => c.id === contractId)
+    if (!contract) return SM.toast('قرارداد یافت نشد', 'error')
+
+    // یافتن یا ایجاد یک گفتگو برای این زوج
+    let req = DB.find('customerRequests', r => r.contractId === contractId)
+    if (!req) {
+      const parts = InboxShared.nowParts()
+      const couple = contract.couple || `${contract.bride || ''} و ${contract.groom || ''}`.trim()
+      req = DB.insert('customerRequests', {
+        contractId: contract.id,
+        contractNum: contract.contractNum || contract.id,
+        type: 'contract_info',
+        text: 'ارسال اطلاعات رسمی قرارداد استودیو',
+        status: 'open',
+        read: true,
+        readByStaff: false,
+        readByCustomer: false,
+        customerName: couple,
+        customerPhone: contract.groomPhone || contract.bridePhone || '',
+        createdAt: parts.date,
+        createdTime: parts.time,
+        lastActivityAt: parts.iso,
+        thread: []
+      })
+    }
+
+    const snippet = InboxShared.buildContractSnippet(contract)
+    const user = SM.user()
+    InboxShared.appendThread(req.id, {
+      author: 'manager',
+      authorName: user?.name || 'مدیریت استودیو',
+      authorRole: 'مدیر استودیو',
+      text: `اطلاعات رسمی قرارداد شماره ${snippet.contractNum} جهت دسترسی زوج و تیم استودیو ارسال گردید.`,
+      action: 'contract_share',
+      contractInfo: snippet
+    })
+
+    SM.toast('اطلاعات قرارداد به گفتگو اضافه شد', 'success')
+    this._refreshView(req.id)
   },
 
   approve(id) {
@@ -154,7 +278,7 @@ const SMInbox = {
     InboxShared.appendThread(id, {
       author: 'manager',
       authorName: user?.name || 'مدیر',
-      text: `تأیید شد — ارجاع به ${dest}`,
+      text: `درخواست با موفقیت تأیید شد — ارجاع به واحد ${dest}`,
       action: 'approve',
       status: 'sent_to_editing',
       read: true
@@ -190,7 +314,7 @@ const SMInbox = {
     InboxShared.appendThread(id, {
       author: 'manager',
       authorName: user?.name || 'مدیر',
-      text: 'درخواست رد شد.',
+      text: 'درخواست پس از بررسی توسط مدیریت پذیرفته نشد.',
       action: 'reject',
       status: 'rejected',
       read: true
@@ -198,29 +322,6 @@ const SMInbox = {
     DB.update('customerRequests', id, { rejectedAt: Utils.todayJalali() })
     SM.toast('رد شد', 'info')
     this._refreshView(id)
-  },
-
-  reply(id) {
-    const req = DB.find('customerRequests', r => r.id === id)
-    if (!req) return
-    SMUI.modal('پاسخ مدیر به مشتری', `
-      ${SMUI.formField('پیام', 'inbox-reply', { type: 'textarea', placeholder: 'پاسخ یا توضیح برای مشتری و پرسنل...' })}`, {
-      width: 480,
-      onSave: () => {
-        const text = document.getElementById('inbox-reply')?.value?.trim()
-        if (!text) return SM.toast('متن پاسخ را بنویسید', 'error')
-        const user = SM.user()
-        InboxShared.appendThread(id, {
-          author: 'manager',
-          authorName: user?.name || 'مدیر',
-          text,
-          action: 'reply'
-        })
-        SMUI.closeModal()
-        SM.toast('پاسخ ثبت شد', 'success')
-        this._refreshView(id)
-      }
-    })
   },
 
   _refreshView(requestId) {

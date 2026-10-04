@@ -45,6 +45,9 @@ const NotifyHub = {
     if (typeof NotificationTicker !== 'undefined') {
       try { NotificationTicker._refreshQueue() } catch { /* */ }
     }
+    if (typeof AudioNotifier !== 'undefined') {
+      try { AudioNotifier.playIncoming() } catch { /* */ }
+    }
   },
 
   async sendSms(phones, text, meta = {}) {

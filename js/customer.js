@@ -125,6 +125,7 @@ const CustomerPortal = {
               </div>
             </div>
             <div class="portal-header-actions" style="display:flex;gap:8px;align-items:center">
+              ${typeof AudioNotifier !== 'undefined' ? AudioNotifier.renderToggleButton('portal-header-btn') : ''}
               <button type="button" class="portal-header-btn" onclick="GlassTheme.openPicker()" title="تنظیم ظاهر" aria-label="تنظیم ظاهر"><i class="fas fa-wand-magic-sparkles"></i></button>
               <button class="logout-btn" onclick="CustomerPortal.logout()">خروج</button>
             </div>
@@ -177,20 +178,48 @@ const CustomerPortal = {
 
           ${myReqs.length ? `
           <div class="customer-card" style="max-width:none">
-            <h1 style="font-size:16px;text-align:right;margin-bottom:12px">📬 درخواست‌های من</h1>
+            <h1 style="font-size:16px;text-align:right;margin-bottom:12px">📬 گفتگوها و پیام‌های من با استودیو</h1>
             ${myReqs.slice().reverse().map(r => {
+              // نشانه‌گذاری خودکار به عنوان خوانده شده توسط مشتری
+              if (typeof InboxShared !== 'undefined') {
+                InboxShared.markThreadRead(r.id, 'customer')
+              }
               const thread = typeof InboxShared !== 'undefined' ? InboxShared.ensureThread(r) : [{ author: 'customer', text: r.text, date: r.createdAt, time: r.createdTime }]
               return `
-              <div class="req-history-item ${r.status || 'pending'}">
-                <div style="font-weight:600;color:#fff;font-size:13px">${PortalShared.REQUEST_TYPES[r.type]?.icon || '📝'} ${PortalShared.REQUEST_TYPES[r.type]?.label || 'درخواست'}</div>
-                <div style="font-size:11px;color:rgba(255,255,255,0.4);margin:6px 0">${InboxShared ? InboxShared.formatWhen(r.createdAt, r.createdTime) : r.createdAt}</div>
-                ${thread.map(t => `
-                  <div class="customer-thread-msg customer-thread-msg--${t.author || 'customer'}">
-                    <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px">${Utils.escapeHtml(t.authorName || (InboxShared?.AUTHOR_LABELS?.[t.author] || 'مشتری'))} · ${Utils.escapeHtml(InboxShared?.formatWhen?.(t.date, t.time) || '')}</div>
-                    <div style="font-size:12px;color:rgba(255,255,255,0.75)">${Utils.escapeHtml(t.text || '')}</div>
-                  </div>`).join('')}
-                <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:8px">
-                  ${r.status === 'sent_to_editing' ? '✅ تأیید مدیر — در تدوین' : r.status === 'rejected' ? '❌ رد شده' : '⏳ منتظر تأیید مدیر'}
+              <div class="req-history-item ${r.status || 'pending'}" style="margin-bottom:14px;padding:12px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                  <div style="font-weight:600;color:#fff;font-size:13px">${PortalShared.REQUEST_TYPES[r.type]?.icon || '📝'} ${PortalShared.REQUEST_TYPES[r.type]?.label || 'درخواست'}</div>
+                  <div style="font-size:11px;color:rgba(255,255,255,0.4)">${InboxShared ? InboxShared.formatWhen(r.createdAt, r.createdTime) : r.createdAt}</div>
+                </div>
+
+                <div class="customer-thread-container" style="display:flex;flex-direction:column;gap:6px;margin:8px 0">
+                  ${thread.map(t => {
+                    const ticks = typeof InboxShared !== 'undefined' ? InboxShared.renderTicks(t, 'customer') : ''
+                    const contractCard = t.contractInfo && typeof InboxShared !== 'undefined' ? InboxShared.renderContractCard(t.contractInfo) : ''
+                    const cls = t.author || 'customer'
+                    return `
+                      <div class="customer-thread-msg customer-thread-msg--${cls}" style="margin:4px 0;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,0.04);border-inline-start:3px solid ${cls === 'customer' ? '#38bdf8' : cls === 'manager' ? '#f59e0b' : '#4ade80'}">
+                        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px">
+                          <span>${Utils.escapeHtml(t.authorName || (InboxShared?.AUTHOR_LABELS?.[t.author] || 'مشتری'))} · ${Utils.escapeHtml(InboxShared?.formatWhen?.(t.date, t.time) || '')}</span>
+                          ${ticks}
+                        </div>
+                        ${t.text ? `<div style="font-size:12.5px;color:rgba(255,255,255,0.85);line-height:1.6">${Utils.escapeHtml(t.text)}</div>` : ''}
+                        ${contractCard}
+                      </div>`
+                  }).join('')}
+                </div>
+
+                <!-- نوار پاسخ سریع مشتری -->
+                <div class="customer-thread-reply-bar" style="margin-top:10px;padding-top:8px;border-top:1px dashed rgba(255,255,255,0.08);display:flex;gap:6px">
+                  <input type="text" id="cust-thread-reply-${r.id}" class="portal-input" placeholder="پاسخ یا پیام جدید شما..." style="flex:1;font-size:12px;padding:7px 10px;background:rgba(0,0,0,0.3);border-radius:8px" onkeydown="if(event.key==='Enter') CustomerPortal.replyToThread('${r.id}')" />
+                  <button type="button" class="portal-btn portal-btn-primary" onclick="CustomerPortal.replyToThread('${r.id}')" style="font-size:12px;padding:6px 14px">
+                    <i class="fas fa-paper-plane"></i> ارسال
+                  </button>
+                </div>
+
+                <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:8px;display:flex;justify-content:space-between">
+                  <span>${r.status === 'sent_to_editing' ? '✅ تأیید مدیر — در تدوین' : r.status === 'rejected' ? '❌ رد شده' : '⏳ در حال بررسی استودیو'}</span>
+                  <span style="opacity:0.6">شناسه: #${Utils.escapeHtml(r.id.slice(-5))}</span>
                 </div>
               </div>`
             }).join('')}
@@ -213,6 +242,30 @@ const CustomerPortal = {
     })
   },
 
+  async replyToThread(requestId) {
+    const input = document.getElementById(`cust-thread-reply-${requestId}`)
+    const text = input?.value?.trim()
+    if (!text) {
+      Utils.toast('لطفاً متن پاسخ را بنویسید', 'error')
+      return
+    }
+
+    const c = this.state.contract
+    const coupleName = `${c.bride || ''} و ${c.groom || ''}`.trim() || 'مشتری'
+
+    InboxShared.appendThread(requestId, {
+      author: 'customer',
+      authorName: coupleName,
+      authorRole: 'مشتری (عروس و داماد)',
+      text,
+      action: 'reply'
+    })
+
+    await DB.flush?.()
+    Utils.toast('پیام شما با موفقیت ارسال شد', 'success')
+    this.renderDashboard()
+  },
+
   async submitRequest() {
     const text = document.getElementById('cust-req-text')?.value?.trim()
     if (!text) { Utils.toast('متن درخواست را بنویسید', 'error'); return }
@@ -227,6 +280,7 @@ const CustomerPortal = {
       status: 'pending',
       read: false,
       readByStaff: false,
+      readByCustomer: true,
       targetRoles: typeof Access !== 'undefined'
         ? Access.getRequestTargetRoles(this._selectedReqType)
         : [],
@@ -236,17 +290,28 @@ const CustomerPortal = {
       createdTime: parts.time,
       lastActivityAt: parts.iso,
       thread: [{
+        id: 'orig',
         author: 'customer',
         authorName: coupleName || 'مشتری',
+        authorRole: 'مشتری (عروس و داماد)',
         text,
         date: parts.date,
         time: parts.time,
         at: parts.iso,
-        action: 'request'
+        action: 'request',
+        status: 'delivered',
+        readBy: {
+          customer: true,
+          manager: false,
+          staff: false
+        }
       }]
     })
     await NotifyHub.customerRequestSubmitted(req, c)
     await DB.flush()
+    if (typeof AudioNotifier !== 'undefined') {
+      AudioNotifier.playSent()
+    }
     Utils.toast('✅ درخواست ثبت شد. پس از تأیید مدیر اطلاع‌رسانی می‌شود.', 'success')
     this.renderDashboard()
   },
