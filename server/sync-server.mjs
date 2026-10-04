@@ -1039,6 +1039,84 @@ const server = http.createServer((req, res) => {
     return
   }
 
+  // Manager Password Reset via Studio Join Code (Zero-SMS Reliable Recovery)
+  if (req.method === 'POST' && url.pathname === '/api/auth/reset-password') {
+    const check = authLimiter.check(clientIp)
+    if (!check.allowed) {
+      return sendJson(res, 429, { ok: false, error: `تعداد درخواست بیش از حد مجاز. لطفاً ${check.retryAfterSec} ثانیه دیگر تلاش کنید.` })
+    }
+
+    readJsonBody(req, res, (body) => {
+      try {
+        const phone = normalizePhone(body.phone || '')
+        const joinCode = String(body.joinCode || '').trim().toUpperCase()
+        const newPassword = String(body.newPassword || '').trim()
+
+        if (!phone || !joinCode || !newPassword) {
+          return sendJson(res, 400, { ok: false, error: 'شماره همراه مدیر، کد اختصاصی استودیو و رمز جدید الزامی هستند' })
+        }
+        if (newPassword.length < 4) {
+          return sendJson(res, 400, { ok: false, error: 'رمز عبور جدید باید حداقل ۴ کاراکتر باشد' })
+        }
+
+        const files = getSortedTenantFiles()
+        let updated = false
+        let matchedStudioName = ''
+        let targetTenantKey = ''
+
+        for (const f of files) {
+          const filePath = path.join(TENANTS_DIR, f)
+          try {
+            const raw = fs.readFileSync(filePath, 'utf8')
+            const data = JSON.parse(raw)
+            const sInfo = data.studioInfo || {}
+            const cJoin = String(sInfo.joinCode || '').trim().toUpperCase()
+
+            if (cJoin === joinCode) {
+              const users = Array.isArray(data.users) ? data.users : []
+              const manager = users.find(u => {
+                const uPhone = normalizePhone(u.phone)
+                const isMgr = (u.roles || []).some(r => r === 'studio_manager' || r === 'admin' || String(r).includes('مدیر'))
+                return uPhone === phone || (isMgr && uPhone === phone)
+              })
+
+              if (manager) {
+                const hashed = hashPasswordSync(newPassword)
+                manager.password = hashed.password
+                manager.salt = hashed.salt
+                manager.updatedAt = new Date().toISOString()
+                
+                data.users = users
+                fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8')
+                targetTenantKey = f.replace(/\.json$/, '')
+                updated = true
+                matchedStudioName = sInfo.name || 'استودیو'
+                break
+              }
+            }
+          } catch { /* skip */ }
+        }
+
+        if (!updated) {
+          return sendJson(res, 404, { ok: false, error: 'اطلاعات وارد شده با شماره مدیر یا کد استودیو همخوانی ندارد' })
+        }
+
+        const meta = readTenantMeta(targetTenantKey)
+        const nextRev = (meta.revision || 0) + 1
+        writeTenantMeta(targetTenantKey, nextRev, new Date().toISOString(), meta.syncToken)
+        broadcastTenantUpdate(targetTenantKey, nextRev, new Date().toISOString())
+
+        return sendJson(res, 200, {
+          ok: true,
+          message: `رمز عبور مدیریت «${matchedStudioName}» با موفقیت تغییر یافت. اکنون با رمز جدید وارد شوید.`
+        })
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: 'خطای سرور در بازنشانی رمز: ' + err.message })
+      }
+    })
+    return
+  }
+
   // Scoped Customer Portal Data
   if (req.method === 'GET' && url.pathname === '/api/portal/customer-data') {
     const phone = url.searchParams.get('phone') || url.searchParams.get('contractId') || ''

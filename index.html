@@ -215,7 +215,10 @@
                 </div>
               </div>
               <div class="auth-field">
-                <label class="auth-label" for="login-password">رمز عبور</label>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                  <label class="auth-label" for="login-password" style="margin-bottom:0">رمز عبور</label>
+                  <button type="button" class="auth-forgot-link" onclick="Portal.showForgotPassword()" style="background:none;border:none;color:#f59e0b;font-size:11.5px;cursor:pointer;padding:0">فراموشی رمز عبور؟</button>
+                </div>
                 <div class="auth-input-wrap">
                   <i class="fas fa-lock"></i>
                   <input type="password" id="login-password" class="ltr" dir="ltr" autocomplete="current-password" placeholder="رمز عبور خود را وارد کنید"/>

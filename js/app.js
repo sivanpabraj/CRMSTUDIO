@@ -740,6 +740,169 @@ const Portal = {
     document.body.appendChild(overlay)
   },
 
+  showForgotPassword() {
+    const existing = document.getElementById('forgot-pw-modal')
+    if (existing) existing.remove()
+
+    const overlay = document.createElement('div')
+    overlay.id = 'forgot-pw-modal'
+    overlay.className = 'portal-modal-overlay open'
+    overlay.style.zIndex = '9999'
+    overlay.style.display = 'flex'
+    overlay.style.alignItems = 'center'
+    overlay.style.justifyContent = 'center'
+    overlay.style.background = 'rgba(0,0,0,0.85)'
+    overlay.style.backdropFilter = 'blur(10px)'
+
+    overlay.innerHTML = `
+      <div class="portal-modal" style="max-width:480px;width:90%;background:#0b0f19;border:1px solid rgba(245,158,11,0.4);border-radius:24px;padding:24px;color:#fff;text-align:right;box-shadow:0 12px 40px rgba(0,0,0,0.8)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:10px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(245,158,11,0.15);color:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:16px">
+              <i class="fas fa-key"></i>
+            </div>
+            <h3 style="margin:0;font-size:15px;color:#fff">بازیابی و فراموشی رمز عبور</h3>
+          </div>
+          <button type="button" onclick="document.getElementById('forgot-pw-modal').remove()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:18px;cursor:pointer">&times;</button>
+        </div>
+
+        <div style="display:flex;gap:6px;margin-bottom:16px;background:rgba(255,255,255,0.04);padding:4px;border-radius:12px">
+          <button type="button" id="forgot-tab-mgr" class="portal-btn portal-btn-sm portal-btn-primary" style="flex:1;font-size:11.5px;padding:8px" onclick="Portal.setForgotTab('mgr')">مدیر استودیو</button>
+          <button type="button" id="forgot-tab-staff" class="portal-btn portal-btn-sm portal-btn-ghost" style="flex:1;font-size:11.5px;padding:8px" onclick="Portal.setForgotTab('staff')">پرسنل و عکاس</button>
+          <button type="button" id="forgot-tab-cust" class="portal-btn portal-btn-sm portal-btn-ghost" style="flex:1;font-size:11.5px;padding:8px" onclick="Portal.setForgotTab('cust')">عروس و داماد</button>
+        </div>
+
+        <!-- تب بازیابی مدیر -->
+        <div id="forgot-content-mgr">
+          <p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0 0 12px;line-height:1.7">
+            مدیر گرامی، برای بازیابی آنی رمز عبور بدون نیاز به پیامک، شماره همراه خود و <strong>کد اختصاصی اتصال به استودیو (Join Code)</strong> را وارد کنید:
+          </p>
+          <div class="auth-field" style="margin-bottom:10px">
+            <label class="auth-label" style="font-size:11px">شماره همراه مدیر</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-phone"></i>
+              <input type="tel" id="reset-phone" class="ltr" dir="ltr" placeholder="09121234567" style="font-size:13px" />
+            </div>
+          </div>
+          <div class="auth-field" style="margin-bottom:10px">
+            <label class="auth-label" style="font-size:11px">کد اختصاصی اتصال به استودیو (Studio Join Code)</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-fingerprint"></i>
+              <input type="text" id="reset-joincode" class="ltr" dir="ltr" placeholder="مثال: R543WD" style="font-size:13px;text-transform:uppercase" />
+            </div>
+          </div>
+          <div class="auth-field" style="margin-bottom:14px">
+            <label class="auth-label" style="font-size:11px">رمز عبور جدید</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-lock"></i>
+              <input type="password" id="reset-new-pw" class="ltr" dir="ltr" placeholder="حداقل ۴ کاراکتر" style="font-size:13px" />
+            </div>
+          </div>
+          <div class="auth-error" id="reset-error" style="display:none;margin-bottom:10px"></div>
+          <button type="button" class="portal-btn portal-btn-primary" id="reset-submit-btn" onclick="Portal.submitResetPassword()" style="width:100%;padding:11px;font-size:13px">
+            <i class="fas fa-check-circle"></i> ثبت و ذخیره رمز عبور جدید
+          </button>
+        </div>
+
+        <!-- تب راهنمای پرسنل -->
+        <div id="forgot-content-staff" style="display:none;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;line-height:1.8">
+          <p style="font-size:12.5px;color:rgba(255,255,255,0.85);margin:0 0 10px">
+            <strong style="color:#4ade80"><i class="fas fa-user-gear"></i> بازیابی رمز پرسنل و عکاسان:</strong>
+          </p>
+          <p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0 0 12px">
+            پرسنل و همکاران استودیو نیازی به تغییر رمز از این بخش ندارند. مدیریت استودیو می‌تواند در پنل اختصاصی خود در بخش <strong>«پرسنل»</strong>، در چند ثانیه رمز جدید یا کد ورود ۶ رقمی شما را بازنشانی کند.
+          </p>
+          <button type="button" class="portal-btn portal-btn-ghost" onclick="document.getElementById('forgot-pw-modal').remove()" style="width:100%;font-size:12px">متوجه شدم</button>
+        </div>
+
+        <!-- تب راهنمای مشتری -->
+        <div id="forgot-content-cust" style="display:none;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;line-height:1.8">
+          <p style="font-size:12.5px;color:rgba(255,255,255,0.85);margin:0 0 10px">
+            <strong style="color:#38bdf8"><i class="fas fa-heart"></i> ورود عروس و داماد:</strong>
+          </p>
+          <p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0 0 12px">
+            مشتریان گرامی نیازی به رمز عبور جداگانه ندارند! رمز عبور پیش‌فرض شما همان <strong>«شماره قرارداد»</strong> مندرج در نسخه قرارداد یا رسید شماست (مثلاً <code dir="ltr">1042</code>). کافیست شماره همراه خود و شماره قرارداد را در فرم ورود وارد نمایید.
+          </p>
+          <button type="button" class="portal-btn portal-btn-ghost" onclick="document.getElementById('forgot-pw-modal').remove()" style="width:100%;font-size:12px">بازگشت به فرم ورود</button>
+        </div>
+      </div>`
+    document.body.appendChild(overlay)
+  },
+
+  setForgotTab(tab) {
+    const mgrContent = document.getElementById('forgot-content-mgr')
+    const staffContent = document.getElementById('forgot-content-staff')
+    const custContent = document.getElementById('forgot-content-cust')
+    const tabMgr = document.getElementById('forgot-tab-mgr')
+    const tabStaff = document.getElementById('forgot-tab-staff')
+    const tabCust = document.getElementById('forgot-tab-cust')
+
+    if (mgrContent) mgrContent.style.display = tab === 'mgr' ? 'block' : 'none'
+    if (staffContent) staffContent.style.display = tab === 'staff' ? 'block' : 'none'
+    if (custContent) custContent.style.display = tab === 'cust' ? 'block' : 'none'
+
+    if (tabMgr) tabMgr.className = `portal-btn portal-btn-sm ${tab === 'mgr' ? 'portal-btn-primary' : 'portal-btn-ghost'}`
+    if (tabStaff) tabStaff.className = `portal-btn portal-btn-sm ${tab === 'staff' ? 'portal-btn-primary' : 'portal-btn-ghost'}`
+    if (tabCust) tabCust.className = `portal-btn portal-btn-sm ${tab === 'cust' ? 'portal-btn-primary' : 'portal-btn-ghost'}`
+  },
+
+  async submitResetPassword() {
+    const errEl = document.getElementById('reset-error')
+    const phone = Utils.normalizePhone(document.getElementById('reset-phone')?.value)
+    const joinCode = (document.getElementById('reset-joincode')?.value || '').trim().toUpperCase()
+    const newPassword = document.getElementById('reset-new-pw')?.value?.trim()
+
+    const showErr = (m) => { if (errEl) { errEl.textContent = m; errEl.style.display = 'block' } }
+    if (errEl) errEl.style.display = 'none'
+
+    if (!Utils.isValidPhone(phone)) return showErr('شماره موبایل مدیر نامعتبر است')
+    if (!joinCode) return showErr('کد اختصاصی استودیو الزامی است')
+    if (!newPassword || newPassword.length < 4) return showErr('رمز عبور جدید باید حداقل ۴ کاراکتر باشد')
+
+    const btn = document.getElementById('reset-submit-btn')
+    if (btn) {
+      btn.disabled = true
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال اعتبارسنجی...'
+    }
+
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, joinCode, newPassword })
+      })
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok || !data.ok) {
+        showErr(data.error || 'خطا در بازنشانی رمز عبور')
+        if (btn) {
+          btn.disabled = false
+          btn.innerHTML = '<i class="fas fa-check-circle"></i> ثبت و ذخیره رمز عبور جدید'
+        }
+        return
+      }
+
+      Utils.toast(data.message || 'رمز عبور با موفقیت به‌روزرسانی شد', 'success', 5000)
+      if (typeof AudioNotifier !== 'undefined') AudioNotifier.playContract()
+      document.getElementById('forgot-pw-modal')?.remove()
+
+      // پر کردن خودکار فیلدهای لاگین
+      const idInp = document.getElementById('login-identifier')
+      const pwInp = document.getElementById('login-password')
+      if (idInp) idInp.value = phone
+      if (pwInp) {
+        pwInp.value = newPassword
+        pwInp.focus()
+      }
+    } catch (e) {
+      showErr('خطا در ارتباط با سرور: ' + e.message)
+      if (btn) {
+        btn.disabled = false
+        btn.innerHTML = '<i class="fas fa-check-circle"></i> ثبت و ذخیره رمز عبور جدید'
+      }
+    }
+  },
+
   _portalVerifyStep(phone) {
     const mask = phone ? `${phone.slice(0, 4)}•••${phone.slice(-4)}` : ''
     return `
