@@ -88,6 +88,16 @@ const activeOtps = new Map()
 const BALE_BOT_TOKEN = process.env.BALE_BOT_TOKEN || ''
 const BALE_BOT_USERNAME = process.env.BALE_BOT_USERNAME || 'mandani_studio_bot'
 
+// Periodic cleanup of expired OTPs to prevent memory leaks
+setInterval(() => {
+  const now = Date.now()
+  for (const [phone, entry] of activeOtps.entries()) {
+    if (entry.expiresAt <= now) {
+      activeOtps.delete(phone)
+    }
+  }
+}, 60 * 1000).unref()
+
 async function sendBaleMessage(chatId, text, customToken = null) {
   const token = customToken || BALE_BOT_TOKEN
   if (!token) {
@@ -95,15 +105,18 @@ async function sendBaleMessage(chatId, text, customToken = null) {
     return { ok: true, mocked: true }
   }
   try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 4000)
     const res = await fetch(`https://tapi.bale.ai/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text })
-    })
+      body: JSON.stringify({ chat_id: chatId, text }),
+      signal: controller.signal
+    }).finally(() => clearTimeout(timeout))
     const data = await res.json().catch(() => ({}))
-    return { ok: res.ok && data.ok, data }
+    return { ok: res.ok && Boolean(data.ok), data }
   } catch (err) {
-    console.warn('[Bale Error]', err.message)
+    console.warn('[Bale Error]', err.name === 'AbortError' ? 'Connection timed out (4s)' : err.message)
     return { ok: false, error: err.message }
   }
 }
@@ -524,8 +537,12 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/system/update') {
     const authHeader = req.headers['authorization'] || ''
     const adminKey = req.headers['x-admin-key'] || url.searchParams.get('key') || ''
+    const expectedAdminKey = process.env.SYSTEM_UPDATE_KEY || 'mandani_root_2026'
 
-    if (adminKey !== 'mandani_root_2026' && !authHeader.includes('Bearer')) {
+    const isKeyValid = adminKey && adminKey === expectedAdminKey
+    const isBearerValid = authHeader.startsWith('Bearer ') && authHeader.slice(7).trim() === expectedAdminKey
+
+    if (!isKeyValid && !isBearerValid) {
       return sendJson(res, 403, { ok: false, error: 'دسترسی غیرمجاز برای اجرای به‌روزرسانی سیستم' })
     }
 
@@ -782,14 +799,23 @@ const server = http.createServer((req, res) => {
                 contractNum: matchCustomerContract.contractNum || ''
               }
 
+              const scopedData = getCustomerScopedData(tenantKey, matchCustomerContract.id) || {
+                contract: matchCustomerContract,
+                studioInfo: data.studioInfo || {}
+              }
+
               return sendJson(res, 200, {
                 ok: true,
                 userKind: 'customer',
                 user: safeUser,
                 contract: matchCustomerContract,
                 tenantKey,
-                studioInfo: data.studioInfo || {},
-                fullData: data
+                studioInfo: {
+                  name: data.studioInfo?.name || 'استودیو',
+                  phone: data.studioInfo?.phone || '',
+                  address: data.studioInfo?.address || ''
+                },
+                scopedData
               })
             }
           } catch { /* skip corrupted file */ }
@@ -1140,20 +1166,21 @@ const server = http.createServer((req, res) => {
 
         const msgText = `🔐 ${studioName}\nکد تأیید ورود شما: ${code}\nاعتبار این کد ۵ دقیقه می‌باشد.`
 
+        let baleResult = { ok: false }
         if (channel === 'bale') {
-          await sendBaleMessage(phone, msgText, studioBaleToken)
+          baleResult = await sendBaleMessage(phone, msgText, studioBaleToken)
         }
 
-        console.log(`[OTP Audit] Code generated for ${maskPhone(phone)} via ${channel} -> ${code}`)
+        console.log(`[OTP Audit] Code dispatched to ${maskPhone(phone)} via ${channel}`)
 
         return sendJson(res, 200, {
           ok: true,
           channel,
+          baleDelivered: Boolean(baleResult?.ok),
           message: channel === 'bale' ? 'کد تأیید به پیام‌رسان بله ارسال گردید' : 'کد تأیید آماده ارسال در واتساپ است',
-          baleBotUrl: `https://ble.ir/${studioBaleUser}?start=${code}`,
+          baleBotUrl: `https://ble.ir/${studioBaleUser}`,
           whatsAppUrl: `https://api.whatsapp.com/send?phone=98${phone.slice(1)}&text=${encodeURIComponent(msgText)}`,
-          retryAfterSec: 60,
-          demoCode: code
+          retryAfterSec: 60
         })
       } catch (err) {
         return sendJson(res, 500, { ok: false, error: 'خطای سرور: ' + err.message })
@@ -1228,14 +1255,22 @@ const server = http.createServer((req, res) => {
                 contractId: customerContract.id,
                 contractNum: customerContract.contractNum || ''
               }
+              const scopedData = getCustomerScopedData(tenantKey, customerContract.id) || {
+                contract: customerContract,
+                studioInfo: data.studioInfo || {}
+              }
               return sendJson(res, 200, {
                 ok: true,
                 userKind: 'customer',
                 user: safeCust,
                 contract: customerContract,
                 tenantKey,
-                studioInfo: data.studioInfo || {},
-                fullData: data
+                studioInfo: {
+                  name: data.studioInfo?.name || 'استودیو',
+                  phone: data.studioInfo?.phone || '',
+                  address: data.studioInfo?.address || ''
+                },
+                scopedData
               })
             }
           } catch { /* skip */ }

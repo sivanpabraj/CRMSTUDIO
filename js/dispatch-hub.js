@@ -256,21 +256,21 @@ const DispatchHub = {
               متن کامل قرارداد و لینک مستقیم تاییدیه در پیام‌رسان باز شده و بلافاصله برای مشتری ارسال می‌گردد:
             </p>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px">
-              <button type="button" class="portal-btn" style="background:#25D366;color:#fff;border:none;padding:9px 12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px" onclick="DispatchHub.openWhatsApp('${phone}', \`${info.text.replace(/`/g, '\\`')}\`)">
+              <button type="button" id="dh-btn-wa" class="portal-btn" style="background:#25D366;color:#fff;border:none;padding:9px 12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
                 <i class="fab fa-whatsapp"></i> واتساپ
               </button>
-              <button type="button" class="portal-btn" style="background:#e07e2a;color:#fff;border:none;padding:9px 12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px" onclick="DispatchHub.openEitaa('${info.portalUrl}', \`${info.text.replace(/`/g, '\\`')}\`)">
+              <button type="button" id="dh-btn-eitaa" class="portal-btn" style="background:#e07e2a;color:#fff;border:none;padding:9px 12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
                 <i class="fas fa-comment-dots"></i> ایتا
               </button>
-              <button type="button" class="portal-btn" style="background:#1b74e4;color:#fff;border:none;padding:9px 12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px" onclick="DispatchHub.openBale('${info.portalUrl}', \`${info.text.replace(/`/g, '\\`')}\`)">
+              <button type="button" id="dh-btn-bale" class="portal-btn" style="background:#1b74e4;color:#fff;border:none;padding:9px 12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
                 <i class="fas fa-paper-plane"></i> بله
               </button>
-              <button type="button" class="portal-btn" style="background:#229ED9;color:#fff;border:none;padding:9px 12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px" onclick="DispatchHub.openTelegram('${info.portalUrl}', \`${info.text.replace(/`/g, '\\`')}\`)">
+              <button type="button" id="dh-btn-tg" class="portal-btn" style="background:#229ED9;color:#fff;border:none;padding:9px 12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
                 <i class="fab fa-telegram-plane"></i> تلگرام
               </button>
             </div>
             <div style="margin-top:10px;text-align:left">
-              <button type="button" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#fff;padding:6px 12px;border-radius:6px;font-size:11.5px;cursor:pointer" onclick="DispatchHub.copyToClipboard(\`${info.text.replace(/`/g, '\\`')}\`, 'متن قرارداد و لینک کپی شد ✓')">
+              <button type="button" id="dh-btn-copy" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#fff;padding:6px 12px;border-radius:6px;font-size:11.5px;cursor:pointer">
                 <i class="fas fa-copy"></i> کپی کامل متن و لینک
               </button>
             </div>
@@ -314,6 +314,23 @@ const DispatchHub = {
     `
 
     document.body.appendChild(modal)
+
+    // Securely bind events without template literal injection
+    modal.querySelector('#dh-btn-wa')?.addEventListener('click', () => {
+      this.openWhatsApp(phone, info.text)
+    })
+    modal.querySelector('#dh-btn-eitaa')?.addEventListener('click', () => {
+      this.openEitaa(info.portalUrl, info.text)
+    })
+    modal.querySelector('#dh-btn-bale')?.addEventListener('click', () => {
+      this.openBale(info.portalUrl, info.text)
+    })
+    modal.querySelector('#dh-btn-tg')?.addEventListener('click', () => {
+      this.openTelegram(info.portalUrl, info.text)
+    })
+    modal.querySelector('#dh-btn-copy')?.addEventListener('click', () => {
+      this.copyToClipboard(info.text, 'متن قرارداد و لینک کپی شد ✓')
+    })
   },
 
   async triggerEmailDispatch(contractId) {

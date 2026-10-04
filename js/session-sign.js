@@ -66,7 +66,7 @@ const SessionSign = {
   async verify(session) {
     if (!session?.userId) return false
     if (!session.sig) {
-      return true
+      return false
     }
     try {
       let secret = null
