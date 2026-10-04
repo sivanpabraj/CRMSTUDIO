@@ -12,6 +12,7 @@ const SMSettings = {
     { id: 'security', icon: 'fa-shield-halved', title: 'امنیت و نشست‌ها', keywords: 'خروج نشست‌ها دستگاه‌ها انقضا پسورد امنیت' },
     { id: 'widgets', icon: 'fa-gauge-high', title: 'پیشخوان مدیریتی', keywords: 'داشبورد مالی عملیات نمودار سلامت مالی' },
     { id: 'site', icon: 'fa-globe', title: 'سایت و پورتال', keywords: 'وب سایت html embed لینک ورود' },
+    { id: 'messengers', icon: 'fa-paper-plane', title: 'پیام‌رسان‌ها (بله و واتساپ)', keywords: 'بله bale واتساپ whatsapp otp ربات bot ایمیل' },
     { id: 'sms', icon: 'fa-sms', title: 'درگاه پیامک', keywords: 'sms api کاوهنگار پیامک ملی پیامک' },
     { id: 'backup', icon: 'fa-cloud', title: 'پشتیبان و دیتا', keywords: 'backup بازیابی restore دانلود پوشه فایل' },
     { id: 'cloud', icon: 'fa-cloud-arrow-up', title: 'ابر Supabase', keywords: 'supabase sync cloud ابر همگام sync' },
@@ -89,6 +90,7 @@ const SMSettings = {
     if (this._tab === 'security') return this._securityTab(info)
     if (this._tab === 'widgets') return this._widgetsTab()
     if (this._tab === 'site') return this._siteTab(info)
+    if (this._tab === 'messengers') return this._messengersTab(info)
     if (this._tab === 'sms') return this._smsTab(info)
     if (this._tab === 'backup') return this._backupTab(info)
     if (this._tab === 'cloud') return this._cloudTab(info)
@@ -419,6 +421,81 @@ const SMSettings = {
   copyEmbed() {
     const el = document.getElementById('site-embed-code')
     if (el && typeof Utils !== 'undefined') Utils.copyText(el.textContent)
+  },
+
+  _messengersTab(info) {
+    const baleToken = info.baleBotToken || ''
+    const baleUser = info.baleBotUsername || 'mandani_studio_bot'
+    const waPhone = info.whatsappPhone || info.phone || ''
+    const emailUser = info.emailSmtpUser || ''
+    const emailPass = info.emailSmtpPass || ''
+
+    return `<div class="sm-card"><div class="sm-card-head"><div class="sm-card-title"><i class="fas fa-paper-plane" style="color:#60a5fa"></i> پیام‌رسان‌ها (بله، واتساپ و ایمیل اختصاصی این استودیو)</div>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveMessengers()"><i class="fas fa-save"></i> ذخیره تنظیمات</button>
+      </div>
+      <div class="sm-card-body">
+        <p style="font-size:.85rem;color:var(--sm-text-muted);margin-bottom:16px;line-height:1.7">
+          این تنظیمات در پایگاه داده اختصاصی همین استودیو ذخیره می‌شود. هر استودیو می‌تواند ربات بله، شماره واتساپ و ایمیل اختصاصی خود را داشته باشد یا از مقادیر پیش‌فرض سرور استفاده کند:
+        </p>
+
+        <!-- Bale Section -->
+        <div style="background:rgba(27,116,228,0.06);border:1px solid rgba(27,116,228,0.25);border-radius:12px;padding:16px;margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:800;color:#60a5fa;margin-bottom:8px">
+            <i class="fas fa-robot"></i> ۱. تنظیمات ربات رسمی بله (Bale Bot — رایگان، قانونی و بدون فیلتر در ایران)
+          </div>
+          <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0 0 12px;line-height:1.6">
+            کافیست در اپلیکیشن بله به <code dir="ltr">@BotFather</code> پیام دهید، یک بازو با نام استودیو خود بسازید و توکن آن را اینجا وارد فرمایید:
+          </p>
+          ${SMUI.formField('توکن ربات بله (Bot Token)', 'set-bale-token', { value: baleToken, dir: 'ltr', placeholder: 'مثلاً: 123456789:ABCdefGhIjkLmNoPqRsTuvWxYz' })}
+          ${SMUI.formField('نام کاربری ربات بله (Username)', 'set-bale-user', { value: baleUser, dir: 'ltr', placeholder: 'مثلاً: mandani_studio_bot' })}
+        </div>
+
+        <!-- WhatsApp Section -->
+        <div style="background:rgba(37,211,102,0.06);border:1px solid rgba(37,211,102,0.25);border-radius:12px;padding:16px;margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:800;color:#4ade80;margin-bottom:8px">
+            <i class="fab fa-whatsapp"></i> ۲. شماره واتساپ استودیو (WhatsApp)
+          </div>
+          <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0 0 12px;line-height:1.6">
+            شماره موبایل کاری استودیو جهت ارسال و دریافت خودکار پیام‌های قرارداد و کدهای تایید:
+          </p>
+          ${SMUI.formField('شماره واتساپ استودیو', 'set-whatsapp-phone', { value: waPhone, dir: 'ltr', placeholder: '0918xxxxxxx' })}
+        </div>
+
+        <!-- Email Section -->
+        <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:16px">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:800;color:#f59e0b;margin-bottom:8px">
+            <i class="fas fa-envelope"></i> ۳. ایمیل رسمی استودیو (SMTP)
+          </div>
+          <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0 0 12px;line-height:1.6">
+            جهت ارسال خودکار نسخه‌های لوکس HTML قرارداد و فاکتورها به ایمیل مراجعین:
+          </p>
+          ${SMUI.formField('آدرس ایمیل فرستنده (جیمیل استودیو)', 'set-email-user', { value: emailUser, dir: 'ltr', placeholder: 'studio@gmail.com' })}
+          ${SMUI.formField('گذرواژه برنامه جیمیل (App Password)', 'set-email-pass', { type: 'password', value: emailPass, dir: 'ltr', placeholder: 'گذرواژه ۱۶ رقمی برنامه' })}
+        </div>
+      </div></div>`
+  },
+
+  async saveMessengers() {
+    const baleToken = document.getElementById('set-bale-token')?.value?.trim() || ''
+    const baleUser = document.getElementById('set-bale-user')?.value?.trim() || ''
+    const waPhone = document.getElementById('set-whatsapp-phone')?.value?.trim() || ''
+    const emailUser = document.getElementById('set-email-user')?.value?.trim() || ''
+    const emailPass = document.getElementById('set-email-pass')?.value?.trim() || ''
+
+    await SecureDB.merge('studioInfo', {
+      baleBotToken: baleToken,
+      baleBotUsername: baleUser,
+      whatsappPhone: waPhone,
+      emailSmtpUser: emailUser,
+      emailSmtpPass: emailPass
+    })
+
+    if (typeof ServerSync !== 'undefined' && ServerSync.pushNow) {
+      ServerSync.pushNow().catch(() => {})
+    }
+
+    SM.toast('تنظیمات پیام‌رسان‌های استودیو با موفقیت ذخیره شد ✓', 'success')
+    SM.navigate('settings')
   },
 
   _smsTab(info) {

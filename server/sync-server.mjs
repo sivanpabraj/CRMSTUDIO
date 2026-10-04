@@ -88,13 +88,14 @@ const activeOtps = new Map()
 const BALE_BOT_TOKEN = process.env.BALE_BOT_TOKEN || ''
 const BALE_BOT_USERNAME = process.env.BALE_BOT_USERNAME || 'mandani_studio_bot'
 
-async function sendBaleMessage(chatId, text) {
-  if (!BALE_BOT_TOKEN) {
+async function sendBaleMessage(chatId, text, customToken = null) {
+  const token = customToken || BALE_BOT_TOKEN
+  if (!token) {
     console.log(`[Bale Audit] Mock dispatch to ${chatId}: ${text}`)
     return { ok: true, mocked: true }
   }
   try {
-    const res = await fetch(`https://tapi.bale.ai/bot${BALE_BOT_TOKEN}/sendMessage`, {
+    const res = await fetch(`https://tapi.bale.ai/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text })
@@ -448,6 +449,23 @@ function sendJson(res, statusCode, data) {
     'Cache-Control': 'no-store'
   })
   res.end(JSON.stringify(data))
+}
+
+function readJsonBody(req, res, callback) {
+  let body = ''
+  req.setEncoding('utf-8')
+  req.on('data', chunk => {
+    body += chunk
+    if (body.length > 512 * 1024) req.destroy()
+  })
+  req.on('end', () => {
+    try {
+      const parsed = JSON.parse(body || '{}')
+      callback(parsed)
+    } catch (e) {
+      sendJson(res, 400, { ok: false, error: 'داده‌های ارسالی نامعتبر است (JSON Parse Error)' })
+    }
+  })
 }
 
 const server = http.createServer((req, res) => {
@@ -1101,10 +1119,29 @@ const server = http.createServer((req, res) => {
           channel
         })
 
-        const msgText = `🔐 استودیو فیلم و عکس ماندنی\nکد تأیید ورود شما: ${code}\nاعتبار این کد ۵ دقیقه می‌باشد.`
+        let studioName = 'استودیو فیلم و عکس ماندنی'
+        let studioBaleToken = null
+        let studioBaleUser = BALE_BOT_USERNAME
+
+        const files = getSortedTenantFiles()
+        for (const f of files) {
+          try {
+            const data = JSON.parse(fs.readFileSync(path.join(TENANTS_DIR, f), 'utf8'))
+            const hasPhone = (data.users || []).some(u => u.phone && normalizePhone(u.phone) === phone) ||
+              (data.contracts || []).some(c => [c.phone, c.groomPhone, c.bridePhone, c.phoneGroom, c.phoneBride].map(normalizePhone).includes(phone))
+            if (hasPhone && data.studioInfo) {
+              if (data.studioInfo.name) studioName = data.studioInfo.name
+              if (data.studioInfo.baleBotToken) studioBaleToken = data.studioInfo.baleBotToken
+              if (data.studioInfo.baleBotUsername) studioBaleUser = data.studioInfo.baleBotUsername
+              break
+            }
+          } catch { /* skip */ }
+        }
+
+        const msgText = `🔐 ${studioName}\nکد تأیید ورود شما: ${code}\nاعتبار این کد ۵ دقیقه می‌باشد.`
 
         if (channel === 'bale') {
-          await sendBaleMessage(phone, msgText)
+          await sendBaleMessage(phone, msgText, studioBaleToken)
         }
 
         console.log(`[OTP Audit] Code generated for ${maskPhone(phone)} via ${channel} -> ${code}`)
@@ -1113,7 +1150,7 @@ const server = http.createServer((req, res) => {
           ok: true,
           channel,
           message: channel === 'bale' ? 'کد تأیید به پیام‌رسان بله ارسال گردید' : 'کد تأیید آماده ارسال در واتساپ است',
-          baleBotUrl: `https://ble.ir/${BALE_BOT_USERNAME}?start=${code}`,
+          baleBotUrl: `https://ble.ir/${studioBaleUser}?start=${code}`,
           whatsAppUrl: `https://api.whatsapp.com/send?phone=98${phone.slice(1)}&text=${encodeURIComponent(msgText)}`,
           retryAfterSec: 60,
           demoCode: code
