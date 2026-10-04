@@ -507,59 +507,52 @@ const Utils = {
   },
 
   _jalaliToGregorian(jy, jm, jd) {
-    // Jalaali.js algorithm (دقیق برای همه سال‌ها)
+    // الگوریتم استاندارد و دقیق Jalaali.js
     const breaks = [-61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178]
-    const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
     const bl = breaks.length
     const gy = jy + 621
     let leapJ = -14
     let jp = breaks[0]
-    let _jmLeap = 0
-    for (let i = 1; i < bl; i++) {
-      const jump = breaks[i] - jp
-      if (jy < breaks[i]) break
-      leapJ += Math.floor(jump / 33) * 8 + Math.floor((jump % 33) / 4)
-      jp = breaks[i]
-    }
-    const n = jy - jp
-    leapJ += Math.floor(n / 33) * 8 + Math.floor((n % 33 + 3) / 4)
-    if (jumpMod33(jy, breaks) === 4 && jumpMod33(jy + 1, breaks) - jumpMod33(jy, breaks) === 4) leapJ += 1
-    const leapG = Math.floor(gy / 4) - Math.floor((Math.floor((gy / 100) + 1) * 3) / 4) - 150
-    const march = 20 + leapJ - leapG
-    const jDayNo = 365 * n + Math.floor((n + 3) / 4) + jd + (jm <= 7 ? (jm - 1) * 31 : ((jm - 7) * 30 + 186)) + march - 1
-    let gDayNo = jDayNo + 79
-    let gy2 = 1600 + 400 * Math.floor(gDayNo / 146097)
-    gDayNo %= 146097
-    let leap = true
-    if (gDayNo >= 36525) {
-      gDayNo--
-      gy2 += 100 * Math.floor(gDayNo / 36524)
-      gDayNo %= 36524
-      if (gDayNo >= 365) gDayNo++
-      else leap = false
-    }
-    gy2 += 4 * Math.floor(gDayNo / 1461)
-    gDayNo %= 1461
-    if (gDayNo >= 366) {
-      leap = false
-      gDayNo--
-      gy2 += Math.floor(gDayNo / 365)
-      gDayNo %= 365
-    }
-    let gm = 0
-    while (gm < 12 && gDayNo >= g_d_m[gm + 1] + (gm === 1 && leap ? 1 : 0)) gm++
-    const gd = gDayNo - g_d_m[gm] - (gm > 1 && leap ? 1 : 0) + 1
-    return [gy2, gm + 1, gd]
+    let jump = 0
+    let jmBreak = 0
 
-    function jumpMod33(y, brks) {
-      let jp2 = brks[0]
-      for (let i = 1; i < brks.length; i++) {
-        const _jump = brks[i] - jp2
-        if (y < brks[i]) return (y - jp2) % 33
-        jp2 = brks[i]
-      }
-      return (y - jp2) % 33
+    const div = (a, b) => ~~(a / b)
+    const mod = (a, b) => a - ~~(a / b) * b
+
+    for (let i = 1; i < bl; i++) {
+      jmBreak = breaks[i]
+      jump = jmBreak - jp
+      if (jy < jmBreak) break
+      leapJ = leapJ + div(jump, 33) * 8 + div(mod(jump, 33), 4)
+      jp = jmBreak
     }
+    let n = jy - jp
+    leapJ = leapJ + div(n, 33) * 8 + div(mod(n, 33) + 3, 4)
+    if (mod(jump, 33) === 4 && jump - n === 4) leapJ += 1
+
+    const leapG = div(gy, 4) - div((div(gy, 100) + 1) * 3, 4) - 150
+    const march = 20 + leapJ - leapG
+
+    // محاسبه شماره روز ژولین (Julian Day Number)
+    const g2d = (gYear, gMonth, gDay) => {
+      let d = div((gYear + div(gMonth - 8, 6) + 100100) * 1461, 4) +
+        div(153 * mod(gMonth + 9, 12) + 2, 5) +
+        gDay - 34840408
+      d = d - div(div(gYear + 100100 + div(gMonth - 8, 6), 100) * 3, 4) + 752
+      return d
+    }
+
+    const jdn = g2d(gy, 3, march) + (jm - 1) * 31 - div(jm, 7) * (jm - 7) + jd - 1
+
+    // تبدیل شماره روز ژولین به تقویم میلادی
+    let j = 4 * jdn + 139361631
+    j = j + div(div(4 * jdn + 183187720, 146097) * 3, 4) * 4 - 3908
+    const iVal = div(mod(j, 1461), 4) * 5 + 308
+    const gd = div(mod(iVal, 153), 5) + 1
+    const gm = mod(div(iVal, 153), 12) + 1
+    const gyCalc = div(j, 1461) - 100100 + div(8 - gm, 6)
+
+    return [gyCalc, gm, gd]
   }
 }
 

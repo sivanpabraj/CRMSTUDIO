@@ -593,11 +593,17 @@ const DB = {
       const data = JSON.parse(json)
       if (!data || typeof data !== 'object') throw new Error('Invalid format')
       const def = createDefaultData()
-      const validKeys = new Set(Object.keys(def))
+      const validKeys = new Set([
+        ...Object.keys(def),
+        'printShops', 'photoSelections', 'salaryPayments'
+      ])
       const objectKeys = new Set(['_meta', ...DB_OBJECT_KEYS])
       for (const key of Object.keys(data)) {
         if (key === '_meta') continue
-        if (!validKeys.has(key)) throw new Error(`کلید ناشناخته: ${key}`)
+        if (!validKeys.has(key)) {
+          console.warn(`[DB] کلید ناشناخته در بکاپ نادیده گرفته شد: ${key}`)
+          continue
+        }
         if (!objectKeys.has(key) && !Array.isArray(data[key]))
           throw new Error(`کلید ${key} باید آرایه باشد`)
       }
