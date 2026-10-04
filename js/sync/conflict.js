@@ -72,6 +72,17 @@ export function mergeCollection(localItems, remoteRows, { idKey = 'id', onConfli
       continue
     }
 
+    // Tombstone handling (C5 fix: do not resurrect deleted items, and respect remote deletions)
+    if (local?._deleted) {
+      skipped++
+      continue
+    }
+    if (row.payload?._deleted) {
+      byId.delete(localId)
+      applied++
+      continue
+    }
+
     const verdict = compareRows(local, row.payload, row.updated_at)
     if (verdict === 'remote' || (!local && row.payload)) {
       byId.set(localId, {

@@ -53,7 +53,6 @@ export function stripSensitive(collection, item) {
   if (collection === 'fileAssets') {
     delete copy.data
   }
-  delete copy._deleted
   return copy
 }
 

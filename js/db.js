@@ -68,6 +68,9 @@ function createDefaultData() {
     apiKeys: [],
     payrollRuns: [],
     customerCustody: [],
+    printShops: [],
+    photoSelections: [],
+    salaryPayments: [],
     securityState: { loginAttempts: {}, otpSend: {}, otpVerify: {} }
   }
 }
