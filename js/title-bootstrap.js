@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════
    Bootstrap Dynamic Studio Branding & Title
-   شخصی‌سازی داینامیک نام استودیو بر اساس تنظیمات و مخزن گیت‌هاب
+   شخصی‌سازی داینامیک نام استودیو بر اساس تنظیمات، پارامتر URL و مخزن گیت‌هاب
    ══════════════════════════════════════════════ */
 ;(function () {
   function applyBranding() {
@@ -9,12 +9,21 @@
       if (typeof AppConfig !== 'undefined' && AppConfig.STUDIO?.NAME) {
         studioName = AppConfig.STUDIO.NAME;
       }
-      var raw = localStorage.getItem('studio_db_v5') || localStorage.getItem('studio_db_v4');
-      if (raw) {
-        var d = JSON.parse(raw);
-        var n = d.studioInfo && d.studioInfo.name;
-        if (n && n !== 'Studio M' && n !== 'Studio ERP' && d.studioInfo.setupCompleted) {
-          studioName = n.trim();
+
+      // اولویت ۱: اگر در آدرس پارامتر ?studio= یا ?s= وجود داشت
+      var urlParams = new URLSearchParams(window.location.search);
+      var queryStudio = urlParams.get('studio') || urlParams.get('s');
+      if (queryStudio && queryStudio.trim()) {
+        studioName = decodeURIComponent(queryStudio.trim());
+      } else {
+        // اولویت ۲: خواندن استودیوی فعال از حافظه مرورگر
+        var raw = localStorage.getItem('studio_db_v5') || localStorage.getItem('studio_db_v4');
+        if (raw) {
+          var d = JSON.parse(raw);
+          var n = d.studioInfo && d.studioInfo.name;
+          if (n && n !== 'Studio M' && n !== 'Studio ERP' && d.studioInfo.setupCompleted) {
+            studioName = n.trim();
+          }
         }
       }
 

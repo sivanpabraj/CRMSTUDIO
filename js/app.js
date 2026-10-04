@@ -667,10 +667,8 @@ const Portal = {
 
       const result = await Auth.login(email || phone, password)
       if (result.ok) {
-        Utils.toast?.('استودیو با موفقیت ساخته شد. ورود به پنل...', 'success', 2500)
-        setTimeout(() => {
-          window.location.href = 'studio-m/'
-        }, 500)
+        if (typeof AudioNotifier !== 'undefined') AudioNotifier.playContract()
+        this.showRegistrationSuccess({ name: studioName, manager: managerName, phone, joinCode, slug: studioName.replace(/\s+/g, '-').slice(0, 24) })
       } else {
         Utils.toast?.('استودیو ثبت شد. لطفاً از تب ورود وارد شوید', 'info', 3000)
         this.setAuthTab('login')
@@ -683,6 +681,63 @@ const Portal = {
         btn.innerHTML = '<i class="fas fa-rocket"></i> ساخت و ثبت استودیو'
       }
     }
+  },
+
+  showRegistrationSuccess(studioInfo) {
+    const origin = window.location.origin
+    const dedicatedLink = `${origin}/app/?studio=${encodeURIComponent(studioInfo.name)}`
+
+    const overlay = document.createElement('div')
+    overlay.className = 'portal-modal-overlay open'
+    overlay.style.zIndex = '9999'
+    overlay.style.display = 'flex'
+    overlay.style.alignItems = 'center'
+    overlay.style.justifyContent = 'center'
+    overlay.style.background = 'rgba(0,0,0,0.85)'
+    overlay.style.backdropFilter = 'blur(10px)'
+
+    overlay.innerHTML = `
+      <div class="portal-modal" style="max-width:540px;width:90%;background:#0b0f19;border:1px solid rgba(245,158,11,0.4);border-radius:24px;padding:26px;color:#fff;text-align:right;box-shadow:0 12px 40px rgba(0,0,0,0.8)">
+        <div style="text-align:center;margin-bottom:18px">
+          <div style="width:68px;height:68px;border-radius:22px;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:32px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;border:1px solid rgba(245,158,11,0.3)">
+            <i class="fas fa-crown"></i>
+          </div>
+          <h2 style="font-size:18px;margin:0 0 6px 0;color:#fff">🎉 استودیو شما با موفقیت راه‌اندازی شد!</h2>
+          <p style="font-size:12.5px;color:rgba(255,255,255,0.6);margin:0">شناسنامه و مشخصات ورود به پنل اختصاصی ${Utils.escapeHtml(studioInfo.name)}</p>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.035);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px;margin-bottom:18px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <span style="font-size:12px;color:rgba(255,255,255,0.5)">نام رسمی استودیو:</span>
+            <strong style="color:#f59e0b;font-size:13.5px">${Utils.escapeHtml(studioInfo.name)}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <span style="font-size:12px;color:rgba(255,255,255,0.5)">کد اختصاصی اتصال پرسنل:</span>
+            <strong style="font-size:16px;color:#38bdf8;letter-spacing:2px" dir="ltr">${Utils.escapeHtml(studioInfo.joinCode)}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <span style="font-size:12px;color:rgba(255,255,255,0.5)">نام کاربری (شماره همراه مدیر):</span>
+            <strong dir="ltr">${Utils.escapeHtml(studioInfo.phone)}</strong>
+          </div>
+          <div style="margin-top:10px">
+            <span style="font-size:11.5px;color:rgba(255,255,255,0.5);display:block;margin-bottom:6px">🌐 لینک صفحه ورود با نام و برند استودیو شما:</span>
+            <div style="display:flex;gap:6px;align-items:center;background:rgba(0,0,0,0.4);padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.08)">
+              <input type="text" readonly value="${dedicatedLink}" style="flex:1;background:transparent;border:none;color:#60a5fa;font-size:11px;direction:ltr" id="dedicated-studio-url" />
+              <button type="button" class="portal-btn portal-btn-sm" onclick="navigator.clipboard.writeText('${dedicatedLink}'); Utils.toast('لینک کپی شد', 'success')" style="font-size:11px">کپی لینک</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button type="button" class="portal-btn portal-btn-primary" onclick="window.location.href='studio-m/'" style="padding:12px;font-size:13.5px;border-radius:12px">
+            <i class="fas fa-arrow-left"></i> ورود به پنل مدیریت ${Utils.escapeHtml(studioInfo.name)}
+          </button>
+          <button type="button" class="portal-btn portal-btn-ghost" onclick="navigator.clipboard.writeText('اطلاعات ورود استودیو ${studioInfo.name}\\nکد اتصال پرسنل: ${studioInfo.joinCode}\\nلینک ورود اختصاصی: ${dedicatedLink}'); Utils.toast('مشخصات استودیو کپی شد', 'success')" style="border-radius:12px;font-size:12px">
+            <i class="fas fa-copy"></i> کپی کامل شناسنامه استودیو
+          </button>
+        </div>
+      </div>`
+    document.body.appendChild(overlay)
   },
 
   _portalVerifyStep(phone) {

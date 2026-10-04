@@ -824,6 +824,20 @@ const SMSettings = {
             </div>`).join('') : '<p>—</p>'}
         </div>
       </div>
+      <div class="sm-card sm-settings-full">
+        <div class="sm-card-head">
+          <div class="sm-card-title"><i class="fas fa-cloud-arrow-up"></i> به‌روزرسانی خودکار سرور (One-Click Auto-Update)</div>
+          ${SMUI.badge('نسخه ' + (AppConfig.APP_VERSION || '2.1.0'), 'info')}
+        </div>
+        <div class="sm-card-body">
+          <p style="font-size:.85rem;color:var(--sm-text-muted);line-height:1.7;margin:0 0 12px">
+            دریافت آخرین نسخه و تغییرات جدید از گیت‌هاب همراه با <strong>تهیه خودکار فایل پشتیبان (Snapshot)</strong> قبل از هرگونه تغییر.
+          </p>
+          <button type="button" class="sm-btn sm-btn-primary" onclick="SMSettings.confirmSystemUpdate()">
+            <i class="fas fa-rotate"></i> بررسی و اجرای به‌روزرسانی زنده سیستم
+          </button>
+        </div>
+      </div>
       <div class="sm-card sm-settings-full sm-card-danger-zone">
         <div class="sm-card-head"><div class="sm-card-title"><i class="fas fa-triangle-exclamation"></i> پاکسازی و بازنشانی</div></div>
         <div class="sm-card-body">
@@ -850,6 +864,60 @@ const SMSettings = {
         </div>
       </div>
     </div>`
+  },
+
+  confirmSystemUpdate() {
+    SMUI.modal('⚠️ هشدار امنیتی و به‌روزرسانی زنده سرور', `
+      <div style="text-align:right;padding:4px 0">
+        <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:12px;margin-bottom:14px">
+          <p style="margin:0 0 8px 0;font-size:13px;color:#f59e0b;font-weight:700">
+            <i class="fas fa-shield-halved"></i> سیستم قبل از آپدیت به صورت خودکار پشتیبان می‌گیرد!
+          </p>
+          <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.8);line-height:1.7">
+            قبل از اعمال تغییرات، یک نسخه پشتیبان کامل (Snapshot) از تمامی قراردادها، اسناد مالی و اطلاعات استودیوها در دایرکتوری امن سرور (<code dir="ltr">/var/backups/crmstudio/</code>) ذخیره می‌گردد.
+          </p>
+        </div>
+
+        <p style="font-size:12.5px;color:rgba(255,255,255,0.7);line-height:1.8;margin:0 0 16px 0">
+          برای اطمینان و آرامش خاطر مضاعف، توصیه می‌شود هم‌اکنون یک نسخه فایل پشتیبان آفلاین (JSON) را نیز روی همین دستگاه دانلود کنید.
+        </p>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.backupNow(); SM.toast('فایل پشتیبان با موفقیت دانلود شد', 'success')" style="border:1px solid rgba(255,255,255,0.15)">
+            <i class="fas fa-download"></i> ۱. دانلود نسخه پشتیبان آفلاین روی دستگاه (اختیاری)
+          </button>
+          <button type="button" class="sm-btn sm-btn-primary" onclick="SMSettings.executeServerUpdate()" style="padding:12px">
+            <i class="fas fa-rocket"></i> ۲. تایید و اجرای به‌روزرسانی زنده سرور (با بکاپ خودکار)
+          </button>
+        </div>
+      </div>`, {
+      width: 490
+    })
+  },
+
+  async executeServerUpdate() {
+    SMUI.closeModal()
+    SM.toast('در حال تهیه پشتیبان خودکار سرور و دریافت تغییرات...', 'info', 6000)
+    if (typeof AudioNotifier !== 'undefined') AudioNotifier.playSent()
+
+    try {
+      const res = await fetch('/api/system/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': 'mandani_root_2026'
+        }
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) {
+        return SM.toast(data.error || 'خطا در اجرای به‌روزرسانی سرور', 'error')
+      }
+
+      if (typeof AudioNotifier !== 'undefined') AudioNotifier.playContract()
+      SM.toast('✅ فرآیند به‌روزرسانی خودکار سرور با موفقیت آغاز شد و بکاپ ذخیره گردید.', 'success', 8000)
+    } catch (e) {
+      SM.toast('خطا در ارتباط با سرور: ' + e.message, 'error')
+    }
   },
 
   async wipeOperational() {
