@@ -2,6 +2,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import zlib from 'node:zlib'
 import { execSync, spawn } from 'node:child_process'
 
 let nodemailer = null
@@ -454,6 +455,7 @@ setInterval(() => {
 }, 25000)
 
 function sendJson(res, statusCode, data) {
+  const payload = JSON.stringify(data)
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
@@ -461,7 +463,29 @@ function sendJson(res, statusCode, data) {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-Studio-Id, X-Sync-Token',
     'Cache-Control': 'no-store'
   })
-  res.end(JSON.stringify(data))
+  res.end(payload)
+}
+
+function sendGzipJson(req, res, statusCode, data) {
+  const acceptEncoding = req.headers['accept-encoding'] || ''
+  const payload = Buffer.from(JSON.stringify(data), 'utf-8')
+  
+  if (acceptEncoding.includes('gzip') && payload.length > 1024) {
+    zlib.gzip(payload, (err, compressed) => {
+      if (err) return sendJson(res, statusCode, data)
+      res.writeHead(statusCode, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Encoding': 'gzip',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-Studio-Id, X-Sync-Token',
+        'Cache-Control': 'no-store'
+      })
+      res.end(compressed)
+    })
+  } else {
+    sendJson(res, statusCode, data)
+  }
 }
 
 function readJsonBody(req, res, callback) {
@@ -1302,6 +1326,7 @@ const server = http.createServer((req, res) => {
         const phone = normalizePhone(body.phone || '')
         const joinCode = String(body.joinCode || '').trim().toUpperCase()
         const newPassword = String(body.newPassword || '').trim()
+        const otpCode = String(body.otpCode || '').trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
 
         if (!phone || !joinCode || !newPassword) {
           return sendJson(res, 400, { ok: false, error: 'شماره همراه مدیر، کد اختصاصی استودیو و رمز جدید الزامی هستند' })
@@ -1309,6 +1334,18 @@ const server = http.createServer((req, res) => {
         if (newPassword.length < 4) {
           return sendJson(res, 400, { ok: false, error: 'رمز عبور جدید باید حداقل ۴ کاراکتر باشد' })
         }
+
+        // Security check: Must supply valid active OTP code to reset password
+        const activeEntry = activeOtps.get(phone)
+        const isOtpValid = activeEntry && activeEntry.expiresAt > Date.now() && activeEntry.code === otpCode
+        if (!isOtpValid) {
+          return sendJson(res, 403, {
+            ok: false,
+            error: 'کد تأیید پیامک/بله منقضی شده یا اشتباه است. لطفاً ابتدا کد تأیید دریافت کنید.'
+          })
+        }
+        // Consume OTP immediately to prevent reuse
+        activeOtps.delete(phone)
 
         const files = getSortedTenantFiles()
         let updated = false
@@ -1443,7 +1480,7 @@ const server = http.createServer((req, res) => {
         })
       }
 
-      return sendJson(res, 200, {
+      return sendGzipJson(req, res, 200, {
         ok: true,
         revision: meta.revision,
         data: parsed,
