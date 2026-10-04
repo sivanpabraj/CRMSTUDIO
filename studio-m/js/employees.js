@@ -467,6 +467,9 @@ const SMEmployees = {
     }
 
     SM.toast('قرارداد همکاری با موفقیت در پنل پرسنل ثبت شد ✓', 'success')
+    if (typeof DispatchHub !== 'undefined') {
+      DispatchHub.showStaffInviteModal(p, code)
+    }
     if (SM.state.viewStack.length) {
       SM.state.viewStack.pop()
       this.view(personnelId)

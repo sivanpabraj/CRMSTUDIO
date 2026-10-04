@@ -4,6 +4,14 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { execSync, spawn } from 'node:child_process'
 
+let nodemailer = null
+try {
+  const nmModule = await import('nodemailer')
+  nodemailer = nmModule.default || nmModule
+} catch (e) {
+  console.warn('[SyncServer] nodemailer import notice:', e.message)
+}
+
 const PORT = parseInt(process.env.PORT || '3000', 10)
 const DATA_DIR = process.env.DATA_DIR || '/var/lib/crmstudio'
 const TENANTS_DIR = path.join(DATA_DIR, 'tenants')
@@ -56,6 +64,7 @@ class RateLimiter {
 // Rate Limiter Instances
 const smsIpLimiter = new RateLimiter(60 * 1000, 8) // max 8 SMS per min per IP
 const smsPhoneLimiter = new RateLimiter(10 * 60 * 1000, 3) // max 3 SMS per 10 min per phone
+const emailIpLimiter = new RateLimiter(60 * 1000, 15) // max 15 emails per min per IP
 const authLimiter = new RateLimiter(60 * 1000, 30) // max 30 auth lookups per min per IP
 const syncLimiter = new RateLimiter(60 * 1000, 120) // max 120 sync requests per min per IP
 
@@ -1268,6 +1277,117 @@ const server = http.createServer((req, res) => {
         }
       } catch (err) {
         return sendJson(res, 400, { ok: false, error: err.message })
+      }
+    })
+    return
+  }
+
+  // Hardened Server Email Dispatcher with SMTP & Rate Limiting
+  if (req.method === 'POST' && url.pathname === '/api/email/send') {
+    const ipCheck = emailIpLimiter.check(clientIp)
+    if (!ipCheck.allowed) {
+      return sendJson(res, 429, {
+        ok: false,
+        error: `تعداد درخواست‌های ارسال ایمیل بیش از حد مجاز است. لطفاً ${ipCheck.retryAfterSec} ثانیه دیگر تلاش کنید.`
+      })
+    }
+
+    let body = ''
+    req.setEncoding('utf-8')
+    req.on('data', chunk => {
+      body += chunk
+      if (body.length > 1024 * 1024) req.destroy()
+    })
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const to = String(payload.to || '').trim()
+        const subject = String(payload.subject || '').trim()
+        const html = String(payload.html || '').trim()
+        const text = String(payload.text || '').trim() || html.replace(/<[^>]+>/g, ' ')
+
+        if (!to || !to.includes('@') || !subject) {
+          return sendJson(res, 400, { ok: false, error: 'آدرس ایمیل گیرنده و موضوع پیام الزامی است' })
+        }
+
+        const smtpHost = payload.smtpHost || process.env.SMTP_HOST || 'smtp.gmail.com'
+        const smtpPort = parseInt(payload.smtpPort || process.env.SMTP_PORT || '465', 10)
+        const smtpSecure = payload.smtpSecure !== undefined ? Boolean(payload.smtpSecure) : (smtpPort === 465)
+        const smtpUser = payload.smtpUser || process.env.SMTP_USER || ''
+        const smtpPass = payload.smtpPass || process.env.SMTP_PASS || ''
+        const fromName = payload.fromName || 'استودیو فیلم و عکس ماندنی'
+        const fromAddress = payload.fromAddress || smtpUser || 'noreply@studiomandani.ir'
+
+        if (!smtpUser || !smtpPass) {
+          const outboxDir = path.join(DATA_DIR, 'outbox')
+          if (!fs.existsSync(outboxDir)) fs.mkdirSync(outboxDir, { recursive: true })
+          const outboxEntry = {
+            id: 'email_' + Date.now(),
+            to,
+            subject,
+            createdAt: new Date().toISOString(),
+            status: 'queued_no_smtp'
+          }
+          fs.writeFileSync(path.join(outboxDir, `${outboxEntry.id}.json`), JSON.stringify({ ...outboxEntry, html }, null, 2))
+          console.log(`[Email Audit] Stored to outbox: ${to} | Subject: ${subject}`)
+          return sendJson(res, 200, {
+            ok: true,
+            queued: true,
+            message: 'ایمیل در صف سیستم ثبت شد (برای ارسال مستقیم زنده، اطلاعات جیمیل یا SMTP در تنظیمات ست شود)'
+          })
+        }
+
+        if (!nodemailer) {
+          return sendJson(res, 500, { ok: false, error: 'ماژول ارسال ایمیل در سرور بارگذاری نشده است' })
+        }
+
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpSecure,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass
+          }
+        })
+
+        const info = await transporter.sendMail({
+          from: `"${fromName}" <${fromAddress}>`,
+          to,
+          subject,
+          text,
+          html: html || undefined
+        })
+
+        console.log(`[Email Audit] Dispatched to ${to} | MessageId: ${info.messageId}`)
+        return sendJson(res, 200, { ok: true, messageId: info.messageId })
+      } catch (err) {
+        console.error('[SyncServer] Email dispatch error:', err.message)
+        return sendJson(res, 500, { ok: false, error: 'خطا در ارسال ایمیل: ' + err.message })
+      }
+    })
+    return
+  }
+
+  // Test SMTP connection endpoint
+  if (req.method === 'POST' && url.pathname === '/api/email/test') {
+    let body = ''
+    req.setEncoding('utf-8')
+    req.on('data', chunk => { body += chunk })
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        if (!nodemailer) return sendJson(res, 500, { ok: false, error: 'ماژول ایمیل نصب نیست' })
+        const transporter = nodemailer.createTransport({
+          host: payload.smtpHost || 'smtp.gmail.com',
+          port: parseInt(payload.smtpPort || '465', 10),
+          secure: payload.smtpPort === '465' || payload.smtpPort === 465,
+          auth: { user: payload.smtpUser, pass: payload.smtpPass }
+        })
+        await transporter.verify()
+        return sendJson(res, 200, { ok: true, message: 'اتصال به سرور ایمیل با موفقیت تأیید شد ✓' })
+      } catch (e) {
+        return sendJson(res, 400, { ok: false, error: 'خطا در اتصال: ' + e.message })
       }
     })
     return

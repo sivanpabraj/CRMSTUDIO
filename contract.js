@@ -1166,7 +1166,13 @@ async function finalizeContract() {
   }
   localStorage.removeItem('talar_contract_draft')
   toast('قرارداد ثبت شد' + (assignedStaff.length ? ` — ${assignedStaff.length} همکار ابلاغ شد` : ''), 'success')
-  setTimeout(() => { window.location.href = 'studio-m/#contracts' }, 1200)
+  if (typeof DispatchHub !== 'undefined') {
+    setTimeout(() => {
+      DispatchHub.showContractShareModal(record)
+    }, 400)
+  } else {
+    setTimeout(() => { window.location.href = 'studio-m/#contracts' }, 1200)
+  }
 }
 
 // ساخت آبجکت قرارداد از مقادیر فرم

@@ -160,6 +160,8 @@ const CustomerPortal = {
             </div>
           </div>
 
+          ${this._renderContractAcceptanceCard(c)}
+
           ${this._renderFinancialSection(c)}
 
           ${queuePreview}
@@ -573,6 +575,197 @@ const CustomerPortal = {
     printWin.document.open()
     printWin.document.write(html)
     printWin.document.close()
+  },
+
+  _renderContractAcceptanceCard(c) {
+    const isSigned = !!(c.customerAccepted || c.signedAt || c.status === 'signed')
+    const studio = DB.get('studioInfo')?.name || AppConfig.DEFAULT_STUDIO_NAME
+    const date = c.customerAcceptedAt || c.signedAt || c.eventDate || '—'
+
+    if (isSigned) {
+      return `
+        <div class="customer-card" style="max-width:none;margin-bottom:16px;background:linear-gradient(135deg,rgba(16,185,129,0.12) 0%,rgba(20,20,24,0.95) 100%);border:1px solid rgba(16,185,129,0.35);box-shadow:0 6px 20px rgba(0,0,0,0.35)">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:36px;height:36px;border-radius:10px;background:rgba(16,185,129,0.2);display:flex;align-items:center;justify-content:center;color:#10b981;font-size:16px;font-weight:900">
+                ✓✓
+              </div>
+              <div>
+                <h2 style="font-size:14px;color:#10b981;margin:0;font-weight:800">قرارداد رسمی تایید و نهایی شد</h2>
+                <div style="font-size:11.5px;color:rgba(255,255,255,0.6);margin-top:2px">امضای الکترونیکی شما در سامانه ثبت گردیده است · تاریخ: ${Utils.escapeHtml(date)}</div>
+              </div>
+            </div>
+            <button type="button" class="portal-btn portal-btn-ghost" style="font-size:11.5px;padding:7px 14px;display:flex;align-items:center;gap:6px" onclick="CustomerPortal.openContractTermsModal('${c.id}')">
+              <i class="fas fa-file-contract"></i> مشاهده متن کامل قرارداد
+            </button>
+          </div>
+        </div>
+      `
+    }
+
+    return `
+      <div class="customer-card" style="max-width:none;margin-bottom:16px;background:linear-gradient(135deg,rgba(245,158,11,0.12) 0%,rgba(20,20,24,0.95) 100%);border:1px solid rgba(245,158,11,0.35);box-shadow:0 8px 24px rgba(0,0,0,0.4)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px">
+          <div style="font-weight:800;font-size:14px;color:#F59E0B;display:flex;align-items:center;gap:6px">
+            <i class="fas fa-file-signature"></i>
+            <span>تایید و امضای رسمی قرارداد #${Utils.escapeHtml(c.contractNum || c.id)}</span>
+          </div>
+          <span style="font-size:11px;padding:3px 8px;border-radius:6px;background:rgba(245,158,11,0.2);color:#fbbf24;font-weight:700">
+            ⏳ در انتظار تایید شما
+          </span>
+        </div>
+
+        <p style="font-size:12.5px;color:rgba(255,255,255,0.85);line-height:1.7;margin:0 0 12px">
+          قرارداد خدمات فیلمبرداری و عکاسی مراسم شما در <strong>${Utils.escapeHtml(studio)}</strong> تنظیم گردیده است. لطفاً مفاد، تعهدات و زمان‌بندی تحویل را بررسی و تایید فرمایید:
+        </p>
+
+        <div style="margin-bottom:12px">
+          <button type="button" class="portal-btn portal-btn-ghost" style="width:100%;font-size:12px;padding:8px 12px;display:flex;align-items:center;justify-content:center;gap:6px" onclick="CustomerPortal.openContractTermsModal('${c.id}')">
+            <i class="fas fa-book-open"></i> مطالعه مفاد، تعهدات کاری و زمان‌بندی تحویل
+          </button>
+        </div>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:12.5px;line-height:1.7;background:rgba(0,0,0,0.3);padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);margin-bottom:12px">
+          <input type="checkbox" id="cust-contract-agree-${c.id}" style="width:18px;height:18px;accent-color:#10b981;margin-top:2px;cursor:pointer" />
+          <span>کلیه مفاد، تعهدات کاری طرفین، زمان‌بندی تحویل راش‌ها و فیلم و شرایط مالی قرارداد را مطالعه نموده و <strong>می‌پذیرم</strong>.</span>
+        </label>
+
+        <button type="button" class="portal-btn portal-btn-primary" style="width:100%;font-size:13.5px;padding:11px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;border:none;border-radius:10px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" onclick="CustomerPortal.acceptContract('${c.id}')">
+          <i class="fas fa-check-circle"></i> تایید و امضای دیجیتال قرارداد (می‌پذیرم)
+        </button>
+      </div>
+    `
+  },
+
+  openContractTermsModal(contractId) {
+    const c = DB.find('contracts', x => x.id === contractId) || this.state.contract
+    if (!c) return
+    const studio = DB.get('studioInfo')?.name || AppConfig.DEFAULT_STUDIO_NAME
+    const couple = c.couple || `${c.bride || ''} و ${c.groom || ''}`.trim() || 'عروس و داماد'
+    const total = Number(c.total || c.finalAmount || 0)
+    const deposit = Number(c.deposit || 0)
+    const remaining = Math.max(0, total - deposit)
+    const modalId = 'cust-contract-terms-modal'
+
+    document.getElementById(modalId)?.remove()
+    const modal = document.createElement('div')
+    modal.id = modalId
+    modal.style.cssText = `
+      position:fixed;top:0;left:0;right:0;bottom:0;
+      background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);
+      z-index:99999;display:flex;align-items:center;justify-content:center;
+      padding:16px;direction:rtl;font-family:Vazirmatn,sans-serif;
+    `
+
+    modal.innerHTML = `
+      <div style="background:#131317;border:1px solid rgba(245,158,11,0.3);border-radius:18px;max-width:640px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,0.7);overflow:hidden;color:#fff">
+        <div style="padding:16px 20px;background:linear-gradient(135deg,rgba(245,158,11,0.15) 0%,rgba(20,20,24,0.9) 100%);border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:800;font-size:15px;color:#F59E0B;display:flex;align-items:center;gap:8px">
+            <i class="fas fa-file-contract"></i>
+            <span>مفاد و تعهدات قرارداد رسمی — ${Utils.escapeHtml(studio)}</span>
+          </div>
+          <button type="button" onclick="document.getElementById('${modalId}').remove()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:20px;cursor:pointer">&times;</button>
+        </div>
+
+        <div style="padding:20px;overflow-y:auto;flex:1;font-size:12.5px;line-height:1.8;color:rgba(255,255,255,0.85)">
+          <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div>طرف اول: <strong>${Utils.escapeHtml(studio)}</strong></div>
+            <div>طرف دوم: <strong>${Utils.escapeHtml(couple)}</strong></div>
+            <div>تاریخ مراسم: <strong dir="ltr">${Utils.escapeHtml(c.eventDate || c.date || '—')}</strong></div>
+            <div>مبلغ کل: <strong>${Number(total).toLocaleString('fa-IR')} تومان</strong></div>
+            <div>بیعانه پرداختی: <strong style="color:#10b981">${Number(deposit).toLocaleString('fa-IR')} تومان</strong></div>
+            <div>مانده حساب: <strong style="color:#F59E0B">${Number(remaining).toLocaleString('fa-IR')} تومان</strong></div>
+          </div>
+
+          <h3 style="color:#F59E0B;font-size:13px;margin:14px 0 6px">ماده ۱: تعهدات تصویربرداری و استاندارد سینمایی</h3>
+          <p style="margin:0 0 10px">
+            استودیو متعهد می‌گردد پوشش کامل مراسم را توسط کادر مجرب، مجهز به دوربین‌های سینمایی حرفه‌ای با وضوح 4K 10-BIT، سیستم‌های لرزش‌گیر پیشرفته (Ronin) و تجهیزات ضبط صدای حرفه‌ای به انجام رساند.
+          </p>
+
+          <h3 style="color:#F59E0B;font-size:13px;margin:14px 0 6px">ماده ۲: زمان‌بندی تدوین و تحویل پروژه‌ها</h3>
+          <ul style="margin:0 0 10px;padding-right:20px">
+            <li><strong>تیزر کوتاه:</strong> حداکثر ظرف ۱۴ الی ۲۱ روز کاری پس از تاریخ برگزاری مراسم.</li>
+            <li><strong>فیلم کامل و آلبوم ژورنال ایتالیایی:</strong> ظرف ۴۵ الی ۶۰ روز کاری پس از انتخاب نهایی عکس‌ها توسط مشتری.</li>
+          </ul>
+
+          <h3 style="color:#F59E0B;font-size:13px;margin:14px 0 6px">ماده ۳: حفظ حریم خصوصی و محرمانگی راش‌ها</h3>
+          <p style="margin:0 0 10px">
+            کلیه تصاویر، فیلم‌ها و فایل‌های خام (راش‌ها) متعلق به طرفین بوده و استودیو متعهد به حفظ محرمانگی کامل بوده و بدون اجازه کتبی و رسمی طرف دوم حق انتشار هیچ‌گونه تصویری را نخواهد داشت.
+          </p>
+
+          <h3 style="color:#F59E0B;font-size:13px;margin:14px 0 6px">ماده ۴: شرایط مالی و تسویه‌حساب</h3>
+          <p style="margin:0 0 10px">
+            مبلغ بیعانه جهت رزرو قطعی تاریخ مراسم دریافت شده و مابقی مبالغ طبق زمان‌بندی مندرج در قرارداد تا پیش از تحویل خروجی نهایی تسویه خواهد شد.
+          </p>
+        </div>
+
+        <div style="padding:14px 20px;background:rgba(0,0,0,0.3);border-top:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;color:rgba(255,255,255,0.5)">امضای دیجیتال دارای اعتبار رسمی در اتوماسیون است</span>
+          <button type="button" class="portal-btn" onclick="document.getElementById('${modalId}').remove()" style="background:rgba(255,255,255,0.08);color:#fff;border:none;padding:7px 18px;border-radius:8px;font-size:12px;cursor:pointer">
+            متوجه شدم
+          </button>
+        </div>
+      </div>
+    `
+    document.body.appendChild(modal)
+  },
+
+  async acceptContract(contractId) {
+    const agreeBox = document.getElementById(`cust-contract-agree-${contractId}`)
+    if (!agreeBox?.checked) {
+      if (typeof Utils !== 'undefined' && Utils.toast) {
+        Utils.toast('لطفاً تیک «مطالعه نموده و می‌پذیرم» را فعال کنید', 'warning')
+      } else {
+        alert('لطفاً تیک مطالعه و پذیرش شرایط قرارداد را فعال نمایید.')
+      }
+      return
+    }
+
+    const c = DB.find('contracts', x => x.id === contractId) || this.state.contract
+    if (!c) return
+
+    const nowJalali = typeof Utils !== 'undefined' ? Utils.todayJalali() : new Date().toLocaleDateString('fa-IR')
+    const nowIso = new Date().toISOString()
+
+    const patch = {
+      customerAccepted: true,
+      customerAcceptedAt: nowJalali,
+      customerAcceptedIso: nowIso,
+      status: 'signed'
+    }
+
+    DB.update('contracts', c.id, patch)
+
+    // ثبت پیام خودکار در صندوق پیام مشتری و مدیر
+    if (typeof InboxShared !== 'undefined') {
+      InboxShared.appendThread(c.id, {
+        author: 'customer',
+        authorName: c.couple || `${c.bride || ''} و ${c.groom || ''}`.trim() || 'مشتری',
+        authorRole: 'مشتری (عروس و داماد)',
+        text: `✓ قرارداد رسمی شماره #${c.contractNum || c.id} توسط مشتری مطالعه و امضای دیجیتال (می‌پذیرم) گردید.`,
+        action: 'contract_accepted'
+      })
+    }
+
+    // پخش صدای شادباش و تایید
+    if (typeof AudioNotifier !== 'undefined' && AudioNotifier.playContract) {
+      AudioNotifier.playContract()
+    }
+
+    await DB.flush?.()
+
+    // ارسال بلادرنگ به سرور
+    if (typeof ServerSync !== 'undefined' && ServerSync.pushNow) {
+      ServerSync.pushNow().catch(() => {})
+    }
+
+    if (typeof Utils !== 'undefined' && Utils.toast) {
+      Utils.toast('تأیید و امضای دیجیتال قرارداد با موفقیت ثبت شد ✓✓', 'success')
+    }
+
+    // به‌روزرسانی نمای پورتال
+    this.state.contract = { ...c, ...patch }
+    this.renderDashboard()
   }
 }
 
