@@ -443,9 +443,14 @@ const SMSettings = {
           <div style="display:flex;align-items:center;gap:8px;font-weight:800;color:#60a5fa;margin-bottom:8px">
             <i class="fas fa-robot"></i> ۱. تنظیمات ربات رسمی بله (Bale Bot — رایگان، قانونی و بدون فیلتر در ایران)
           </div>
-          <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0 0 12px;line-height:1.6">
-            کافیست در اپلیکیشن بله به <code dir="ltr">@BotFather</code> پیام دهید، یک بازو با نام استودیو خود بسازید و توکن آن را اینجا وارد فرمایید:
-          </p>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+            <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0;line-height:1.6">
+              کافیست در اپلیکیشن بله به <code dir="ltr">@BotFather</code> پیام دهید، یک بازو با نام استودیو خود بسازید و توکن آن را اینجا وارد فرمایید:
+            </p>
+            <a href="bale_bot_guide.html" target="_blank" class="sm-btn sm-btn-xs" style="background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-weight:700">
+              <i class="fas fa-play-circle"></i> مشاهده شبیه‌ساز و راهنمای تصویری گام‌به‌گام
+            </a>
+          </div>
           ${SMUI.formField('توکن ربات بله (Bot Token)', 'set-bale-token', { value: baleToken, dir: 'ltr', placeholder: 'مثلاً: 123456789:ABCdefGhIjkLmNoPqRsTuvWxYz' })}
           ${SMUI.formField('نام کاربری ربات بله (Username)', 'set-bale-user', { value: baleUser, dir: 'ltr', placeholder: 'مثلاً: mandani_studio_bot' })}
         </div>

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>راهنمای تصویری ساخت ربات بله — استودیو ماندنی</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .pulse-ring { animation: pulse-ring 2s infinite; }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] p-4 font-sans select-none antialiased">
+  <div class="max-w-2xl mx-auto bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
+    <!-- Header -->
+    <div class="bg-gradient-to-l from-emerald-600 via-teal-600 to-cyan-700 p-5 text-white flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center text-2xl shadow-inner">
+          🤖
+        </div>
+        <div>
+          <h1 class="text-base font-extrabold m-0">راهنمای تصویری و زنده ساخت بازوی بله</h1>
+          <p class="text-xs text-white/80 m-0 mt-0.5">آموزش گام‌به‌گام دریافت توکن در ۳۰ ثانیه (ویژه استودیو ماندنی)</p>
+        </div>
+      </div>
+      <span class="text-xs bg-white/20 px-3 py-1 rounded-full font-bold">نسخه تعاملی</span>
+    </div>
+
+    <!-- Stepper Navigation -->
+    <div class="grid grid-cols-4 border-b border-[var(--border)] bg-[var(--sidebar)] text-center text-xs">
+      <button id="step-btn-1" onclick="goToStep(1)" class="py-3 px-2 font-bold border-b-2 border-emerald-500 text-emerald-500 transition-colors">
+        ۱. جستجوی بات‌فادر
+      </button>
+      <button id="step-btn-2" onclick="goToStep(2)" class="py-3 px-2 font-bold text-[var(--muted-foreground)] transition-colors">
+        ۲. کلیک روی ساخت بازو
+      </button>
+      <button id="step-btn-3" onclick="goToStep(3)" class="py-3 px-2 font-bold text-[var(--muted-foreground)] transition-colors">
+        ۳. نام و شناسه
+      </button>
+      <button id="step-btn-4" onclick="goToStep(4)" class="py-3 px-2 font-bold text-[var(--muted-foreground)] transition-colors">
+        ۴. کپی توکن
+      </button>
+    </div>
+
+    <!-- Interactive Simulated Screen -->
+    <div class="p-6">
+      <!-- Step 1 -->
+      <div id="step-1" class="step-pane">
+        <div class="flex items-start gap-4 mb-4">
+          <div class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center font-bold text-sm shrink-0">۱</div>
+          <div>
+            <h2 class="text-sm font-bold m-0 text-[var(--foreground)]">جستجوی بات‌فادر در پیام‌رسان بله</h2>
+            <p class="text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed">
+              اپلیکیشن بله را باز کنید، در قسمت جستجوی بالای صفحه عبارت <span class="bg-[var(--border)] px-2 py-0.5 rounded font-mono text-emerald-400 font-bold" dir="ltr">@BotFather</span> را جستجو کرده و وارد چت آن شوید.
+            </p>
+          </div>
+        </div>
+        <!-- Bale Mockup UI -->
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 shadow-inner text-sm space-y-3">
+          <div class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+            <span class="text-slate-400">🔍</span>
+            <span class="font-mono text-emerald-400 font-semibold" dir="ltr">@BotFather</span>
+            <span class="text-xs text-slate-500 mr-auto">بازوی رسمی ساخت ربات</span>
+          </div>
+          <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg">🤖</div>
+              <div>
+                <div class="font-bold text-slate-200">بات‌فادر (BotFather)</div>
+                <div class="text-xs text-slate-400">ساخت و مدیریت بازوهای بله</div>
+              </div>
+            </div>
+            <button onclick="goToStep(2)" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold transition">
+              ورود به چت ➔
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div id="step-2" class="step-pane hidden">
+        <div class="flex items-start gap-4 mb-4">
+          <div class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center font-bold text-sm shrink-0">۲</div>
+          <div>
+            <h2 class="text-sm font-bold m-0 text-[var(--foreground)]">کلیک روی دکمه «ساخت بازوی جدید»</h2>
+            <p class="text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed">
+              در پایین صفحه چت بات‌فادر، ۴ دکمه قرار دارد (دقیقاً مانند تصویری که فرستادید). کافیست روی دکمهٔ اول کلیک کنید:
+            </p>
+          </div>
+        </div>
+        <!-- Mockup Buttons -->
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-5 shadow-inner">
+          <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-xs text-slate-300 mb-4 leading-relaxed">
+            👋 سلام، در بات‌فادر می‌توانید بازوی جدید بسازید و آن را به سادگی مدیریت کنید...
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <button onclick="goToStep(3)" class="pulse-ring bg-emerald-600 hover:bg-emerald-500 text-white py-3 px-4 rounded-xl font-extrabold text-xs shadow-lg transition flex items-center justify-center gap-2 border-2 border-emerald-400">
+              <span>🔹</span> ساخت بازوی جدید
+            </button>
+            <button class="bg-slate-900 text-slate-400 py-3 px-4 rounded-xl font-bold text-xs border border-slate-800 opacity-60">
+              بازوهای من
+            </button>
+            <button class="bg-slate-900 text-slate-400 py-3 px-4 rounded-xl font-bold text-xs border border-slate-800 opacity-60">
+              ارتقا بازوها به سطح ۲
+            </button>
+            <button class="bg-slate-900 text-slate-400 py-3 px-4 rounded-xl font-bold text-xs border border-slate-800 opacity-60">
+              گروه و بازو
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div id="step-3" class="step-pane hidden">
+        <div class="flex items-start gap-4 mb-4">
+          <div class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center font-bold text-sm shrink-0">۳</div>
+          <div>
+            <h2 class="text-sm font-bold m-0 text-[var(--foreground)]">ارسال نام فارسی و آیدی انگلیسی</h2>
+            <p class="text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed">
+              بات‌فادر به نوبت از شما ۲ چیز می‌خواهد: اول نام نمایشی و دوم آیدی انگلیسی ربات.
+            </p>
+          </div>
+        </div>
+
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 shadow-inner space-y-3 text-xs">
+          <!-- Bot query 1 -->
+          <div class="flex gap-2">
+            <div class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 text-xs">🤖</div>
+            <div class="bg-slate-900 text-slate-200 p-2.5 rounded-lg border border-slate-800 max-w-[85%]">
+              لطفاً یک نام برای بازوی خود انتخاب کنید (مثلاً: استودیو ماندنی):
+            </div>
+          </div>
+          <!-- User reply 1 -->
+          <div class="flex justify-end">
+            <div class="bg-emerald-600 text-white p-2.5 rounded-lg font-bold max-w-[85%]">
+              استودیو فیلم و عکس ماندنی
+            </div>
+          </div>
+          <!-- Bot query 2 -->
+          <div class="flex gap-2">
+            <div class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 text-xs">🤖</div>
+            <div class="bg-slate-900 text-slate-200 p-2.5 rounded-lg border border-slate-800 max-w-[85%]">
+              عالی است! حالا یک شناسه (آیدی کاربری) انگلیسی انتخاب کنید که به <span class="font-mono text-emerald-400 font-bold" dir="ltr">bot</span> ختم شود:
+            </div>
+          </div>
+          <!-- User reply 2 -->
+          <div class="flex justify-end">
+            <div class="bg-emerald-600 text-white p-2.5 rounded-lg font-bold font-mono max-w-[85%]" dir="ltr">
+              studiomandani_bot
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 text-center">
+          <button onclick="goToStep(4)" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-5 py-2 rounded-lg font-bold shadow transition">
+            مشاهده پیام حاوی توکن (گام نهایی) ➔
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div id="step-4" class="step-pane hidden">
+        <div class="flex items-start gap-4 mb-4">
+          <div class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center font-bold text-sm shrink-0">۴</div>
+          <div>
+            <h2 class="text-sm font-bold m-0 text-[var(--foreground)]">دریافت و کپی توکن (Token)</h2>
+            <p class="text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed">
+              بات‌فادر پیامی مشابه زیر ارسال می‌کند. کافیست کد توکن را کپی کرده و در پنل استودیو یا در چت بفرستید:
+            </p>
+          </div>
+        </div>
+
+        <div class="bg-slate-950 border border-emerald-500/30 rounded-xl p-4 shadow-inner space-y-3 text-xs">
+          <div class="flex gap-2">
+            <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 font-bold">🤖</div>
+            <div class="bg-slate-900 text-slate-200 p-3.5 rounded-xl border border-slate-800 leading-relaxed">
+              تبریک! بازوی شما با نام <strong>استودیو فیلم و عکس ماندنی</strong> ساخته شد.<br>
+              شناسه بازو: <span class="text-emerald-400 font-mono font-bold" dir="ltr">@studiomandani_bot</span><br><br>
+              توکن اختصاصی شما جهت اتصال به سرور:<br>
+              <div class="bg-black/60 border border-emerald-500/40 p-2.5 rounded-lg mt-2 font-mono text-emerald-400 font-bold select-all flex items-center justify-between" dir="ltr">
+                <span id="sample-token">1592634890:AAH_sample_mandani_token_XYZ789</span>
+                <button onclick="copySampleToken()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1 rounded font-sans transition">
+                  کپی
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 flex items-center gap-2">
+          <span>✓</span>
+          <span>این توکن را در چت بفرستید تا فوراً روی سرور برای شما ست و متصل شود.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer Controls -->
+    <div class="bg-[var(--sidebar)] border-t border-[var(--border)] p-4 flex items-center justify-between">
+      <button id="prev-btn" onclick="prevStep()" class="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-bold transition disabled:opacity-30" disabled>
+        ← مرحله قبل
+      </button>
+      <div class="flex gap-1.5" id="dots-wrap">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-[var(--border)]"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-[var(--border)]"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-[var(--border)]"></span>
+      </div>
+      <button id="next-btn" onclick="nextStep()" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-lg font-bold transition">
+        مرحله بعد →
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let currentStep = 1;
+
+    function goToStep(n) {
+      currentStep = n;
+      for (let i = 1; i <= 4; i++) {
+        const pane = document.getElementById(`step-${i}`);
+        const btn = document.getElementById(`step-btn-${i}`);
+        if (pane) pane.classList.toggle('hidden', i !== n);
+        if (btn) {
+          if (i === n) {
+            btn.className = 'py-3 px-2 font-bold border-b-2 border-emerald-500 text-emerald-500 transition-colors';
+          } else {
+            btn.className = 'py-3 px-2 font-bold text-[var(--muted-foreground)] transition-colors';
+          }
+        }
+      }
+
+      document.getElementById('prev-btn').disabled = n === 1;
+      const nextBtn = document.getElementById('next-btn');
+      if (n === 4) {
+        nextBtn.textContent = 'شروع مجدد ↺';
+        nextBtn.onclick = () => goToStep(1);
+      } else {
+        nextBtn.textContent = 'مرحله بعد →';
+        nextBtn.onclick = nextStep;
+      }
+
+      // Update dots
+      const dots = document.querySelectorAll('#dots-wrap span');
+      dots.forEach((dot, idx) => {
+        dot.className = (idx + 1 === n) ? 'w-2.5 h-2.5 rounded-full bg-emerald-500' : 'w-2.5 h-2.5 rounded-full bg-[var(--border)]';
+      });
+    }
+
+    function nextStep() {
+      if (currentStep < 4) goToStep(currentStep + 1);
+    }
+
+    function prevStep() {
+      if (currentStep > 1) goToStep(currentStep - 1);
+    }
+
+    function copySampleToken() {
+      const text = document.getElementById('sample-token').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('نمونه توکن کپی شد!');
+      });
+    }
+  </script>
+</body>
+</html>
