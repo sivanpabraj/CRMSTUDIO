@@ -147,21 +147,26 @@ const PortalInvite = {
     }
   },
 
-  async sendInvite(userId, _tempPassword) {
+  async sendInvite(userId, _tempPassword, forceNew = false) {
     const user = DB.find('users', u => u.id === userId)
     if (!user?.phone) return { ok: false, error: 'کاربر یافت نشد' }
 
-    const code = Utils.generateOtp6()
+    // اگر کد تأیید قبلی هنوز تأیید نشده و معتبر است، همان را نگه دار تا کد دست پرسنل باطل نشود
+    const existingCode = (!forceNew && user.portalOtp && !user.portalOtp.verified && user.portalOtp.code)
+      ? String(user.portalOtp.code).trim()
+      : ''
+    const code = existingCode || Utils.generateOtp6()
     const studio = DB.get('studioInfo')?.name || AppConfig.DEFAULT_STUDIO_NAME
     const url = this.portalUrl(user)
     const label = this.portalLabel(user)
-    const otpStored = await this._hashOtpCode(code)
+    const otpStored = (existingCode && user.portalOtp?.codeHash && user.portalOtp?.codeSalt)
+      ? { codeHash: user.portalOtp.codeHash, codeSalt: user.portalOtp.codeSalt }
+      : await this._hashOtpCode(code)
 
     await SecureDB.update('users', userId, {
       portalStatus: 'pending_verify',
       portalOtp: {
         ...otpStored,
-        // نگه داشتن کد خام فقط برای نمایش به مدیر در همان لحظه (در UI، نه در sync ابر)
         code,
         sentAt: new Date().toISOString(),
         verified: false,

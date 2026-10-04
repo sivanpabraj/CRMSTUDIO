@@ -626,6 +626,24 @@ const Portal = {
                 contractId: j.contractId,
                 eventDate: j.eventDate
               }
+              if (j.studioId) {
+                try {
+                  localStorage.setItem('crm_studio_id', j.studioId)
+                  Utils?.storage?.set?.('talar_studio_id', j.studioId)
+                  if (typeof window !== 'undefined' && window.ServerSync?.setStudioId) {
+                    window.ServerSync.setStudioId(j.studioId)
+                  }
+                  if (typeof DB !== 'undefined' && (!DB.get('users') || !DB.get('users').length)) {
+                    fetch(`/api/sync/pull?studioId=${encodeURIComponent(j.studioId)}&rev=0`, { cache: 'no-store' })
+                      .then(r => r.json())
+                      .then(async p => {
+                        if (p?.data && typeof DB.importJSON === 'function') {
+                          await DB.importJSON(JSON.stringify(p.data))
+                        }
+                      }).catch(() => {})
+                  }
+                } catch { /* */ }
+              }
             }
           }
         } catch { /* ignore */ }
@@ -678,6 +696,8 @@ const Portal = {
       `
       chip.style.display = 'flex'
       if (btnLabel) btnLabel.textContent = 'ورود به پورتال پرسنل'
+      const pwInput = document.getElementById('login-password')
+      if (pwInput) pwInput.placeholder = 'کد ورود ۶ رقمی دریافتی از مدیر یا رمز عبور'
       return
     }
 
@@ -850,7 +870,48 @@ const Portal = {
       return
     }
 
-    const result = await UnifiedLogin.loginWithPassword(identifier, password)
+    let result = await UnifiedLogin.loginWithPassword(identifier, password)
+
+    // Fallback: If client-side DB has no user or password was invite code, verify via server-authoritative API
+    if (!result.ok) {
+      try {
+        const srvRes = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier, password })
+        })
+        if (srvRes.ok) {
+          const srvJson = await srvRes.json()
+          if (srvJson.ok && srvJson.user) {
+            if (srvJson.fullData && typeof DB !== 'undefined' && DB.importJSON) {
+              await DB.importJSON(JSON.stringify(srvJson.fullData))
+            }
+            if (srvJson.tenantKey) {
+              localStorage.setItem('crm_studio_id', srvJson.tenantKey)
+              Utils?.storage?.set?.('talar_studio_id', srvJson.tenantKey)
+              if (typeof window !== 'undefined' && window.ServerSync?.setStudioId) {
+                window.ServerSync.setStudioId(srvJson.tenantKey)
+              }
+            }
+            const csrf = Auth._regenerateCsrf ? Auth._regenerateCsrf() : 'csrf_' + Date.now()
+            await Auth._sessionSetSigned?.(Auth.SESSION_KEY, {
+              userId: srvJson.user.id,
+              loginAt: Date.now(),
+              expiresAt: Date.now() + Auth.SESSION_TIMEOUT_MS,
+              csrf
+            })
+            try { sessionStorage.setItem(Auth.CSRF_KEY, csrf) } catch { /* */ }
+            DB.log?.('login', srvJson.user.name)
+            result = {
+              ok: true,
+              user: srvJson.user,
+              url: srvJson.user.portalType === 'staff' ? 'index.html?view=portal' : (Access?.canAccessStudioM?.(srvJson.user) ? 'studio-m/' : 'index.html?view=portal')
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
     this._setBtn(false, '<i class="fas fa-sign-in-alt"></i> ورود به پنل استودیو')
 
     if (!result.ok) {
@@ -899,6 +960,23 @@ const Portal = {
               contractId: j.contractId,
               eventDate: j.eventDate
             }
+            if (j.studioId) {
+              try {
+                localStorage.setItem('crm_studio_id', j.studioId)
+                Utils?.storage?.set?.('talar_studio_id', j.studioId)
+                if (typeof window !== 'undefined' && window.ServerSync?.setStudioId) {
+                  window.ServerSync.setStudioId(j.studioId)
+                }
+                const pRes = await fetch(`/api/sync/pull?studioId=${encodeURIComponent(j.studioId)}&rev=0`, { cache: 'no-store' })
+                if (pRes.ok) {
+                  const p = await pRes.json()
+                  if (p?.data && typeof DB.importJSON === 'function') {
+                    await DB.importJSON(JSON.stringify(p.data))
+                    resolved = UnifiedLogin.resolvePhone(phone) || resolved
+                  }
+                }
+              } catch { /* */ }
+            }
           }
         }
       } catch { /* ignore */ }
@@ -917,15 +995,56 @@ const Portal = {
 
   async verifyOtp() {
     this._clearErr()
-    const phone = this.state._phone || UnifiedLogin.getPending()?.phone
+    const phone = this.state._phone || UnifiedLogin.getPending()?.phone || Utils.normalizePhone(document.getElementById('login-identifier')?.value)
     const code = document.getElementById('login-otp')?.value
     if (!phone) { this.backToLogin(); return }
 
     this._setBtn(true, '')
-    const result = await UnifiedLogin.verifyOtp(phone, code)
+    let result = await UnifiedLogin.verifyOtp(phone, code)
+
+    // Fallback: If local verify failed or code wasn't matching local pending, check server-authoritative verify
+    if (!result.ok) {
+      try {
+        const srvRes = await fetch('/api/auth/verify-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, code })
+        })
+        if (srvRes.ok) {
+          const srvJson = await srvRes.json()
+          if (srvJson.ok && srvJson.user) {
+            if (srvJson.fullData && typeof DB !== 'undefined' && DB.importJSON) {
+              await DB.importJSON(JSON.stringify(srvJson.fullData))
+            }
+            if (srvJson.tenantKey) {
+              localStorage.setItem('crm_studio_id', srvJson.tenantKey)
+              Utils?.storage?.set?.('talar_studio_id', srvJson.tenantKey)
+              if (typeof window !== 'undefined' && window.ServerSync?.setStudioId) {
+                window.ServerSync.setStudioId(srvJson.tenantKey)
+              }
+            }
+            const csrf = Auth._regenerateCsrf ? Auth._regenerateCsrf() : 'csrf_' + Date.now()
+            await Auth._sessionSetSigned?.(Auth.SESSION_KEY, {
+              userId: srvJson.user.id,
+              loginAt: Date.now(),
+              expiresAt: Date.now() + Auth.SESSION_TIMEOUT_MS,
+              csrf
+            })
+            try { sessionStorage.setItem(Auth.CSRF_KEY, csrf) } catch { /* */ }
+            DB.log?.('login', srvJson.user.name)
+            result = {
+              ok: true,
+              user: srvJson.user,
+              url: srvJson.user.portalType === 'staff' ? 'index.html?view=portal' : (Access?.canAccessStudioM?.(srvJson.user) ? 'studio-m/' : 'index.html?view=portal')
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
     this._setBtn(false, '<i class="fas fa-check"></i> تأیید و ورود')
 
-    if (!result.ok) { this._err(result.error || 'خطا'); return }
+    if (!result.ok) { this._err(result.error || 'کد وارد‌شده نادرست است'); return }
 
     if (result.next === 'consultation') {
       this.state.step = 'consultation'

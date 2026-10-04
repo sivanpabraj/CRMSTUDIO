@@ -140,6 +140,36 @@ function maskPhone(p) {
   return p.slice(0, 4) + '***' + p.slice(-4)
 }
 
+function verifyPasswordSync(password, storedHash, salt) {
+  if (!password || !storedHash) return false
+  const cleanPw = String(password).trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+  if (storedHash.startsWith('pbkdf2$')) {
+    const [, iterStr, expectedHash] = storedHash.split('$')
+    const iterations = parseInt(iterStr, 10)
+    const saltBytes = Buffer.from(salt, 'hex')
+    const derived = crypto.pbkdf2Sync(cleanPw, saltBytes, iterations, 32, 'sha256').toString('hex')
+    return derived === expectedHash
+  }
+  if (/^[a-f0-9]{64}$/i.test(storedHash)) {
+    const hash = crypto.createHash('sha256').update(String(salt) + cleanPw).digest('hex')
+    return hash === storedHash
+  }
+  return false
+}
+
+function verifyOtpSync(code, portalOtp) {
+  if (!code || !portalOtp) return false
+  const cleanCode = String(code).trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+  if (portalOtp.code && cleanCode === String(portalOtp.code).trim()) {
+    return true
+  }
+  if (portalOtp.codeHash && portalOtp.codeSalt) {
+    const hash = crypto.createHash('sha256').update(String(portalOtp.codeSalt) + cleanCode).digest('hex')
+    return hash === portalOtp.codeHash
+  }
+  return false
+}
+
 /**
  * Scans tenant databases and returns SAFE sanitized metadata.
  * NEVER returns raw database, passwords, or unrelated tenant records.
@@ -443,6 +473,187 @@ const server = http.createServer((req, res) => {
       contractId: match.contractSummary?.id || null,
       eventDate: match.contractSummary?.eventDate || null
     })
+  }
+
+  // Server-Authoritative Login (Password or 6-digit Invite Code)
+  if (req.method === 'POST' && url.pathname === '/api/auth/login') {
+    const check = authLimiter.check(clientIp)
+    if (!check.allowed) {
+      return sendJson(res, 429, { ok: false, error: `تعداد درخواست بیش از حد مجاز. لطفاً ${check.retryAfterSec} ثانیه دیگر تلاش کنید.` })
+    }
+
+    let body = ''
+    req.setEncoding('utf-8')
+    req.on('data', chunk => {
+      body += chunk
+      if (body.length > 32 * 1024) req.destroy()
+    })
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const rawId = String(payload.identifier || payload.phone || '').trim()
+        const rawPw = String(payload.password || payload.code || '').trim()
+        const phone = normalizePhone(rawId)
+        const isEmail = rawId.includes('@')
+        const email = isEmail ? rawId.toLowerCase() : ''
+
+        if (!rawId || !rawPw) {
+          return sendJson(res, 400, { ok: false, error: 'شماره تماس/ایمیل و رمز عبور یا کد ورود الزامی است' })
+        }
+
+        if (!fs.existsSync(TENANTS_DIR)) {
+          return sendJson(res, 404, { ok: false, error: 'پایگاه داده یافت نشد' })
+        }
+
+        const files = fs.readdirSync(TENANTS_DIR)
+        for (const f of files) {
+          if (f.endsWith('.json') && !f.endsWith('.meta.json')) {
+            const filePath = path.join(TENANTS_DIR, f)
+            try {
+              const content = fs.readFileSync(filePath, 'utf-8')
+              const data = JSON.parse(content)
+              const users = Array.isArray(data.users) ? data.users : []
+
+              const userIndex = users.findIndex(u =>
+                (phone && u.phone && normalizePhone(u.phone) === phone) ||
+                (isEmail && u.email && u.email.toLowerCase() === email)
+              )
+
+              if (userIndex !== -1) {
+                const user = users[userIndex]
+                const tenantKey = f.replace(/\.json$/, '')
+
+                let match = false
+                let usedOtp = false
+
+                if (user.password && user.salt) {
+                  try {
+                    match = verifyPasswordSync(rawPw, user.password, user.salt)
+                  } catch { /* ignore */ }
+                }
+
+                if (!match && user.portalOtp) {
+                  usedOtp = verifyOtpSync(rawPw, user.portalOtp)
+                  if (usedOtp) match = true
+                }
+
+                if (match) {
+                  if (usedOtp) {
+                    user.portalStatus = 'active'
+                    user.portalOtp = {
+                      ...(user.portalOtp || {}),
+                      verified: true,
+                      verifiedAt: new Date().toISOString(),
+                      verifiedVia: 'server_auth_login'
+                    }
+                    data.users[userIndex] = user
+                    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+                    const meta = readTenantMeta(tenantKey)
+                    writeTenantMeta(tenantKey, meta.revision + 1, new Date().toISOString(), meta.syncToken)
+                    broadcastTenantUpdate(tenantKey, meta.revision + 1, new Date().toISOString())
+                  }
+
+                  const { password: _p, salt: _s, ...safeUser } = user
+                  return sendJson(res, 200, {
+                    ok: true,
+                    user: safeUser,
+                    tenantKey,
+                    studioInfo: data.studioInfo || {},
+                    fullData: data
+                  })
+                } else {
+                  return sendJson(res, 401, { ok: false, error: 'رمز عبور یا کد ورود نادرست است' })
+                }
+              }
+            } catch { /* skip corrupted file */ }
+          }
+        }
+
+        return sendJson(res, 404, { ok: false, error: 'حسابی با این شماره موبایل یا ایمیل یافت نشد' })
+      } catch (err) {
+        return sendJson(res, 400, { ok: false, error: err.message })
+      }
+    })
+    return
+  }
+
+  // Server-Authoritative Invite Code / OTP Verification
+  if (req.method === 'POST' && url.pathname === '/api/auth/verify-code') {
+    const check = authLimiter.check(clientIp)
+    if (!check.allowed) {
+      return sendJson(res, 429, { ok: false, error: `تعداد درخواست بیش از حد مجاز. لطفاً ${check.retryAfterSec} ثانیه دیگر تلاش کنید.` })
+    }
+
+    let body = ''
+    req.setEncoding('utf-8')
+    req.on('data', chunk => {
+      body += chunk
+      if (body.length > 32 * 1024) req.destroy()
+    })
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const phone = normalizePhone(payload.phone || payload.identifier || '')
+        const code = String(payload.code || '').trim()
+
+        if (!phone || !code) {
+          return sendJson(res, 400, { ok: false, error: 'شماره تماس و کد ۶ رقمی الزامی است' })
+        }
+
+        if (!fs.existsSync(TENANTS_DIR)) {
+          return sendJson(res, 404, { ok: false, error: 'پایگاه داده یافت نشد' })
+        }
+
+        const files = fs.readdirSync(TENANTS_DIR)
+        for (const f of files) {
+          if (f.endsWith('.json') && !f.endsWith('.meta.json')) {
+            const filePath = path.join(TENANTS_DIR, f)
+            try {
+              const content = fs.readFileSync(filePath, 'utf-8')
+              const data = JSON.parse(content)
+              const users = Array.isArray(data.users) ? data.users : []
+
+              const userIndex = users.findIndex(u => u.phone && normalizePhone(u.phone) === phone)
+              if (userIndex !== -1) {
+                const user = users[userIndex]
+                const tenantKey = f.replace(/\.json$/, '')
+
+                const ok = verifyOtpSync(code, user.portalOtp)
+                if (ok) {
+                  user.portalStatus = 'active'
+                  user.portalOtp = {
+                    ...(user.portalOtp || {}),
+                    verified: true,
+                    verifiedAt: new Date().toISOString(),
+                    verifiedVia: 'server_auth_verify_code'
+                  }
+                  data.users[userIndex] = user
+                  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+                  const meta = readTenantMeta(tenantKey)
+                  writeTenantMeta(tenantKey, meta.revision + 1, new Date().toISOString(), meta.syncToken)
+                  broadcastTenantUpdate(tenantKey, meta.revision + 1, new Date().toISOString())
+
+                  const { password: _p, salt: _s, ...safeUser } = user
+                  return sendJson(res, 200, {
+                    ok: true,
+                    user: safeUser,
+                    tenantKey,
+                    studioInfo: data.studioInfo || {},
+                    fullData: data
+                  })
+                } else {
+                  return sendJson(res, 401, { ok: false, error: 'کد وارد‌شده نادرست است' })
+                }
+              }
+            } catch { /* skip */ }
+          }
+        }
+        return sendJson(res, 404, { ok: false, error: 'کاربر یافت نشد' })
+      } catch (err) {
+        return sendJson(res, 400, { ok: false, error: err.message })
+      }
+    })
+    return
   }
 
   // Scoped Customer Portal Data

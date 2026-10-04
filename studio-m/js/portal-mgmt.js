@@ -162,7 +162,7 @@ const SMPortalMgmt = {
         <div style="font-size:.75rem;color:var(--sm-text-muted)">کد ورود (۶ رقمی)</div>
         <div dir="ltr" style="font-size:2rem;font-weight:800;letter-spacing:6px;margin-top:6px">${SM.esc(code)}</div>
       </div>
-      <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0">کاربر: صفحه ورود → تب پیامک → همین موبایل → همین کد</p>`, {
+      <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0">روش ورود: در صفحه ورود شماره موبایل را وارد نموده و این کد ۶ رقمی را در کادر رمز عبور (یا بخش پیامک) وارد فرمایید.</p>`, {
       width: 420,
       saveLabel: 'کپی کد',
       onSave: () => {

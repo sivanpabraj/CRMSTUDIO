@@ -181,31 +181,32 @@ const UnifiedLogin = {
     }
 
     // پرسنل/ادمین دعوت‌شده: همان کد دعوت مدیر را دوباره بفرست / نشان بده (کد دوم نساز)
-    if (resolved.user && typeof PortalInvite !== 'undefined' &&
-        PortalInvite.needsOtpVerification(resolved.user)) {
+    const targetUser = resolved.user || (typeof DB !== 'undefined' && DB.find ? DB.find('users', u => Utils.normalizePhone(u.phone) === phone) : null)
+    if (targetUser && typeof PortalInvite !== 'undefined' &&
+        PortalInvite.needsOtpVerification(targetUser)) {
       const inv = typeof SecureDB !== 'undefined' && SecureDB.runInternalAsync
-        ? await SecureDB.runInternalAsync(() => PortalInvite.sendInvite(resolved.user.id))
-        : await PortalInvite.sendInvite(resolved.user.id)
+        ? await SecureDB.runInternalAsync(() => PortalInvite.sendInvite(targetUser.id))
+        : await PortalInvite.sendInvite(targetUser.id)
       if (!inv.ok) return inv
       this._setPending({
         phone,
         code: inv.code,
-        kind: resolved.kind,
-        label: resolved.label,
-        userId: resolved.user.id,
+        kind: resolved.kind || targetUser.portalType || 'staff',
+        label: resolved.label || targetUser.name || 'همکار',
+        userId: targetUser.id,
         inviteLogin: true,
         contractIds: [],
         expires: Date.now() + this.OTP_TTL_MS
       })
       this._recordSend(phone)
-      if (!inv.smsSent && (inv.code || inv.demoCode)) {
+      if (inv.code || inv.demoCode) {
         if (typeof Utils !== 'undefined' && Utils.toast) {
           Utils.toast('کد ورود پرسنل: ' + (inv.code || inv.demoCode), 'info', 15000)
         }
       }
       return {
         ok: true,
-        demoCode: inv.smsSent ? '' : (inv.code || inv.demoCode || ''),
+        demoCode: inv.code || inv.demoCode || '',
         resolved,
         inviteLogin: true
       }
