@@ -97,6 +97,26 @@ const CustomerPortal = {
           </div>
         </div>`
 
+    const aiInsight = typeof AICopilot !== 'undefined' ? AICopilot.getCustomerInsights(c) : null
+    const aiDisplay = aiInsight ? `
+      <div class="customer-card ai-concierge-card" style="max-width:none;margin-bottom:16px;background:linear-gradient(135deg,rgba(245,158,11,0.12) 0%,rgba(20,20,26,0.9) 100%);border:1px solid rgba(245,158,11,0.35);border-radius:14px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.4)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="width:36px;height:36px;border-radius:10px;background:rgba(245,158,11,0.2);display:flex;align-items:center;justify-content:center;color:#f59e0b;font-size:16px"><i class="fas ${aiInsight.icon || 'fa-sparkles'}"></i></span>
+          <div>
+            <strong style="color:#f59e0b;font-size:13.5px;display:block">دستیار هوشمند استودیو ماندنی</strong>
+            <div style="font-size:11px;color:rgba(255,255,255,0.65)">${Utils.escapeHtml(aiInsight.message)}</div>
+          </div>
+        </div>
+        <div style="font-size:12px;line-height:1.7;color:#e5e7eb;background:rgba(0,0,0,0.3);padding:10px 12px;border-radius:8px;border-inline-start:3px solid #f59e0b;margin-bottom:8px">
+          💡 ${Utils.escapeHtml(aiInsight.tip)}
+        </div>
+        ${aiInsight.action ? `
+          <button type="button" class="portal-btn" style="width:100%;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:800;font-size:12px;padding:8px 12px;border-radius:8px;border:none;margin-top:6px" onclick="${aiInsight.action.type === 'contact' ? `window.open('https://wa.me/989187766554?text=' + encodeURIComponent('سلام، در رابطه با قرارداد ' + ('${Utils.escapeHtml(c.contractNum || '')}') + ' سوال داشتم'))` : `CustomerPortal.selectReqType('mp3')`}">
+            <i class="fas fa-arrow-left"></i> ${Utils.escapeHtml(aiInsight.action.label)}
+          </button>
+        ` : ''}
+      </div>` : ''
+
     const queuePreview = queue.stage < 2 && queue.sorted.length > 1
       ? `<div class="customer-card" style="max-width:none;margin-bottom:16px">
           <h1 style="font-size:14px;text-align:right;margin-bottom:10px;color:rgba(255,255,255,0.6)">📋 صف تحویل (بر اساس تاریخ)</h1>
@@ -141,6 +161,7 @@ const CustomerPortal = {
             ${congrats.lines.map(l => `<p class="congrats-line">${l}</p>`).join('')}
           </div>
 
+          ${aiDisplay}
           ${queueDisplay}
 
           ${dl ? `<div class="portal-hero ${dl.urgent ? 'urgent' : ''}" style="margin-bottom:16px">

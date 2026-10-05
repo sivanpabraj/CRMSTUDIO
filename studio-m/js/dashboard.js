@@ -579,7 +579,10 @@ const SMDashboard = {
     </section>`
   },
 
-  _assistantPanel(insights) {
+  _assistantPanel(insights, ctx) {
+    if (typeof AICopilot !== 'undefined' && typeof AICopilot.renderDashboardCard === 'function' && ctx) {
+      return AICopilot.renderDashboardCard('manager', ctx)
+    }
     return `<section class="sm-exec-panel sm-exec-assistant">
       <div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">بر پایه داده ثبت‌شده</span><h3><i class="fas fa-robot"></i> دستیار تصمیم‌گیری</h3></div></div>
       <div class="sm-insight-list">${insights.map(item => `<div class="sm-insight is-${item.type}"><i class="fas ${item.icon}"></i><span>${SM.esc(item.text)}</span></div>`).join('')}</div>
@@ -615,6 +618,9 @@ const SMDashboard = {
   _operationalDashboard(ctx) {
     const stages = this._workflowSummary()
     const closeEvents = ctx.events.filter(event => event.days >= 0 && event.days <= 30).length
+    const copilotHtml = typeof AICopilot !== 'undefined' && typeof AICopilot.renderDashboardCard === 'function'
+      ? AICopilot.renderDashboardCard('coordinator', ctx)
+      : ''
     return `<div class="sm-exec-dashboard sm-exec-dashboard--operations">
       <div class="sm-exec-toolbar"><div><span class="sm-exec-eyebrow">نمای عملیاتی مجاز</span><h2>پیشخوان کارها</h2><p>${SM.esc(Utils.todayJalali())} · اطلاعات مالی فقط برای مدیر استودیو نمایش داده می‌شود</p></div>
         <div class="sm-exec-toolbar-actions">${SMUI.moduleSearch('dashboard', 'جستجو در مراسم و مشتری...')}</div></div>
@@ -624,6 +630,7 @@ const SMDashboard = {
         ${this._kpiCard('رزروهای نزدیک', ctx.upcomingBookings.length, 'چهارده روز آینده', 'fa-calendar-plus', '#34D399', 'bookings')}
         ${this._kpiCard('پروژه‌های تولید', stages.reduce((sum, stage) => sum + stage.count, 0), 'ادیت، بازبینی و تحویل', 'fa-clapperboard', '#F59E0B', 'workflow')}
       </div>
+      ${copilotHtml ? `<div style="margin: 18px 0;">${copilotHtml}</div>` : ''}
       <div class="sm-exec-grid sm-exec-grid--bottom">${this._eventsPanel(ctx)}${this._workflowPanel(stages)}</div>
     </div>`
   },
@@ -723,7 +730,7 @@ const SMDashboard = {
       case 'expenses':
         return `<div class="sm-exec-grid sm-exec-grid--full">${this._expensePanel(expenses)}</div>`
       case 'assistant':
-        return `<div class="sm-exec-grid sm-exec-grid--full">${this._assistantPanel(insights)}</div>`
+        return `<div class="sm-exec-grid sm-exec-grid--full">${this._assistantPanel(insights, ctx)}</div>`
       case 'workflow':
         return `<div class="sm-exec-grid sm-exec-grid--full">${this._workflowPanel(stages)}</div>`
       case 'events':

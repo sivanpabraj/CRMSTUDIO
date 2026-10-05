@@ -2567,3 +2567,219 @@ body.sm-sidebar-open { overflow: hidden; }
   }
 }
 
+/* ══════════════════════════════════════════════
+   AI Copilot — استایل لوکس کارت هوش استودیو
+   ══════════════════════════════════════════════ */
+.sm-copilot-card {
+  background: linear-gradient(135deg, rgba(20, 20, 26, 0.95) 0%, rgba(12, 12, 16, 0.98) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 16px;
+  padding: 20px 22px;
+  margin-bottom: 22px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 20px rgba(245, 158, 11, 0.05);
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+}
+
+.sm-copilot-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #f59e0b 0%, #ff5500 50%, rgba(245, 158, 11, 0) 100%);
+}
+
+.sm-copilot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.sm-copilot-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sm-copilot-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(255, 85, 0, 0.15) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #f59e0b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.2);
+}
+
+.sm-copilot-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #f3f4f6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sm-copilot-title small {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  letter-spacing: 0.5px;
+}
+
+.sm-copilot-subtitle {
+  font-size: 0.78rem;
+  color: #9ca3af;
+  margin-top: 3px;
+}
+
+.sm-copilot-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sm-copilot-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+}
+
+.sm-copilot-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.sm-copilot-item.is-danger {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.09) 0%, rgba(20, 20, 26, 0.4) 100%);
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
+.sm-copilot-item.is-warning {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(20, 20, 26, 0.4) 100%);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
+.sm-copilot-item.is-info {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(20, 20, 26, 0.4) 100%);
+  border-color: rgba(59, 130, 246, 0.22);
+}
+
+.sm-copilot-item.is-success {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(20, 20, 26, 0.4) 100%);
+  border-color: rgba(34, 197, 94, 0.22);
+}
+
+.sm-copilot-item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.sm-copilot-item.is-danger .sm-copilot-item-icon {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.sm-copilot-item.is-warning .sm-copilot-item-icon {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.sm-copilot-item.is-info .sm-copilot-item-icon {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.sm-copilot-item.is-success .sm-copilot-item-icon {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.sm-copilot-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.sm-copilot-item-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #f3f4f6;
+  margin-bottom: 3px;
+}
+
+.sm-copilot-item-desc {
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: #9ca3af;
+}
+
+.sm-copilot-subitems {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.sm-copilot-subitem {
+  font-size: 0.74rem;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sm-copilot-subitem span {
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+.sm-copilot-subitem small {
+  color: #9ca3af;
+}
+
+.sm-copilot-item-action {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+@media (max-width: 640px) {
+  .sm-copilot-item {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sm-copilot-item-action {
+    align-self: flex-start;
+  }
+}
+
