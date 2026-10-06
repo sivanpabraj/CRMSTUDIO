@@ -18,8 +18,8 @@ const DATA_DIR = process.env.DATA_DIR || '/var/lib/crmstudio'
 const TENANTS_DIR = path.join(DATA_DIR, 'tenants')
 const DEFAULT_DB_FILE = path.join(DATA_DIR, 'crmstudio_db.json')
 const DEFAULT_META_FILE = path.join(DATA_DIR, 'crmstudio_meta.json')
-const MELIPAYAMAK_API_KEY = process.env.MELIPAYAMAK_API_KEY || '09e58c2abb4a49188d3a1f5c4a53390f'
-const MELIPAYAMAK_LINE = process.env.MELIPAYAMAK_LINE || '50004001004893'
+const MELIPAYAMAK_API_KEY = process.env.MELIPAYAMAK_API_KEY || ''
+const MELIPAYAMAK_LINE = process.env.MELIPAYAMAK_LINE || ''
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -170,6 +170,36 @@ function writeTenantMeta(tenantKey, revision, lastUpdatedAt, syncToken) {
     fs.writeFileSync(metaFile, JSON.stringify(payload, null, 2), 'utf-8')
   } catch (e) {
     console.warn(`Meta write failed for [${tenantKey || 'default'}]:`, e.message)
+  }
+}
+
+function authenticateTenantSync(req, url, effectiveTenant) {
+  if (!effectiveTenant) return { ok: false, error: 'شناسه استودیو مشخص نشده است' }
+  const meta = readTenantMeta(effectiveTenant)
+  const token = req.headers['x-sync-token'] ||
+    (req.headers['authorization']?.startsWith('Bearer ') ? req.headers['authorization'].slice(7).trim() : '') ||
+    url.searchParams.get('token') || ''
+
+  const dbFile = getTenantDbPath(effectiveTenant)
+  // If the tenant DB doesn't exist yet, allow initial creation
+  if (!fs.existsSync(dbFile)) {
+    return { ok: true, isNew: true }
+  }
+
+  // System admin master key
+  const systemKey = process.env.SYSTEM_UPDATE_KEY
+  if (systemKey && token === systemKey) {
+    return { ok: true }
+  }
+
+  // Validate syncToken
+  if (meta.syncToken && token === meta.syncToken) {
+    return { ok: true }
+  }
+
+  return {
+    ok: false,
+    error: 'دسترسی غیرمجاز به پایگاه داده استودیو: توکن همگام‌سازی نامعتبر است یا ثبت نشده است'
   }
 }
 
@@ -557,11 +587,20 @@ const server = http.createServer((req, res) => {
     })
   }
 
-  // One-Click Automated Server Update Endpoint
+  // One-Click Automated Server Update Endpoint (Hardened with strict admin key & rate limit)
   if (req.method === 'POST' && url.pathname === '/api/system/update') {
+    const updateCheck = authLimiter.check(clientIp)
+    if (!updateCheck.allowed) {
+      return sendJson(res, 429, { ok: false, error: 'نرخ درخواست بیش از حد مجاز است' })
+    }
+
     const authHeader = req.headers['authorization'] || ''
-    const adminKey = req.headers['x-admin-key'] || url.searchParams.get('key') || ''
-    const expectedAdminKey = process.env.SYSTEM_UPDATE_KEY || 'mandani_root_2026'
+    const adminKey = req.headers['x-admin-key'] || ''
+    const expectedAdminKey = process.env.SYSTEM_UPDATE_KEY || ''
+
+    if (!expectedAdminKey) {
+      return sendJson(res, 503, { ok: false, error: 'به‌روزرسانی خودکار از طریق API به دلیل عدم تنظیم متغیر محیطی SYSTEM_UPDATE_KEY غیرفعال است.' })
+    }
 
     const isKeyValid = adminKey && adminKey === expectedAdminKey
     const isBearerValid = authHeader.startsWith('Bearer ') && authHeader.slice(7).trim() === expectedAdminKey
@@ -776,11 +815,12 @@ const server = http.createServer((req, res) => {
                   broadcastTenantUpdate(tenantKey, meta.revision + 1, new Date().toISOString())
                 }
 
-                const { password: _p, salt: _s, ...safeUser } = user
+                const meta = readTenantMeta(tenantKey)
                 return sendJson(res, 200, {
                   ok: true,
                   user: safeUser,
                   tenantKey,
+                  syncToken: meta.syncToken,
                   studioInfo: data.studioInfo || {},
                   fullData: data
                 })
@@ -1457,6 +1497,11 @@ const server = http.createServer((req, res) => {
       return sendJson(res, 200, { ok: true, empty: true, data: null, revision: 1, message: 'No studio specified' })
     }
 
+    const authCheck = authenticateTenantSync(req, url, effectiveTenant)
+    if (!authCheck.ok && !authCheck.isNew) {
+      return sendJson(res, 401, { ok: false, error: authCheck.error })
+    }
+
     const meta = readTenantMeta(effectiveTenant)
     const clientRev = Number(url.searchParams.get('rev'))
     if (clientRev && clientRev === meta.revision) {
@@ -1702,6 +1747,17 @@ const server = http.createServer((req, res) => {
         const dbFile = getTenantDbPath(effectiveTenant)
         const meta = readTenantMeta(effectiveTenant)
 
+        // Strict Tenant Authentication: Require valid syncToken if tenant database exists
+        if (fs.existsSync(dbFile)) {
+          const authCheck = authenticateTenantSync(req, url, effectiveTenant)
+          const payloadToken = payload.syncToken || ''
+          const isAuthorized = authCheck.ok || (meta.syncToken && payloadToken === meta.syncToken)
+          if (!isAuthorized) {
+            console.warn(`[SyncServer] Push unauthorized on [${effectiveTenant}]: invalid token`)
+            return sendJson(res, 401, { ok: false, error: 'دسترسی غیرمجاز برای ذخیره داده‌ها: توکن نامعتبر است' })
+          }
+        }
+
         // Optimistic Concurrency Control (OCC): Reject push if client is out of date
         const clientRev = Number(payload.clientRev) || 0
         if (clientRev && meta.revision && clientRev < meta.revision && !payload.force) {
@@ -1756,7 +1812,7 @@ const server = http.createServer((req, res) => {
         broadcastTenantUpdate(effectiveTenant, newRevision, newUpdatedAt)
         console.log(`[SyncServer] Push accepted for tenant [${effectiveTenant}]. Revision: ${newRevision}`)
 
-        return sendJson(res, 200, { ok: true, revision: newRevision, at: newUpdatedAt, tenant: effectiveTenant })
+        return sendJson(res, 200, { ok: true, revision: newRevision, at: newUpdatedAt, tenant: effectiveTenant, syncToken: meta.syncToken })
       } catch (err) {
         return sendJson(res, 400, { ok: false, error: 'خطا در ذخیره‌سازی داده: ' + err.message })
       }

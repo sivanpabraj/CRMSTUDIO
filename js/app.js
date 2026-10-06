@@ -1299,6 +1299,14 @@ const Portal = {
             if (srvJson.fullData && typeof DB !== 'undefined' && DB.importJSON) {
               await DB.importJSON(JSON.stringify(srvJson.fullData))
             }
+            if (srvJson.syncToken) {
+              localStorage.setItem('crmstudio_sync_token', srvJson.syncToken)
+              if (typeof DB !== 'undefined' && DB.get && DB.set) {
+                const info = DB.get('studioInfo') || {}
+                info.syncToken = srvJson.syncToken
+                DB.set('studioInfo', info)
+              }
+            }
             if (srvJson.tenantKey) {
               localStorage.setItem('crm_studio_id', srvJson.tenantKey)
               Utils?.storage?.set?.('talar_studio_id', srvJson.tenantKey)

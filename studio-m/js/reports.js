@@ -53,10 +53,27 @@ const SMReports = {
       return d !== null && d >= 0 && d <= 30
     })
 
+    const totalStaffCosts = persProjects.reduce((s, p) => s + (p.wage || p.amount || p.fee || 0), 0)
+    const totalPrintCosts = printOrders.reduce((s, o) => s + (o.totalCost || o.amount || 0), 0)
+    const totalNetProfit = contractTotal - (totalStaffCosts + totalPrintCosts + expenseSum)
+    const avgMargin = contractTotal > 0 ? Math.round((Math.max(0, totalNetProfit) / contractTotal) * 100) : 0
+
     return {
       generatedAt: Utils.todayJalali(),
       studio: SM.studio().name || 'Studio M',
       sections: [
+        {
+          id: 'profitability',
+          title: 'تحلیل سودآوری پروژه‌ها و حاشیه سود',
+          icon: 'fa-chart-pie',
+          color: '#10B981',
+          items: [
+            { label: 'سود خالص برآوردی', value: SM.fmt(totalNetProfit), sub: 'ارزش قراردادها − هزینه‌ها', isText: true },
+            { label: 'میانگین حاشیه سود', value: `${SM.fmt(avgMargin)}٪`, sub: 'نسبت سود به کل درآمد', isText: true },
+            { label: 'دستمزد عوامل پروژه', value: SM.fmt(totalStaffCosts), sub: 'عکاس، تصویربردار، ادیتور', isText: true },
+            { label: 'هزینه چاپ و آلبوم', value: SM.fmt(totalPrintCosts), sub: 'سفارشات چاپخانه', isText: true }
+          ]
+        },
         {
           id: 'main',
           title: 'اصلی — رزرو و برنامه',

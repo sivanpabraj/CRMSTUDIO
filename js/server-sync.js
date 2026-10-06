@@ -46,6 +46,38 @@ export const ServerSync = {
     }
   },
 
+  _getSyncToken() {
+    try {
+      if (typeof DB !== 'undefined' && DB.get) {
+        const info = DB.get('studioInfo') || {}
+        if (info.syncToken) return info.syncToken
+      }
+      if (typeof localStorage !== 'undefined') {
+        const token = localStorage.getItem('crmstudio_sync_token')
+        if (token) return token
+      }
+      return ''
+    } catch {
+      return ''
+    }
+  },
+
+  _saveSyncToken(token) {
+    if (!token || typeof token !== 'string') return
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('crmstudio_sync_token', token)
+      }
+      if (typeof DB !== 'undefined' && DB.get && DB.set) {
+        const info = DB.get('studioInfo') || {}
+        if (info.syncToken !== token) {
+          info.syncToken = token
+          DB.set('studioInfo', info)
+        }
+      }
+    } catch { /* ignore */ }
+  },
+
   _connectStream() {
     if (typeof EventSource === 'undefined') return
 
@@ -92,16 +124,25 @@ export const ServerSync = {
 
     try {
       const studioId = this._getStudioId()
+      const syncToken = this._getSyncToken()
       const q = new URLSearchParams()
       if (this._localRevision) q.set('rev', String(this._localRevision))
       if (studioId) q.set('studioId', studioId)
 
+      const headers = {}
+      if (syncToken) headers['X-Sync-Token'] = syncToken
+      if (studioId) headers['X-Studio-Id'] = studioId
+
       const res = await fetch(`/api/sync/pull?${q.toString()}`, {
-        cache: 'no-store'
+        cache: 'no-store',
+        headers
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
       const json = await res.json()
+      if (json.syncToken) {
+        this._saveSyncToken(json.syncToken)
+      }
       if (json.notModified) {
         this._status = 'connected'
         return
@@ -191,15 +232,18 @@ export const ServerSync = {
       const dataStr = DB.exportJSON()
       const data = JSON.parse(dataStr)
 
+      const syncToken = this._getSyncToken()
       const res = await fetch('/api/sync/push', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(studioId ? { 'X-Studio-Id': studioId } : {})
+          ...(studioId ? { 'X-Studio-Id': studioId } : {}),
+          ...(syncToken ? { 'X-Sync-Token': syncToken } : {})
         },
         body: JSON.stringify({
           data,
           studioId,
+          syncToken,
           clientRev: this._localRevision
         })
       })
@@ -219,6 +263,9 @@ export const ServerSync = {
 
       const json = await res.json()
       if (json.ok) {
+        if (json.syncToken) {
+          this._saveSyncToken(json.syncToken)
+        }
         this._localRevision = json.revision
         if (DB._data && DB._data._meta) {
           DB._data._meta.serverRevision = json.revision

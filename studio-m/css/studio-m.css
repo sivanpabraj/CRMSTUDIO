@@ -423,6 +423,15 @@ body.sm-sidebar-open { overflow: hidden; }
   transition: transform .2s, box-shadow .2s;
 }
 .sm-kanban-card:hover { transform: translateY(-2px); box-shadow: var(--sm-shadow); }
+.sm-kanban-col.sm-kanban-drag-over {
+  background: var(--sm-surface-3, rgba(0, 113, 227, 0.08)) !important;
+  border-color: var(--sm-accent) !important;
+  outline: 2px dashed var(--sm-accent);
+}
+.sm-workflow-kanban-card:active {
+  opacity: 0.6;
+  cursor: grabbing;
+}
 
 /* ── Timeline ── */
 .sm-timeline { position: relative; padding-inline-start: 28px; }

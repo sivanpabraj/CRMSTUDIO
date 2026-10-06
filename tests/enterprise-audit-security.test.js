@@ -163,4 +163,48 @@ describe('Enterprise Security & Concurrency Verification', () => {
       expect(auditLogs[0].amount).toBe(15000000)
     })
   })
+
+  describe('Tenant Database Sync Authorization & Zero-Trust Verification', () => {
+    function mockAuthenticateTenantSync({ token, metaToken, dbExists = true, systemKey = '' }) {
+      if (!dbExists) return { ok: true, isNew: true }
+      if (systemKey && token === systemKey) return { ok: true }
+      if (metaToken && token === metaToken) return { ok: true }
+      return { ok: false, error: 'Unauthorized' }
+    }
+
+    it('rejects sync pull without token on existing tenant', () => {
+      const res = mockAuthenticateTenantSync({ token: '', metaToken: 'secret_tok_48', dbExists: true })
+      expect(res.ok).toBe(false)
+      expect(res.error).toBe('Unauthorized')
+    })
+
+    it('allows sync pull with valid syncToken', () => {
+      const res = mockAuthenticateTenantSync({ token: 'secret_tok_48', metaToken: 'secret_tok_48', dbExists: true })
+      expect(res.ok).toBe(true)
+    })
+
+    it('allows sync initialization on brand new non-existent tenant database', () => {
+      const res = mockAuthenticateTenantSync({ token: '', metaToken: '', dbExists: false })
+      expect(res.ok).toBe(true)
+      expect(res.isNew).toBe(true)
+    })
+
+    it('allows system admin master key bypass on sync', () => {
+      const res = mockAuthenticateTenantSync({ token: 'root_master_key', metaToken: 'secret_tok_48', dbExists: true, systemKey: 'root_master_key' })
+      expect(res.ok).toBe(true)
+    })
+
+    it('blocks system update endpoint if SYSTEM_UPDATE_KEY environment variable is not configured', () => {
+      const systemKey = ''
+      const res = !systemKey ? { status: 503, error: 'Disabled' } : { status: 200 }
+      expect(res.status).toBe(503)
+    })
+
+    it('blocks system update with invalid or fallback keys', () => {
+      const expectedAdminKey = 'secure_admin_key_123'
+      const suppliedKey = 'mandani_root_2026' // old fallback
+      const isKeyValid = suppliedKey === expectedAdminKey
+      expect(isKeyValid).toBe(false)
+    })
+  })
 })

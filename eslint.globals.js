@@ -51,6 +51,8 @@ export const browserGlobals = {
   SecureDB: "readonly",
   SessionSign: "readonly",
   SignedProof: "readonly",
+  SignaturePad: "readonly",
+  PaymentGateway: "readonly",
   AuthBridge: "readonly",
   FinanceSync: "readonly",
   PackageCatalog: "readonly",

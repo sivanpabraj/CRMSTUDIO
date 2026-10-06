@@ -67,8 +67,8 @@ const AppConfig = {
 
   DEFAULT_SMS: {
     provider: 'melipayamak',
-    apiKey: '09e58c2abb4a49188d3a1f5c4a53390f',
-    lineNumber: '50004001004893',
+    apiKey: '',
+    lineNumber: '',
     proxyUrl: '',
     username: ''
   },

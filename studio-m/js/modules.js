@@ -1528,7 +1528,133 @@ SMModules.api = {
       await DB.flush?.()
     } else DB.delete('apiKeys', id)
     SM.navigate('api')
+/* ── Signatures & Digital Contracts ── */
+SMModules.signatures = {
+  render(el) {
+    const list = SMH.filterBySearch(DB.get('signatures') || [], ['signerName', 'signerPhone', 'contractNum'], 'signatures')
+    const contracts = DB.get('contracts') || []
+
+    el.innerHTML = `
+      ${SMUI.sectionHead(
+        SMH.lbl('امضاهای دیجیتال قراردادها', 'Digital Signatures'),
+        SMH.lbl('آرشیو رسمی امضاهای لمسی، متادیتا و اثر انگشت رمزنگاری شده (SHA-256)', 'Touch signatures & cryptographic proof'),
+        `<button class="sm-btn sm-btn-primary" onclick="SMModules.signatures.add()"><i class="fas fa-file-signature"></i> ${SMH.lbl('ثبت امضای جدید', 'New signature')}</button>`
+      )}
+      ${SMUI.moduleSearch('signatures', SMH.lbl('جستجو بر اساس نام امضاکننده، شماره قرارداد یا موبایل...', 'Search by signer name, contract #...'))}
+      ${SMUI.statCards([
+        { label: SMH.lbl('کل امضاها', 'Total Signatures'), value: SM.fmt(list.length), color: 'var(--sm-accent)' },
+        { label: SMH.lbl('قراردادهای امضاشده', 'Signed Contracts'), value: SM.fmt(new Set(list.map(s => s.contractId).filter(Boolean)).size), color: 'var(--sm-success)' },
+        { label: SMH.lbl('کل قراردادها', 'Total Contracts'), value: SM.fmt(contracts.length), color: 'var(--sm-text-muted)' }
+      ])}
+      ${list.length ? SMUI.table(
+        [
+          SMH.lbl('پیش‌نمایش', 'Preview'),
+          SMH.lbl('امضاکننده', 'Signer'),
+          SMH.lbl('نقش', 'Role'),
+          SMH.lbl('قرارداد', 'Contract'),
+          SMH.lbl('تاریخ ثبت', 'Signed Date'),
+          SMH.lbl('هش امنیتی (SHA-256)', 'Cryptographic Hash'),
+          SM.t('actions')
+        ],
+        list.map(s => `<tr>
+          <td>
+            ${s.signatureDataUrl ? `<img src="${s.signatureDataUrl}" alt="امضا" style="max-height:36px;max-width:90px;background:#fff;border-radius:6px;padding:3px;border:1px solid #d1d1d6;display:block" />` : '—'}
+          </td>
+          <td><strong>${SM.esc(s.signerName || '—')}</strong><div style="font-size:.72rem;color:var(--sm-text-muted)">${SM.esc(s.signerPhone || '')}</div></td>
+          <td>${SMUI.badge(s.role === 'bride' ? 'عروس' : s.role === 'groom' ? 'داماد' : s.role === 'manager' ? 'مدیریت' : 'مشتری', 'info')}</td>
+          <td>${SM.esc(s.contractNum ? '#' + s.contractNum : (s.contractId || '—'))}</td>
+          <td>${SM.esc(s.signedAt || '—')}</td>
+          <td dir="ltr" style="font-family:monospace;font-size:.72rem;color:var(--sm-text-muted)">${SM.esc((s.hash || '').slice(0, 14))}...</td>
+          <td>
+            <div style="display:flex;gap:6px">
+              <button class="sm-btn sm-btn-xs sm-btn-ghost" onclick="SMModules.signatures.view('${s.id}')" title="${SM.t('view')}"><i class="fas fa-eye"></i></button>
+              <button class="sm-btn sm-btn-xs sm-btn-danger" onclick="SMModules.signatures.delete('${s.id}')" title="${SM.t('delete')}"><i class="fas fa-trash"></i></button>
+            </div>
+          </td>
+        </tr>`)
+      ) : SMUI.empty('fa-signature', SMH.lbl('هنوز هیچ امضای دیجیتالی ثبت نشده است', 'No digital signatures found'))}`
+  },
+
+  view(id) {
+    const s = DB.find('signatures', x => x.id === id)
+    if (!s) return
+    SMUI.modal(SMH.lbl('جزئیات سند امضای دیجیتال', 'Signature Details'), `
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="background:#ffffff;padding:16px;border-radius:12px;border:1px solid #d1d1d6;display:inline-block;max-width:100%">
+          <img src="${s.signatureDataUrl}" alt="امضا" style="max-height:160px;max-width:100%;display:block;margin:0 auto" />
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:.84rem;margin-bottom:14px">
+        <div><strong>امضاکننده:</strong> ${SM.esc(s.signerName || '—')}</div>
+        <div><strong>نقش:</strong> ${SM.esc(s.role === 'bride' ? 'عروس' : s.role === 'groom' ? 'داماد' : 'مدیر')}</div>
+        <div><strong>شماره تماس:</strong> ${SM.esc(s.signerPhone || '—')}</div>
+        <div><strong>قرارداد:</strong> #${SM.esc(s.contractNum || s.contractId || '—')}</div>
+        <div><strong>تاریخ ثبت:</strong> ${SM.esc(s.signedAt || '—')}</div>
+        <div><strong>وضعیت:</strong> ${SMUI.badge('معتبر و تأیید شده', 'success')}</div>
+      </div>
+      <div style="background:var(--sm-surface-2, rgba(255,255,255,0.03));padding:10px 12px;border-radius:8px;border:1px solid var(--sm-border);font-size:.76rem">
+        <div style="color:var(--sm-text-muted);margin-bottom:4px">هش امنیتی SHA-256 سند:</div>
+        <div dir="ltr" style="font-family:monospace;word-break:break-all;color:var(--sm-accent)">${SM.esc(s.hash || '—')}</div>
+      </div>
+    `, { width: 480 })
+  },
+
+  add() {
+    const contracts = (DB.get('contracts') || []).filter(c => c.status !== 'cancelled')
+    if (!contracts.length) {
+      SM.toast(SMH.lbl('هیچ قراردادی برای امضا یافت نشد', 'No active contracts'), 'error')
+      return
+    }
+
+    SMUI.modal(SMH.lbl('انتخاب قرارداد جهت امضا', 'Select contract to sign'), `
+      ${SMUI.formField('قرارداد مدنظر', 'sig-select-contract', {
+        type: 'select',
+        options: contracts.map(c => ({
+          value: c.id,
+          label: `#${c.contractNum || c.id} — ${c.couple || [c.bride, c.groom].filter(Boolean).join(' و ')}`
+        }))
+      })}
+      ${SMUI.formField('امضاکننده', 'sig-select-role', {
+        type: 'select',
+        options: [
+          { value: 'groom', label: 'داماد' },
+          { value: 'bride', label: 'عروس' },
+          { value: 'manager', label: 'مدیریت استودیو' }
+        ]
+      })}`, {
+      onSave: () => {
+        const d = SMUI.readForm(['sig-select-contract', 'sig-select-role'])
+        const c = DB.find('contracts', x => x.id === d['sig-select-contract'])
+        if (!c) return
+        const role = d['sig-select-role'] || 'groom'
+        const name = role === 'groom' ? (c.groom || 'داماد') : role === 'bride' ? (c.bride || 'عروس') : 'مدیریت استودیو'
+        const phone = role === 'groom' ? (c.groomPhone || c.phone) : role === 'bride' ? (c.bridePhone || '') : ''
+
+        if (typeof window.SignaturePad !== 'undefined') {
+          window.SignaturePad.openModal({
+            title: `امضای رسمی — ${name}`,
+            role,
+            signerName: name,
+            signerPhone: phone,
+            contractId: c.id,
+            contractNum: c.contractNum || '',
+            onSigned: () => {
+              SM.navigate('signatures')
+            }
+          })
+        }
+      },
+      width: 440
+    })
+  },
+
+  async delete(id) {
+    if (!confirm(SM.t('delete') + '?')) return
+    await SecureDB.delete('signatures', id)
+    SM.toast(SM.t('success'), 'success')
+    SM.navigate('signatures')
   }
 }
 
 window.SMModules = SMModules
+

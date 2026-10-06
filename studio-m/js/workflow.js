@@ -1,15 +1,15 @@
-/* Studio M — گردش کار تدوین (venue / clip / album) */
+/* Studio M — گردش کار تدوین (venue / clip / album) با بورد کانبان تعاملی و درگ اند دراپ */
 
 const SMWorkflow = {
   STAGES: ['ingest', 'cull', 'edit', 'color', 'review', 'delivery'],
 
   STAGE_LABELS: {
-    ingest: { fa: 'دریافت فوتیج', en: 'Ingest' },
-    cull: { fa: 'انتخاب و حذف', en: 'Cull' },
-    edit: { fa: 'تدوین', en: 'Edit' },
-    color: { fa: 'رنگ‌بندی', en: 'Color' },
-    review: { fa: 'بازبینی', en: 'Review' },
-    delivery: { fa: 'تحویل', en: 'Delivery' }
+    ingest: { fa: 'دریافت فوتیج', en: 'Ingest', icon: 'fa-cloud-arrow-down', color: '#0071E3' },
+    cull: { fa: 'انتخاب و حذف', en: 'Cull', icon: 'fa-filter', color: '#5856D6' },
+    edit: { fa: 'تدوین و کات', en: 'Edit', icon: 'fa-scissors', color: '#E68619' },
+    color: { fa: 'اصلاح رنگ و نور', en: 'Color', icon: 'fa-wand-magic-sparkles', color: '#00A3BF' },
+    review: { fa: 'بازبینی مدیر/مشتری', en: 'Review', icon: 'fa-eye', color: '#B8860B' },
+    delivery: { fa: 'تحویل نهایی', en: 'Delivery', icon: 'fa-circle-check', color: '#34C759' }
   },
 
   TYPES: {
@@ -34,6 +34,7 @@ const SMWorkflow = {
   },
 
   _tab: 'active',
+  _viewMode: 'kanban', // 'kanban' | 'list'
 
   _lbl(map, key) {
     const o = map[key] || {}
@@ -42,6 +43,10 @@ const SMWorkflow = {
 
   _stageLabel(stage) {
     return this._lbl(this.STAGE_LABELS, stage || 'ingest')
+  },
+
+  _stageMeta(stage) {
+    return this.STAGE_LABELS[stage || 'ingest'] || this.STAGE_LABELS.ingest
   },
 
   _typeLabel(type) {
@@ -103,6 +108,61 @@ const SMWorkflow = {
     SM.navigate('workflow')
   },
 
+  toggleViewMode(mode) {
+    this._viewMode = mode
+    SM.navigate('workflow')
+  },
+
+  /* ── Drag & Drop Handlers for Kanban Board ── */
+  onDragStart(e, id) {
+    e.dataTransfer.setData('text/plain', id)
+    e.dataTransfer.effectAllowed = 'move'
+  },
+
+  onDragOver(e) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const col = e.currentTarget
+    if (col && !col.classList.contains('sm-kanban-drag-over')) {
+      col.classList.add('sm-kanban-drag-over')
+    }
+  },
+
+  onDragLeave(e) {
+    const col = e.currentTarget
+    if (col) col.classList.remove('sm-kanban-drag-over')
+  },
+
+  async onDrop(e, targetStage) {
+    e.preventDefault()
+    const col = e.currentTarget
+    if (col) col.classList.remove('sm-kanban-drag-over')
+    const id = e.dataTransfer.getData('text/plain')
+    if (!id) return
+    await this.moveToStage(id, targetStage)
+  },
+
+  async moveToStage(id, targetStage) {
+    const w = DB.find('workflows', x => x.id === id)
+    if (!w || w.stage === targetStage) return
+    const isDelivery = targetStage === 'delivery'
+    const idx = this.STAGES.indexOf(targetStage)
+    const progress = Math.round((idx / (this.STAGES.length - 1)) * 100)
+
+    const patch = {
+      stage: targetStage,
+      progress,
+      status: isDelivery ? 'completed' : (w.status === 'on_hold' ? 'on_hold' : 'active'),
+      completedAt: isDelivery ? (w.completedAt || Utils.todayJalali()) : '',
+      updatedAt: Utils.todayJalali()
+    }
+
+    await SecureDB.update('workflows', id, patch)
+    await this._notifyStage(w, targetStage, isDelivery)
+    SM.toast(SMH.lbl(`پروژه به مرحله «${this._stageLabel(targetStage)}» منتقل شد`, `Project moved to stage ${this._stageLabel(targetStage)}`), 'success')
+    SM.navigate('workflow')
+  },
+
   _pipelineHtml(w) {
     const cur = this.STAGES.indexOf(w.stage || 'ingest')
     const done = this._statusOf(w) === 'completed'
@@ -122,15 +182,26 @@ const SMWorkflow = {
     const completed = all.filter(w => this._statusOf(w) === 'completed')
     const items = this._filtered()
 
+    const viewSwitcher = `
+      <div style="display:inline-flex;background:var(--sm-surface-2, rgba(255,255,255,0.05));border-radius:10px;padding:3px;border:1px solid var(--sm-border);margin-inline-end:8px">
+        <button type="button" class="sm-btn sm-btn-sm ${this._viewMode === 'kanban' ? 'sm-btn-primary' : 'sm-btn-ghost'}" onclick="SMWorkflow.toggleViewMode('kanban')" style="padding:6px 12px;font-size:.8rem">
+          <i class="fas fa-table-columns"></i> ${SMH.lbl('بورد کانبان', 'Kanban')}
+        </button>
+        <button type="button" class="sm-btn sm-btn-sm ${this._viewMode === 'list' ? 'sm-btn-primary' : 'sm-btn-ghost'}" onclick="SMWorkflow.toggleViewMode('list')" style="padding:6px 12px;font-size:.8rem">
+          <i class="fas fa-list-check"></i> ${SMH.lbl('لیست', 'List')}
+        </button>
+      </div>`
+
     el.innerHTML = `
-      ${SMUI.sectionHead(SM.t('workflow'), SMH.lbl('خط تولید تدوین و تحویل', 'Editing & delivery pipeline'), `
+      ${SMUI.sectionHead(SM.t('workflow'), SMH.lbl('پایپ‌لاین تولید و گردش کار تدوین', 'Production & editing pipeline'), `
+        ${viewSwitcher}
         <button type="button" class="sm-btn sm-btn-ghost" onclick="SMWorkflow.addFromContract()"><i class="fas fa-file-signature"></i> ${SMH.lbl('از قرارداد', 'From contract')}</button>
         <button type="button" class="sm-btn sm-btn-primary" onclick="SMWorkflow.add()"><i class="fas fa-plus"></i> ${SM.t('add')}</button>`)}
       ${SMUI.statCards([
         { label: SMH.lbl('در جریان', 'Active'), value: SM.fmt(active.length), color: 'var(--sm-accent)' },
         { label: SMH.lbl('سررسید گذشته', 'Overdue'), value: SM.fmt(overdue.length), color: 'var(--sm-danger)' },
-        { label: SMH.lbl('تمام‌شده', 'Done'), value: SM.fmt(completed.length), color: 'var(--sm-success)' },
-        { label: SMH.lbl('کل پروژه', 'Total'), value: SM.fmt(all.length), color: 'var(--sm-text-muted)' }
+        { label: SMH.lbl('تحویل‌شده', 'Delivered'), value: SM.fmt(completed.length), color: 'var(--sm-success)' },
+        { label: SMH.lbl('کل پروژه‌ها', 'Total'), value: SM.fmt(all.length), color: 'var(--sm-text-muted)' }
       ])}
       ${SMUI.tabs([
         { id: 'active', label: SMH.lbl('فعال', 'Active'), active: this._tab === 'active' },
@@ -138,7 +209,92 @@ const SMWorkflow = {
         { id: 'completed', label: SMH.lbl('تمام‌شده', 'Done'), active: this._tab === 'completed' },
         { id: 'all', label: SMH.lbl('همه', 'All'), active: this._tab === 'all' }
       ], 'SMWorkflow.setTab')}
-      ${items.length ? items.map(w => this._cardHtml(w)).join('') : SMUI.empty('fa-diagram-project', SM.t('no_data'))}`
+      ${this._viewMode === 'kanban' ? this._kanbanHtml(items) : this._listHtml(items)}`
+  },
+
+  _kanbanHtml(items) {
+    if (!items.length) {
+      return SMUI.empty('fa-diagram-project', SM.t('no_data'))
+    }
+
+    const colsHtml = this.STAGES.map(stage => {
+      const meta = this._stageMeta(stage)
+      const stageItems = items.filter(w => (w.stage || 'ingest') === stage)
+      return `
+        <div class="sm-kanban-col"
+             ondragover="SMWorkflow.onDragOver(event)"
+             ondragleave="SMWorkflow.onDragLeave(event)"
+             ondrop="SMWorkflow.onDrop(event, '${stage}')"
+             style="display:flex;flex-direction:column;border-top:3px solid ${meta.color}">
+          <div class="sm-kanban-head" style="background:var(--sm-surface-2, rgba(255,255,255,0.02))">
+            <span style="display:inline-flex;align-items:center;gap:6px">
+              <i class="fas ${meta.icon}" style="color:${meta.color}"></i>
+              ${SM.esc(this._stageLabel(stage))}
+            </span>
+            <span class="sm-badge sm-badge-muted" style="font-size:.7rem;padding:2px 8px">${SM.fmt(stageItems.length)}</span>
+          </div>
+          <div class="sm-kanban-body" style="flex:1;min-height:160px;overflow-y:auto;max-height:680px">
+            ${stageItems.length ? stageItems.map(w => this._kanbanCardHtml(w)).join('') : `
+              <div style="text-align:center;color:var(--sm-text-muted);font-size:.75rem;padding:24px 8px;border:1px dashed var(--sm-border);border-radius:8px">
+                ${SMH.lbl('کارتی در این مرحله نیست', 'No cards here')}
+              </div>
+            `}
+          </div>
+        </div>`
+    }).join('')
+
+    return `<div class="sm-kanban" style="grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:12px;margin-top:16px">${colsHtml}</div>`
+  },
+
+  _kanbanCardHtml(w) {
+    const pr = this.PRIORITY[w.priority || 'normal'] || this.PRIORITY.normal
+    const type = this.TYPES[w.type || 'other'] || this.TYPES.other
+    const overdue = this._isOverdue(w)
+    const assignee = this._personnelName(w.personnelId)
+    const progress = this._progress(w)
+
+    return `
+      <div class="sm-kanban-card sm-workflow-kanban-card"
+           draggable="true"
+           ondragstart="SMWorkflow.onDragStart(event, '${w.id}')"
+           style="position:relative;border-inline-start:4px solid ${overdue ? 'var(--sm-danger)' : pr.badge === 'danger' ? 'var(--sm-danger)' : pr.badge === 'warning' ? 'var(--sm-warning)' : 'var(--sm-border)'}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+          <div style="font-weight:700;font-size:.86rem;color:var(--sm-text);line-height:1.4">
+            <i class="fas ${type.icon}" style="font-size:.78rem;opacity:.7"></i> ${SM.esc(w.title || this._contractLabel(w.contractId))}
+          </div>
+          <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost" onclick="event.stopPropagation();SMWorkflow.edit('${w.id}')" title="${SM.t('edit')}">
+            <i class="fas fa-pen" style="font-size:.72rem"></i>
+          </button>
+        </div>
+
+        <div style="font-size:.75rem;color:var(--sm-text-muted);margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span><i class="fas fa-user-pen" style="font-size:.7rem"></i> ${SM.esc(assignee)}</span>
+          ${w.dueDate ? `<span style="${overdue ? 'color:var(--sm-danger);font-weight:700' : ''}"><i class="fas fa-calendar" style="font-size:.7rem"></i> ${SM.esc(w.dueDate)}</span>` : ''}
+        </div>
+
+        <div style="margin-top:8px;background:var(--sm-bg-hover, rgba(255,255,255,0.06));border-radius:4px;height:5px;overflow:hidden">
+          <div style="background:var(--sm-accent);height:100%;width:${progress}%;transition:width .3s"></div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:8px;border-top:1px solid var(--sm-border);font-size:.74rem">
+          <div style="display:flex;gap:4px;align-items:center">
+            ${SMUI.badge(this._lbl(pr, w.priority || 'normal'), pr.badge)}
+            ${overdue ? SMUI.badge(SMH.lbl('تأخیر', 'Late'), 'danger') : ''}
+          </div>
+          <div style="display:flex;gap:4px">
+            <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost" onclick="event.stopPropagation();SMWorkflow.revert('${w.id}')" title="${SMH.lbl('مرحله قبل', 'Previous')}">
+              <i class="fas fa-arrow-right"></i>
+            </button>
+            <button type="button" class="sm-btn sm-btn-xs sm-btn-primary" onclick="event.stopPropagation();SMWorkflow.advance('${w.id}')" title="${SMH.lbl('مرحله بعد', 'Next')}">
+              <i class="fas fa-arrow-left"></i>
+            </button>
+          </div>
+        </div>
+      </div>`
+  },
+
+  _listHtml(items) {
+    return items.length ? items.map(w => this._cardHtml(w)).join('') : SMUI.empty('fa-diagram-project', SM.t('no_data'))
   },
 
   _cardHtml(w) {
@@ -324,6 +480,7 @@ const SMWorkflow = {
 
 SMModules.workflow = {
   setTab(tab) { SMWorkflow.setTab(tab) },
+  toggleViewMode(mode) { SMWorkflow.toggleViewMode(mode) },
   render(el) { SMWorkflow.render(el) },
   add() { SMWorkflow.add() },
   edit(id) { SMWorkflow.edit(id) },

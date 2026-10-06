@@ -405,6 +405,13 @@ const CustomerPortal = {
           </div>
         </div>
 
+        ${remaining > 0 ? `
+        <div style="margin-top:14px">
+          <button type="button" class="portal-btn portal-btn-primary" style="width:100%;padding:10px 14px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:10px;color:#fff;font-weight:800;font-size:12.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" onclick="CustomerPortal.openPaymentModal('${c.id}', ${remaining})">
+            <i class="fas fa-credit-card"></i> پرداخت آنلاین اقساط / مانده‌حساب با درگاه بانکی
+          </button>
+        </div>` : ''}
+
         ${services.length ? `
         <div style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.06);padding-top:12px">
           <h2 style="font-size:13px;color:#fff;margin:0 0 8px;font-weight:700">📋 خدمات و تعهدات مندرج در قرارداد:</h2>
@@ -612,13 +619,16 @@ const CustomerPortal = {
                 ✓✓
               </div>
               <div>
-                <h2 style="font-size:14px;color:#10b981;margin:0;font-weight:800">قرارداد رسمی تایید و نهایی شد</h2>
+                <h2 style="font-size:14px;color:#10b981;margin:0;font-weight:800">قرارداد رسمی تایید و امضا شد</h2>
                 <div style="font-size:11.5px;color:rgba(255,255,255,0.6);margin-top:2px">امضای الکترونیکی شما در سامانه ثبت گردیده است · تاریخ: ${Utils.escapeHtml(date)}</div>
               </div>
             </div>
-            <button type="button" class="portal-btn portal-btn-ghost" style="font-size:11.5px;padding:7px 14px;display:flex;align-items:center;gap:6px" onclick="CustomerPortal.openContractTermsModal('${c.id}')">
-              <i class="fas fa-file-contract"></i> مشاهده متن کامل قرارداد
-            </button>
+            <div style="display:flex;gap:8px;align-items:center">
+              ${c.signatureDataUrl ? `<div style="background:#fff;padding:2px 6px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);display:inline-block"><img src="${c.signatureDataUrl}" alt="امضای دیجیتال" style="height:28px;display:block" /></div>` : ''}
+              <button type="button" class="portal-btn portal-btn-ghost" style="font-size:11.5px;padding:7px 14px;display:flex;align-items:center;gap:6px" onclick="CustomerPortal.openContractTermsModal('${c.id}')">
+                <i class="fas fa-file-contract"></i> مشاهده متن کامل قرارداد
+              </button>
+            </div>
           </div>
         </div>
       `
@@ -745,48 +755,88 @@ const CustomerPortal = {
     const c = DB.find('contracts', x => x.id === contractId) || this.state.contract
     if (!c) return
 
-    const nowJalali = typeof Utils !== 'undefined' ? Utils.todayJalali() : new Date().toLocaleDateString('fa-IR')
-    const nowIso = new Date().toISOString()
+    const coupleName = c.couple || `${c.bride || ''} و ${c.groom || ''}`.trim() || 'مشتری'
+    const phone = c.groomPhone || c.bridePhone || c.phone || ''
 
-    const patch = {
-      customerAccepted: true,
-      customerAcceptedAt: nowJalali,
-      customerAcceptedIso: nowIso,
-      status: 'signed'
+    const completeSigning = async (signatureRecord = null) => {
+      const nowJalali = typeof Utils !== 'undefined' ? Utils.todayJalali() : new Date().toLocaleDateString('fa-IR')
+      const nowIso = new Date().toISOString()
+
+      const patch = {
+        customerAccepted: true,
+        customerAcceptedAt: nowJalali,
+        customerAcceptedIso: nowIso,
+        status: 'signed',
+        ...(signatureRecord ? {
+          signatureId: signatureRecord.id,
+          signatureHash: signatureRecord.hash,
+          signatureDataUrl: signatureRecord.signatureDataUrl
+        } : {})
+      }
+
+      DB.update('contracts', c.id, patch)
+
+      // ثبت پیام خودکار در صندوق پیام مشتری و مدیر
+      if (typeof InboxShared !== 'undefined') {
+        InboxShared.appendThread(c.id, {
+          author: 'customer',
+          authorName: coupleName,
+          authorRole: 'مشتری (عروس و داماد)',
+          text: `✓ قرارداد رسمی شماره #${c.contractNum || c.id} توسط مشتری با امضای لمسی دیجیتال ثبت گردید.`,
+          action: 'contract_accepted'
+        })
+      }
+
+      // پخش صدای شادباش و تایید
+      if (typeof AudioNotifier !== 'undefined' && AudioNotifier.playContract) {
+        AudioNotifier.playContract()
+      }
+
+      await DB.flush?.()
+
+      // ارسال بلادرنگ به سرور
+      if (typeof ServerSync !== 'undefined' && ServerSync.pushNow) {
+        ServerSync.pushNow().catch(() => {})
+      }
+
+      if (typeof Utils !== 'undefined' && Utils.toast) {
+        Utils.toast('تأیید و امضای لمسی قرارداد با موفقیت ثبت شد ✓✓', 'success')
+      }
+
+      // به‌روزرسانی نمای پورتال
+      this.state.contract = { ...c, ...patch }
+      this.renderDashboard()
     }
 
-    DB.update('contracts', c.id, patch)
+    if (typeof SignaturePad !== 'undefined' && SignaturePad.openModal) {
+      SignaturePad.openModal({
+        title: 'امضای رسمی قرارداد',
+        signerName: coupleName,
+        signerPhone: phone,
+        contractId: c.id,
+        contractNum: c.contractNum || '',
+        onSigned: (sigRecord) => completeSigning(sigRecord)
+      })
+    } else {
+      await completeSigning()
+    }
+  },
 
-    // ثبت پیام خودکار در صندوق پیام مشتری و مدیر
-    if (typeof InboxShared !== 'undefined') {
-      InboxShared.appendThread(c.id, {
-        author: 'customer',
-        authorName: c.couple || `${c.bride || ''} و ${c.groom || ''}`.trim() || 'مشتری',
-        authorRole: 'مشتری (عروس و داماد)',
-        text: `✓ قرارداد رسمی شماره #${c.contractNum || c.id} توسط مشتری مطالعه و امضای دیجیتال (می‌پذیرم) گردید.`,
-        action: 'contract_accepted'
+  openPaymentModal(contractId, remaining) {
+    const c = DB.find('contracts', x => x.id === contractId) || this.state.contract
+    if (!c) return
+    const coupleName = c.couple || `${c.bride || ''} و ${c.groom || ''}`.trim() || 'مشتری'
+    const phone = c.groomPhone || c.bridePhone || c.phone || ''
+
+    if (typeof PaymentGateway !== 'undefined' && PaymentGateway.requestPayment) {
+      PaymentGateway.requestPayment({
+        contractId: c.id,
+        contractNum: c.contractNum || '',
+        amount: remaining,
+        customerName: coupleName,
+        customerPhone: phone
       })
     }
-
-    // پخش صدای شادباش و تایید
-    if (typeof AudioNotifier !== 'undefined' && AudioNotifier.playContract) {
-      AudioNotifier.playContract()
-    }
-
-    await DB.flush?.()
-
-    // ارسال بلادرنگ به سرور
-    if (typeof ServerSync !== 'undefined' && ServerSync.pushNow) {
-      ServerSync.pushNow().catch(() => {})
-    }
-
-    if (typeof Utils !== 'undefined' && Utils.toast) {
-      Utils.toast('تأیید و امضای دیجیتال قرارداد با موفقیت ثبت شد ✓✓', 'success')
-    }
-
-    // به‌روزرسانی نمای پورتال
-    this.state.contract = { ...c, ...patch }
-    this.renderDashboard()
   }
 }
 

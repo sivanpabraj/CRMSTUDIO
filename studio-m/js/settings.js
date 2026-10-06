@@ -527,8 +527,8 @@ const SMSettings = {
           { value: 'smsir', label: 'SMS.ir' },
           { value: 'farazsms', label: 'فراز SMS' }
         ]})}
-        ${SMUI.formField('توکن کنسول / کلید API (API Key)', 'set-sms-key', { value: info.smsApiKey || '', dir: 'ltr', placeholder: 'مثلاً: 09e58c2abb4a49188d3a1f5c4a53390f' })}
-        ${SMUI.formField('شماره خط اختصاصی فرستنده', 'set-sms-line', { value: info.smsLineNumber || '', dir: 'ltr', placeholder: 'مثلاً: 50004001004893' })}
+        ${SMUI.formField('توکن کنسول / کلید API (API Key)', 'set-sms-key', { value: info.smsApiKey || '', dir: 'ltr', placeholder: 'مثلاً: a1b2c3d4e5f6...' })}
+        ${SMUI.formField('شماره خط اختصاصی فرستنده', 'set-sms-line', { value: info.smsLineNumber || '', dir: 'ltr', placeholder: 'مثلاً: 500012345678' })}
         ${SMUI.formField('نام کاربری پنل (اختیاری — برای توکن کنسول خالی بگذارید)', 'set-sms-user', { value: info.smsUsername || '', dir: 'ltr', placeholder: 'username پنل' })}
         ${SMUI.formField('URL پراکسی SMS (اختیاری — برای ارسال مستقیم خالی بگذارید)', 'set-sms-proxy', { value: info.smsProxyUrl || '', dir: 'ltr', placeholder: 'https://xxx.supabase.co/functions/v1/send-sms' })}
 
