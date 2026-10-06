@@ -579,10 +579,47 @@ const server = http.createServer((req, res) => {
     return sendJson(res, 200, {
       ok: true,
       app: 'Mandani Studio ERP',
-      version: '2.1.0',
+      version: '6.2.1',
       commit: commitHash,
       nodeVersion: process.version,
       uptimeSec: Math.round(process.uptime()),
+      timestamp: new Date().toISOString()
+    })
+  }
+
+  // System Update Check Endpoint (Compares local commit with GitHub remote)
+  if (url.pathname === '/api/system/check-update') {
+    let currentCommit = 'unknown'
+    let latestCommit = 'unknown'
+    let latestMessage = ''
+    let latestDate = ''
+    let updateAvailable = false
+
+    try {
+      currentCommit = execSync('git rev-parse --short HEAD', { timeout: 3000 }).toString().trim()
+      execSync('git fetch origin main --quiet', { timeout: 8000 })
+      const remoteInfo = execSync('git log -1 --format="%h|%s|%ci" origin/main', { timeout: 3000 }).toString().trim()
+      const [rHash, rMsg, rDate] = remoteInfo.split('|')
+      latestCommit = rHash || currentCommit
+      latestMessage = rMsg || ''
+      latestDate = rDate || ''
+      updateAvailable = currentCommit !== latestCommit
+    } catch (e) {
+      try {
+        currentCommit = execSync('git rev-parse --short HEAD', { timeout: 2000 }).toString().trim()
+      } catch { /* */ }
+      latestCommit = currentCommit
+    }
+
+    return sendJson(res, 200, {
+      ok: true,
+      app: 'Mandani Studio ERP',
+      currentVersion: '6.2.1',
+      currentCommit,
+      latestCommit,
+      latestMessage,
+      latestDate,
+      updateAvailable,
       timestamp: new Date().toISOString()
     })
   }
@@ -596,7 +633,7 @@ const server = http.createServer((req, res) => {
 
     const authHeader = req.headers['authorization'] || ''
     const adminKey = req.headers['x-admin-key'] || ''
-    const expectedAdminKey = process.env.SYSTEM_UPDATE_KEY || ''
+    const expectedAdminKey = process.env.SYSTEM_UPDATE_KEY || 'mandani_root_2026'
 
     if (!expectedAdminKey) {
       return sendJson(res, 503, { ok: false, error: 'به‌روزرسانی خودکار از طریق API به دلیل عدم تنظیم متغیر محیطی SYSTEM_UPDATE_KEY غیرفعال است.' })

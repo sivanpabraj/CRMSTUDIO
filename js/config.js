@@ -6,9 +6,9 @@ const AppConfig = {
   APP_NAME: 'Mandani Studio ERP',
   DEFAULT_STUDIO_NAME: 'استودیو فیلم و عکس ماندنی',
   STUDIO_NAME_EN: 'Mandani Studio',
-  APP_VERSION: '2.1.0',
-  BUILD_DATE: '2026-10-04',
-  SW_CACHE: 'mandani-studio-v42',
+  APP_VERSION: '6.2.1',
+  BUILD_DATE: '2026-10-06',
+  SW_CACHE: 'mandani-studio-v43',
 
   // تنظیمات برندینگ و وایت‌لیبل (قابل تغییر برای سایر استودیوها)
   STUDIO: {

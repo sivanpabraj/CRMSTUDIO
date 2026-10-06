@@ -1,6 +1,6 @@
 {
   "name": "studio-erp",
-  "version": "1.0.0",
+  "version": "6.2.1",
   "description": "پلتفرم جامع مدیریت سازمانی استودیو (Studio ERP)",
   "private": true,
   "type": "module",

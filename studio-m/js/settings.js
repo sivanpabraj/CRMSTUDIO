@@ -908,16 +908,23 @@ const SMSettings = {
       </div>
       <div class="sm-card sm-settings-full">
         <div class="sm-card-head">
-          <div class="sm-card-title"><i class="fas fa-cloud-arrow-up"></i> به‌روزرسانی خودکار سرور (One-Click Auto-Update)</div>
-          ${SMUI.badge('نسخه ' + (AppConfig.APP_VERSION || '2.1.0'), 'info')}
+          <div class="sm-card-title"><i class="fas fa-cloud-arrow-up"></i> وضعیت نسخه و به‌روزرسانی زنده سیستم</div>
+          <span id="sm-system-ver-badge">${SMUI.badge('نسخه ' + (AppConfig.APP_VERSION || '6.2.1'), 'info')}</span>
         </div>
         <div class="sm-card-body">
-          <p style="font-size:.85rem;color:var(--sm-text-muted);line-height:1.7;margin:0 0 12px">
-            دریافت آخرین نسخه و تغییرات جدید از گیت‌هاب همراه با <strong>تهیه خودکار فایل پشتیبان (Snapshot)</strong> قبل از هرگونه تغییر.
-          </p>
-          <button type="button" class="sm-btn sm-btn-primary" onclick="SMSettings.confirmSystemUpdate()">
-            <i class="fas fa-rotate"></i> بررسی و اجرای به‌روزرسانی زنده سیستم
-          </button>
+          <div id="sm-system-update-container">
+            <p style="font-size:.85rem;color:var(--sm-text-muted);line-height:1.7;margin:0 0 12px">
+              پایش و استعلام مستقیم آخرین کدهای منتشرشده روی گیت‌هاب همراه با <strong>تهیه خودکار فایل پشتیبان (Snapshot)</strong> قبل از هرگونه تغییر.
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="sm-btn sm-btn-primary" onclick="SMSettings.checkSystemUpdate()">
+                <i class="fas fa-rotate"></i> بررسی انتشار نسخه جدید در گیت‌هاب
+              </button>
+              <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.confirmSystemUpdate()">
+                <i class="fas fa-rocket"></i> اجرای دستی به‌روزرسانی سرور
+              </button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="sm-card sm-settings-full sm-card-danger-zone">
@@ -948,8 +955,65 @@ const SMSettings = {
     </div>`
   },
 
+  async checkSystemUpdate(silent = false) {
+    const container = document.getElementById('sm-system-update-container')
+    if (!silent && container) {
+      container.innerHTML = `<p style="font-size:.85rem;color:var(--sm-text-muted)"><i class="fas fa-spinner fa-spin"></i> در حال ارتباط با مخزن گیت‌هاب و بررسی نسخه‌ها...</p>`
+    }
+
+    try {
+      const res = await fetch('/api/system/check-update')
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d.ok) {
+        if (!silent) SM.toast(d.error || 'خطا در بررسی به‌روزرسانی', 'error')
+        return
+      }
+
+      if (container) {
+        if (d.updateAvailable) {
+          container.innerHTML = `
+            <div style="background:linear-gradient(135deg,rgba(245,158,11,0.12) 0%,rgba(20,20,26,0.85) 100%);border:1px solid rgba(245,158,11,0.35);border-radius:12px;padding:16px;margin-bottom:12px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <span style="color:#f59e0b;font-weight:800;font-size:14px"><i class="fas fa-sparkles"></i> نسخه جدید در گیت‌هاب آماده است!</span>
+                <span class="sm-badge sm-badge-warning" dir="ltr">${d.latestCommit}</span>
+              </div>
+              <div style="font-size:12.5px;color:#e5e7eb;margin-bottom:10px;line-height:1.6">
+                <strong>پیام تغییرات:</strong> ${SM.esc(d.latestMessage || 'به‌روزرسانی جدید استودیو')}<br>
+                <small style="color:var(--sm-text-muted)">تاریخ انتشار: ${SM.esc(d.latestDate || '—')} · کامیت فعلی سرور: ${d.currentCommit}</small>
+              </div>
+              <button type="button" class="sm-btn sm-btn-primary" onclick="SMSettings.confirmSystemUpdate()" style="width:100%;padding:11px">
+                <i class="fas fa-cloud-arrow-down"></i> تایید و ارتقای دستی سیستم به آخرین نسخه گیت‌هاب
+              </button>
+            </div>`
+          if (!silent) SM.toast('نسخه جدید در گیت‌هاب یافت شد!', 'warning')
+        } else {
+          container.innerHTML = `
+            <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:12px;padding:14px;margin-bottom:12px">
+              <div style="color:#22c55e;font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:8px">
+                <i class="fas fa-circle-check"></i> سیستم شما کاملاً به‌روز است
+              </div>
+              <p style="margin:6px 0 10px;font-size:12px;color:rgba(255,255,255,0.7)">
+                آخرین کامیت فعال روی سرور: <code dir="ltr">${d.currentCommit}</code> (${SM.esc(d.latestMessage || 'نسخه جاری')})
+              </p>
+              <div style="display:flex;gap:8px">
+                <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost" onclick="SMSettings.checkSystemUpdate()">
+                  <i class="fas fa-rotate"></i> بررسی مجدد
+                </button>
+                <button type="button" class="sm-btn sm-btn-xs sm-btn-primary" onclick="SMSettings.confirmSystemUpdate()">
+                  <i class="fas fa-rocket"></i> اعمال مجدد کدهای سرور (Re-sync)
+                </button>
+              </div>
+            </div>`
+          if (!silent) SM.toast('سیستم کاملاً با گیت‌هاب به‌روز و همگام است', 'success')
+        }
+      }
+    } catch (e) {
+      if (!silent) SM.toast('خطا در بررسی وضعیت آپدیت: ' + e.message, 'error')
+    }
+  },
+
   confirmSystemUpdate() {
-    SMUI.modal('⚠️ هشدار امنیتی و به‌روزرسانی زنده سرور', `
+    SMUI.modal('⚠️ تایید و اجرای به‌روزرسانی زنده سرور', `
       <div style="text-align:right;padding:4px 0">
         <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:12px;margin-bottom:14px">
           <p style="margin:0 0 8px 0;font-size:13px;color:#f59e0b;font-weight:700">
@@ -961,7 +1025,7 @@ const SMSettings = {
         </div>
 
         <p style="font-size:12.5px;color:rgba(255,255,255,0.7);line-height:1.8;margin:0 0 16px 0">
-          برای اطمینان و آرامش خاطر مضاعف، توصیه می‌شود هم‌اکنون یک نسخه فایل پشتیبان آفلاین (JSON) را نیز روی همین دستگاه دانلود کنید.
+          پس از کلیک روی تایید، سرور کدهای نسخه جدید را مستقیماً از گیت‌هاب دریافت کرده، اعتبارسنجی را انجام داده و بدون قطعی مجدداً راه‌اندازی می‌شود.
         </p>
 
         <div style="display:flex;flex-direction:column;gap:8px">
@@ -979,7 +1043,7 @@ const SMSettings = {
 
   async executeServerUpdate() {
     SMUI.closeModal()
-    SM.toast('در حال تهیه پشتیبان خودکار سرور و دریافت تغییرات...', 'info', 6000)
+    SM.toast('در حال تهیه پشتیبان خودکار سرور و دریافت تغییرات از گیت‌هاب...', 'info', 10000)
     if (typeof AudioNotifier !== 'undefined') AudioNotifier.playSent()
 
     try {
@@ -996,7 +1060,11 @@ const SMSettings = {
       }
 
       if (typeof AudioNotifier !== 'undefined') AudioNotifier.playContract()
-      SM.toast('✅ فرآیند به‌روزرسانی خودکار سرور با موفقیت آغاز شد و بکاپ ذخیره گردید.', 'success', 8000)
+      SM.toast('✅ فرآیند ارتقای سرور با موفقیت انجام شد. سیستم در حال بررسی سلامت نسخه جدید است...', 'success', 8000)
+
+      setTimeout(() => {
+        SMSettings.checkSystemUpdate(true)
+      }, 3500)
     } catch (e) {
       SM.toast('خطا در ارتباط با سرور: ' + e.message, 'error')
     }
