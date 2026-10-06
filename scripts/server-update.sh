@@ -27,9 +27,9 @@ fi
 # ۲. دریافت آخرین نسخه از ریپازیتوری گیت‌هاب
 cd "${APP_DIR}"
 echo "📥 در حال دریافت تغییرات جدید از گیت‌هاب..."
-git fetch origin
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-git pull origin "${CURRENT_BRANCH}"
+git fetch origin "${CURRENT_BRANCH}"
+git reset --hard "origin/${CURRENT_BRANCH}"
 echo "✓ آخرین کدهای نسخه جدید با موفقیت دریافت شدند."
 
 # ۳. بررسی صحت سینتکس فایل‌های سرور
