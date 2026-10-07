@@ -6,62 +6,51 @@
 
 ---
 
-## نمره‌گذاری مهندسی (به‌روز پس از فاز فعلی)
+## نمره‌گذاری مهندسی (نهایی این فاز)
 
-| حوزه | قبل | الان | هدف بعدی |
-|------|-----|------|----------|
-| معماری ماژولار | 5 | **6** | 8 (استخراج bookings/timeline شروع شد) |
-| امنیت auth/session | 6 | **7** | 8 (fail-closed در production) |
-| SecureDB / CSRF | 8 | 8 | 8 |
-| همگام‌سازی ابر | 7 | 7 | 8 |
-| **PWA / Offline** | **3** | **8** | 9 |
-| RTL / UX فارسی | 9 | 9 | 9 |
-| مستندات | 8 | 9 | 9 |
-| تست و CI | 6 | 6 | 8 |
-| عملکرد داده | 5 | 5 | 7 (IDB v2) |
-| قابلیت نگهداری | 5 | **6.5** | 8 |
+| حوزه | قبل | الان | توضیح |
+|------|-----|------|--------|
+| معماری ماژولار | 5 | **6** | bookings/timeline استخراج شدند |
+| امنیت auth/session | 6 | **7** | SessionSign fail-closed |
+| SecureDB / CSRF | 8 | 8 | — |
+| همگام‌سازی ابر | 7 | 7 | — |
+| **PWA / Offline** | **3** | **8** | SW واقعی + manifest |
+| RTL / UX فارسی | 9 | 9 | — |
+| مستندات | 8 | 9 | audit + E2E.md |
+| **تست و CI** | **6** | **8** | Playwright E2E + unit session |
+| عملکرد داده | 5 | 5 | IDB v2 باقی |
+| قابلیت نگهداری | 5 | **6.5** | — |
 
 **میانگین قبل:** ~۶.۲  
-**میانگین الان:** ~۷.۲  
-**هدف فاز بعد:** ~۷.۸
+**میانگین الان:** ~۷.۴
 
 ---
 
-## کارهای انجام‌شده در این شاخه
+## کارهای انجام‌شده
 
 ### PWA
-- [x] `sw.js` v41 — shell cache + SWR assets + network-only API
-- [x] حذف unregister از `studio-m/index.html` و `site.html`
-- [x] `manifest.json` قابل نصب
-- [x] `sw-register.js` مقاوم به race
-- [ ] حذف unregister از `index.html` (هنوز باقی؛ register تأخیری جبران می‌کند)
+- [x] sw.js v41
+- [x] studio-m + site بدون unregister
+- [x] manifest قابل نصب
+- [ ] index.html head unregister (جبران با sw-register تأخیری)
 
 ### امنیت
-- [x] `session-sign.js` v2 — fail-closed در production برای نشست بدون signature
+- [x] session-sign v2 fail-closed
 
-### ماژولارسازی
-- [x] استخراج `bookings` و `timeline` به `studio-m/js/modules/`
-- [x] بارگذاری override در `studio-m/index.html`
-- [ ] حذف تعریف تکراری از `modules.js` (۸۰KB باقی)
-- [ ] استخراج `contracts` / `settings` tabs
+### ماژولار
+- [x] bookings + timeline استخراج
 
----
-
-## اهداف باقی‌مانده (اولویت)
-
-1. **index.html** — حذف بلوک unregister در head (راهنما: `docs/PWA_INDEX_HTML_FIX.md`)
-2. حذف bookings/timeline از داخل `modules.js` برای کاهش حجم
-3. IndexedDB v2 (store-per-collection)
-4. E2E: OTP + contract + workflow status
+### تست
+- [x] e2e/auth, pwa, studio-m, contract
+- [x] smoke selectors اصلاح
+- [x] tests/session-sign.test.js
+- [x] CI: playwright بعد از build
 
 ---
 
-## ایجنت‌های مهندسی
+## باقی‌مانده
 
-| ایجنت | skill |
-|-------|-------|
-| PWA Engineer | `.agents/skills/crmstudio-pwa/` |
-| Code Quality | `.agents/skills/crmstudio-code-quality/` |
-| Architecture | `.agents/skills/crmstudio-architecture/` |
-| Security | `.agents/skills/crmstudio-security/` |
-| Sync | `.agents/skills/crmstudio-sync-engine/` |
+1. حذف unregister از index.html
+2. حذف تعریف تکراری از modules.js
+3. IndexedDB v2
+4. E2E لاگین واقعی با OTP در staging
