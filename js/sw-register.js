@@ -1,6 +1,6 @@
 /**
  * Studio ERP — Service Worker registration + update UX
- * Engineering: production PWA only; skip aggressive cache on localhost during dev
+ * Survives legacy pages that call unregister() in <head>.
  */
 (() => {
   if (!('serviceWorker' in navigator)) return
@@ -10,7 +10,6 @@
     location.hostname === '127.0.0.1' ||
     location.hostname === '[::1]'
 
-  // On localhost allow opt-out via ?nosw=1 for clean debugging
   if (isLocal && /[?&]nosw=1/.test(location.search)) {
     navigator.serviceWorker.getRegistrations().then((regs) => {
       regs.forEach((r) => r.unregister())
@@ -18,30 +17,34 @@
     return
   }
 
-  const swPath = location.pathname.includes('/studio-m/') ? '../sw.js' : './sw.js'
+  const inStudioM = location.pathname.includes('/studio-m/')
+  const swPath = inStudioM ? '../sw.js' : './sw.js'
+  const scope = inStudioM ? '../' : './'
 
   const register = () => {
     navigator.serviceWorker
-      .register(swPath, { scope: location.pathname.includes('/studio-m/') ? '../' : './' })
+      .register(swPath, { scope })
       .then((reg) => {
         if (reg.update) reg.update()
-
         reg.addEventListener('updatefound', () => {
           const worker = reg.installing
           if (!worker) return
           worker.addEventListener('statechange', () => {
             if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-              // New version ready — soft prompt via custom event
               window.dispatchEvent(new CustomEvent('crmstudio:sw-update', { detail: { reg } }))
             }
           })
         })
       })
-      .catch(() => {
-        /* PWA optional */
-      })
+      .catch(() => {})
   }
 
-  if (document.readyState === 'complete') register()
-  else window.addEventListener('load', register)
+  // Immediate + delayed (beats head-level unregister race on index.html)
+  const run = () => {
+    register()
+    setTimeout(register, 400)
+  }
+
+  if (document.readyState === 'complete') run()
+  else window.addEventListener('load', run)
 })()
