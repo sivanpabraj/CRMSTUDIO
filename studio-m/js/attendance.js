@@ -206,7 +206,7 @@ const SMAttendance = {
     const title = p ? `${p.jd.toLocaleString('fa-IR')} ${Utils.jalaliMonthName(p.jm)} ${p.jy.toLocaleString('fa-IR')}` : date
     const personnel = DB.get('personnel').filter(p => p.status !== 'inactive')
 
-    let emptyHtml = ''
+    let emptyHtml
     if (!personnel.length) {
       emptyHtml = `<div style="background:rgba(201,169,110,0.08);border:1px dashed rgba(201,169,110,0.3);border-radius:12px;padding:16px;text-align:center;margin-top:10px">
         <i class="fas fa-users-gear" style="font-size:24px;color:var(--sm-gold);margin-bottom:8px"></i>

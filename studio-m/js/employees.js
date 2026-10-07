@@ -415,7 +415,7 @@ const SMEmployees = {
 
     const contractBody = `قرارداد همکاری بین ${studio} و ${p.name} — نقش: ${roleList} — ${paySummary}`
 
-    const contract = await SecureDB.insert('persContracts', {
+    const _contract = await SecureDB.insert('persContracts', {
       type: 'employment',
       personnelId: p.id,
       personnelName: p.name,

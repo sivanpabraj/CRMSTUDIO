@@ -1528,6 +1528,9 @@ SMModules.api = {
       await DB.flush?.()
     } else DB.delete('apiKeys', id)
     SM.navigate('api')
+  }
+}
+
 /* ── Signatures & Digital Contracts ── */
 SMModules.signatures = {
   render(el) {

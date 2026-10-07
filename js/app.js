@@ -938,7 +938,7 @@ const Portal = {
 
   _otpStep(phone) {
     const mask = phone ? `${phone.slice(0, 4)}•••${phone.slice(-4)}` : ''
-    const pending = UnifiedLogin?.getPending?.()
+    const _pending = UnifiedLogin?.getPending?.()
     const channelName = this.state._otpChannel === 'bale' ? 'پیام‌رسان بله' : this.state._otpChannel === 'whatsapp' ? 'واتساپ' : 'پیامک'
     return `
       <div class="auth-form">

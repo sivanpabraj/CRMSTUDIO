@@ -7,7 +7,7 @@ const SM = {
   DISABLED_MODULES: {},
 
   _normalizeRoute(route) {
-    if (route === 'gallery' || route === 'media') return 'dashboard'
+    if (route === 'gallery') return 'media'
     return route
   },
 
@@ -116,6 +116,7 @@ const SM = {
       { id: 'equipment', icon: 'fa-camera', group: 'assets', perm: 'view_all' },
       { id: 'custody', icon: 'fa-right-left', group: 'assets', perm: 'view_all' },
       { id: 'files', icon: 'fa-folder-open', group: 'assets', perm: 'view_all' },
+      { id: 'media', icon: 'fa-photo-film', group: 'assets', perm: 'view_contract' },
       { id: 'workflow', icon: 'fa-diagram-project', group: 'assets', perm: 'editing' },
       { id: 'notifications', icon: 'fa-bell', group: 'comms', perm: null },
       { id: 'inbox', icon: 'fa-inbox', group: 'comms', perm: 'view_contract' },

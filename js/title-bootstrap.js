@@ -47,7 +47,7 @@
       if (homeLink) {
         homeLink.innerHTML = '<i class="fas fa-home"></i> صفحه اصلی ' + studioName;
       }
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
   }
 
   applyBranding();
