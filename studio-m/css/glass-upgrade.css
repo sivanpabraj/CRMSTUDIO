@@ -1,0 +1,160 @@
+/* ═══════════════════════════════════════════════════════════
+   Glass Upgrade v2 — StatsCard + panels inspired by glassy dash
+   Load AFTER dark-glass-theme.css / studio-m.css
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  --glass-radius: 18px;
+  --glass-radius-sm: 12px;
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.06);
+  --glass-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  --glass-gold: #C9A96E;
+  --glass-emerald: #34d399;
+}
+
+/* Unified glass card */
+.glass-card {
+  position: relative;
+  border-radius: var(--glass-radius);
+  border: 1px solid var(--glass-border);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.07), rgba(255,255,255,.02)),
+    rgba(12, 18, 26, 0.72);
+  box-shadow: var(--glass-shadow);
+  overflow: hidden;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-card {
+    backdrop-filter: blur(20px) saturate(130%);
+    -webkit-backdrop-filter: blur(20px) saturate(130%);
+  }
+}
+
+.glass-card:hover {
+  border-color: color-mix(in srgb, var(--sm-accent, var(--glass-gold)) 40%, var(--glass-border));
+  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.35);
+}
+
+.glass-card--lift:hover {
+  transform: translateY(-4px);
+}
+
+/* StatsCard row (KPI) */
+.glass-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.glass-stat {
+  padding: 14px 16px;
+  border-radius: var(--glass-radius-sm);
+  border: 1px solid var(--glass-border);
+  background: linear-gradient(160deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: default;
+}
+
+.glass-stat[role="button"] { cursor: pointer; }
+
+.glass-stat__label {
+  font-size: .72rem;
+  color: var(--sm-text-muted, #9da9b8);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.glass-stat__value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--sm-text, #f7f9fc);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.glass-stat__delta {
+  font-size: .7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--glass-emerald);
+}
+
+.glass-stat__delta.is-down { color: #f87171; }
+
+.glass-stat__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: .85rem;
+  background: color-mix(in srgb, var(--stat-color, var(--glass-gold)) 22%, transparent);
+  color: var(--stat-color, var(--glass-gold));
+}
+
+/* Section panels */
+.glass-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.glass-panel-head h3 {
+  margin: 0;
+  font-size: .95rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Apply glass to existing dashboard widgets when dark-glass active */
+body[data-theme="dark-glass"] .sm-dash-widget,
+body[data-theme="dark-glass"] .sm-card,
+body[data-theme="dark-glass"] .sm-stat {
+  border-radius: var(--glass-radius);
+}
+
+body[data-theme="dark-glass"] .sm-dash-widget-head {
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+/* Contract share status chips */
+.share-log-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.share-log-chip--wa { background: rgba(37, 211, 102, .12); color: #86efac; border-color: rgba(37,211,102,.3); }
+.share-log-chip--email { background: rgba(56, 189, 248, .12); color: #7dd3fc; border-color: rgba(56,189,248,.3); }
+
+@media (max-width: 640px) {
+  .glass-stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-card,
+  .glass-card--lift:hover { transition: none; transform: none; }
+}
