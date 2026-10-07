@@ -1,8 +1,22 @@
 /**
- * Studio M Phase 2 — HMAC-signed local session (anti-forgery)
+ * Studio M — HMAC-signed local session (anti-forgery) v2
+ * Engineering upgrades:
+ * - Fail closed on missing signature in production (not localhost)
+ * - Meta marker for secret creation
+ * - Rotate secret on explicit clear only
  */
 const SessionSign = {
   SECRET_KEY: 'sm_session_secret',
+  SECRET_KEY_META: 'sm_session_secret_meta',
+
+  _isLocalHost() {
+    try {
+      const h = location.hostname
+      return h === 'localhost' || h === '127.0.0.1' || h === '[::1]'
+    } catch {
+      return true
+    }
+  },
 
   async _getSecret() {
     try {
@@ -23,6 +37,9 @@ const SessionSign = {
         }
         try { localStorage.setItem(this.SECRET_KEY, s) } catch { /* */ }
         try { sessionStorage.setItem(this.SECRET_KEY, s) } catch { /* */ }
+        try {
+          localStorage.setItem(this.SECRET_KEY_META, JSON.stringify({ createdAt: Date.now(), v: 2 }))
+        } catch { /* */ }
       }
       return s
     } catch {
@@ -60,13 +77,13 @@ const SessionSign = {
     const secret = await this._getSecret()
     if (!secret) return session
     const sig = await this._hmac(this._payload(session), secret)
-    return { ...session, sig, v: 1 }
+    return { ...session, sig, v: 2 }
   },
 
   async verify(session) {
     if (!session?.userId) return false
     if (!session.sig) {
-      return false
+      return this._isLocalHost()
     }
     try {
       let secret = null
@@ -74,7 +91,9 @@ const SessionSign = {
       if (!secret) {
         try { secret = sessionStorage.getItem(this.SECRET_KEY) } catch { /* */ }
       }
-      if (!secret) return true
+      if (!secret) {
+        return this._isLocalHost()
+      }
       const expected = await this._hmac(this._payload(session), secret)
       if (session.sig === expected) return true
 
@@ -85,13 +104,14 @@ const SessionSign = {
       }
       return false
     } catch {
-      return true
+      return this._isLocalHost()
     }
   },
 
   clearSecret() {
     try { sessionStorage.removeItem(this.SECRET_KEY) } catch { /* */ }
     try { localStorage.removeItem(this.SECRET_KEY) } catch { /* */ }
+    try { localStorage.removeItem(this.SECRET_KEY_META) } catch { /* */ }
   }
 }
 
