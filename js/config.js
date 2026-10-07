@@ -6,9 +6,9 @@ const AppConfig = {
   APP_NAME: 'Mandani Studio ERP',
   DEFAULT_STUDIO_NAME: 'استودیو فیلم و عکس ماندنی',
   STUDIO_NAME_EN: 'Mandani Studio',
-  APP_VERSION: '6.2.2',
+  APP_VERSION: '6.2.3',
   BUILD_DATE: '2026-10-07',
-  SW_CACHE: 'mandani-studio-v44',
+  SW_CACHE: 'mandani-studio-v45',
 
   STUDIO: {
     NAME: 'استودیو فیلم و عکس ماندنی',
@@ -54,7 +54,7 @@ const AppConfig = {
   WALLPAPER_KEY: 'talar_wallpaper',
   ACCENT_KEY: 'talar_accent',
   DRAFT_KEY: 'talar_contract_draft',
-  CHANGELOG_SEEN_KEY: 'talar_changelog_v622_seen',
+  CHANGELOG_SEEN_KEY: 'talar_changelog_v623_seen',
 
   LEGACY_DB_KEYS: ['studio_db_v4', 'talar_db_v3'],
   BACKUP_PREFIX: 'studio_bu_',
@@ -97,16 +97,14 @@ const AppConfig = {
   SHOW_DEMO_OTP: false,
 
   CHANGELOG: [
+    { icon: '💰', title: 'نسخه ۶.۲.۳', desc: 'نمای مالی مدرن: مانده خالص، نمودار، سلامت مالی، اکشن سریع در حسابداری' },
     { icon: '✨', title: 'نسخه ۶.۲.۲', desc: 'تم شیشه‌ای ارتقا، KPI نقش‌محور، لاگ ارسال قرارداد، PWA پایدار' },
     { icon: '🚀', title: 'CRMSTUDIO ERP 6.1', desc: 'پلتفرم جامع مدیریت سازمانی (ERP) — ترازنامه مالی، تخصیص انبار، تقویم و گردش‌کار' },
-    { icon: '🌐', title: 'نسخه ۵.۷', desc: 'سایت عمومی، کد عضویت استودیو، جداسازی ورود مدیر/پرسنل/مشتری، پنل تنظیمات با کد و لینک' },
+    { icon: '🌐', title: 'نسخه ۵.۷', desc: 'سایت عمومی، کد عضویت استودیو، جداسازی ورود مدیر/پرسنل/مشتری' },
     { icon: '🗄️', title: 'IndexedDB', desc: 'ذخیره‌سازی تا ۵۰MB+ با مهاجرت خودکار از localStorage' },
-    { icon: '🔐', title: 'امنیت', desc: 'رمز حداقل ۸ کاراکتر + سیستم مجوز نقش‌ها' },
-    { icon: '📦', title: 'پشتیبان‌گیری', desc: 'بک‌آپ در IndexedDB جدا — بدون پر شدن localStorage' },
-    { icon: '⚡', title: 'Vite Dev Server', desc: 'اجرای سریع با npm run dev' },
-    { icon: '🎨', title: 'UI', desc: 'صفحه بارگذاری و اعلان نسخه جدید' },
-    { icon: '🧹', title: 'یکپارچه‌سازی', desc: 'نام‌گذاری و Service Worker به‌روز' },
-    { icon: '✨', title: 'تم شیشه‌ای', desc: 'پس‌زمینه پویا، دکمه‌های شیشه‌ای و رنگ‌بندی جذاب در همه بخش‌ها' }
+    { icon: '🔐', title: 'امنیت', desc: 'رمز + سیستم مجوز نقش‌ها' },
+    { icon: '📦', title: 'پشتیبان‌گیری', desc: 'بک‌آپ در IndexedDB' },
+    { icon: '✨', title: 'تم شیشه‌ای', desc: 'پس‌زمینه پویا و کارت‌های شیشه‌ای' }
   ]
 }
 
