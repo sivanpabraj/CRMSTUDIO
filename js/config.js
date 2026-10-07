@@ -6,11 +6,10 @@ const AppConfig = {
   APP_NAME: 'Mandani Studio ERP',
   DEFAULT_STUDIO_NAME: 'استودیو فیلم و عکس ماندنی',
   STUDIO_NAME_EN: 'Mandani Studio',
-  APP_VERSION: '6.2.1',
-  BUILD_DATE: '2026-10-06',
-  SW_CACHE: 'mandani-studio-v43',
+  APP_VERSION: '6.2.2',
+  BUILD_DATE: '2026-10-07',
+  SW_CACHE: 'mandani-studio-v44',
 
-  // تنظیمات برندینگ و وایت‌لیبل (قابل تغییر برای سایر استودیوها)
   STUDIO: {
     NAME: 'استودیو فیلم و عکس ماندنی',
     NAME_EN: 'Mandani Studio',
@@ -55,13 +54,12 @@ const AppConfig = {
   WALLPAPER_KEY: 'talar_wallpaper',
   ACCENT_KEY: 'talar_accent',
   DRAFT_KEY: 'talar_contract_draft',
-  CHANGELOG_SEEN_KEY: 'talar_changelog_v60_seen',
+  CHANGELOG_SEEN_KEY: 'talar_changelog_v622_seen',
 
   LEGACY_DB_KEYS: ['studio_db_v4', 'talar_db_v3'],
   BACKUP_PREFIX: 'studio_bu_',
 
   MIN_PASSWORD_LENGTH: 6,
-  /** فقط برای seed تست محلی — در production رمز تصادفی ساخته می‌شود */
   INITIAL_ADMIN_PHONE: '09121000000',
   INITIAL_ADMIN_PASSWORD: '12345678',
 
@@ -96,10 +94,10 @@ const AppConfig = {
   OTP_MAX_SENDS_PER_HOUR: 3,
   OTP_MAX_VERIFY_ATTEMPTS: 5,
 
-  /** نمایش کد OTP در UI فقط در dev/local */
   SHOW_DEMO_OTP: false,
 
   CHANGELOG: [
+    { icon: '✨', title: 'نسخه ۶.۲.۲', desc: 'تم شیشه‌ای ارتقا، KPI نقش‌محور، لاگ ارسال قرارداد، PWA پایدار' },
     { icon: '🚀', title: 'CRMSTUDIO ERP 6.1', desc: 'پلتفرم جامع مدیریت سازمانی (ERP) — ترازنامه مالی، تخصیص انبار، تقویم و گردش‌کار' },
     { icon: '🌐', title: 'نسخه ۵.۷', desc: 'سایت عمومی، کد عضویت استودیو، جداسازی ورود مدیر/پرسنل/مشتری، پنل تنظیمات با کد و لینک' },
     { icon: '🗄️', title: 'IndexedDB', desc: 'ذخیره‌سازی تا ۵۰MB+ با مهاجرت خودکار از localStorage' },
