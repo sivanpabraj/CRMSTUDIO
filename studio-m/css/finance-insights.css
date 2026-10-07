@@ -1,0 +1,98 @@
+.fin-insights {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+@media (max-width: 800px) {
+  .fin-insights { grid-template-columns: 1fr; }
+}
+
+.fin-ins-card {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04);
+}
+
+body:not([data-theme="dark-glass"]) .fin-ins-card {
+  background: #fff;
+  border-color: rgba(0,0,0,.06);
+  box-shadow: 0 8px 28px rgba(0,0,0,.04);
+}
+
+.fin-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.fin-donut {
+  --p1: 40; --p2: 35; --p3: 25;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: conic-gradient(
+    #8b5cf6 0 calc(var(--p1) * 1%),
+    #34d399 calc(var(--p1) * 1%) calc((var(--p1) + var(--p2)) * 1%),
+    #fbbf24 calc((var(--p1) + var(--p2)) * 1%) 100%
+  );
+  display: grid;
+  place-items: center;
+  position: relative;
+  flex-shrink: 0;
+}
+.fin-donut::before {
+  content: '';
+  position: absolute;
+  inset: 14px;
+  border-radius: 50%;
+  background: #0d151e;
+}
+body:not([data-theme="dark-glass"]) .fin-donut::before { background: #fff; }
+.fin-donut span {
+  position: relative;
+  z-index: 1;
+  font-weight: 800;
+  font-size: .85rem;
+}
+
+.fin-donut-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: .72rem;
+  line-height: 1.7;
+}
+.fin-donut-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: 6px;
+}
+.fin-donut-legend .c-bank { background: #8b5cf6; }
+.fin-donut-legend .c-recv { background: #34d399; }
+.fin-donut-legend .c-other { background: #fbbf24; }
+
+.fin-ins-ai {
+  background: linear-gradient(145deg, rgba(15,40,30,.9), rgba(10,18,24,.85));
+  color: #e8f5e9;
+}
+body:not([data-theme="dark-glass"]) .fin-ins-ai {
+  background: linear-gradient(145deg, #0f2920, #132018);
+  color: #e8f5e9;
+}
+.fin-ai-tips {
+  margin: 0 0 12px;
+  padding-right: 16px;
+  font-size: .78rem;
+  line-height: 1.65;
+  opacity: .92;
+}
+.fin-ai-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
