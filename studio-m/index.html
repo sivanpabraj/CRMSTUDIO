@@ -3,20 +3,13 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="theme-color" content="#0071E3"/>
+  <meta name="theme-color" content="#C9A96E"/>
   <meta name="description" content="Studio ERP — Enterprise Photography & Videography Studio ERP"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <title>Studio ERP</title>
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(regs) {
-        for (var i = 0; i < regs.length; i++) regs[i].unregister();
-      });
-    }
-    if ('caches' in window) {
-      caches.keys().then(function(keys) {
-        for (var i = 0; i < keys.length; i++) caches.delete(keys[i]);
-      });
-    }
     function purgeStuckLoader() {
       var l = document.getElementById('talar-loader');
       if (l && (l.innerText.indexOf('6.1.0') !== -1 || l.innerText.indexOf('Studio ERP') !== -1)) {
@@ -28,6 +21,7 @@
     setTimeout(purgeStuckLoader, 1000);
   </script>
   <link rel="manifest" href="../manifest.json"/>
+  <link rel="apple-touch-icon" href="../icons/icon-192.png"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
@@ -104,6 +98,6 @@
   <script src="js/theme-system.js" defer></script>
   <script src="js/module-launcher.js" defer></script>
   <script src="js/app.js" defer></script>
-<script src="../js/sw-register.js"></script>
+  <script src="../js/sw-register.js"></script>
 </body>
 </html>
