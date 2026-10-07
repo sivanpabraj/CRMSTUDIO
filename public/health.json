@@ -1,1 +1,7 @@
-{"status":"ok","service":"crmstudio","version":"1.0.0"}
+{
+  "status": "ok",
+  "service": "crmstudio",
+  "version": "6.2.2",
+  "branch": "eng/glass-pwa-ux-v2",
+  "features": ["pwa-v41", "glass-kpi", "share-log", "session-sign-v2"]
+}
