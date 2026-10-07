@@ -6,17 +6,21 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'list',
+  reporter: process.env.CI ? 'github' : 'list',
+  timeout: 45_000,
+  expect: { timeout: 12_000 },
   use: {
     baseURL: 'http://127.0.0.1:5173',
     trace: 'on-first-retry',
-    locale: 'fa-IR'
+    locale: 'fa-IR',
+    // Avoid SW cache races during tests unless a test opts in
+    // Individual tests append ?nosw=1 where needed
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'npm run preview -- --host 127.0.0.1 --port 5173',
+    command: 'npm run build && npm run preview -- --host 127.0.0.1 --port 5173',
     url: 'http://127.0.0.1:5173/site.html',
-    reuseExistingServer: true,
-    timeout: 60_000
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000
   }
 })

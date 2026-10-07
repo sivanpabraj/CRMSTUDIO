@@ -25,5 +25,13 @@ jobs:
 
       - run: npm run build
 
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E Playwright
+        run: npx playwright test
+        env:
+          CI: 'true'
+
       - name: Docker build
         run: docker build -t studio-m:ci .
