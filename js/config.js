@@ -6,9 +6,9 @@ const AppConfig = {
   APP_NAME: 'Mandani Studio ERP',
   DEFAULT_STUDIO_NAME: 'استودیو فیلم و عکس ماندنی',
   STUDIO_NAME_EN: 'Mandani Studio',
-  APP_VERSION: '6.2.4',
-  BUILD_DATE: '2026-10-08',
-  SW_CACHE: 'mandani-studio-v46',
+  APP_VERSION: '6.2.5',
+  BUILD_DATE: '2026-10-09',
+  SW_CACHE: 'mandani-studio-v47',
 
   STUDIO: {
     NAME: 'استودیو فیلم و عکس ماندنی',
@@ -54,7 +54,7 @@ const AppConfig = {
   WALLPAPER_KEY: 'talar_wallpaper',
   ACCENT_KEY: 'talar_accent',
   DRAFT_KEY: 'talar_contract_draft',
-  CHANGELOG_SEEN_KEY: 'talar_changelog_v624_seen',
+  CHANGELOG_SEEN_KEY: 'talar_changelog_v625_seen',
 
   LEGACY_DB_KEYS: ['studio_db_v4', 'talar_db_v3'],
   BACKUP_PREFIX: 'studio_bu_',
@@ -97,11 +97,12 @@ const AppConfig = {
   SHOW_DEMO_OTP: false,
 
   CHANGELOG: [
-    { icon: '📋', title: 'نسخه ۶.۲.۴', desc: 'گزارش بازبینی کامل، کارت مرحله پرتال مشتری، هم‌ترازی health' },
-    { icon: '🧠', title: 'مغز استودیو', desc: 'هشدار بدهی/چک، پاسخ مقید به داده، رد سؤالات نامرتبط' },
-    { icon: '🔍', title: 'سرچ سراسری', desc: 'ذره‌بین + Ctrl+K روی همه بخش‌ها' },
-    { icon: '💰', title: 'نسخه ۶.۲.۳', desc: 'نمای مالی مدرن در حسابداری' },
-    { icon: '✨', title: 'نسخه ۶.۲.۲', desc: 'تم شیشه‌ای، KPI، shareLog، PWA' },
+    { icon: '🛠', title: 'نسخه ۶.۲.۵', desc: 'پک مهندسی: مالی واحد، آفیش خودکار، سرچ Ctrl+K، بریف صبح، فیش مشتری' },
+    { icon: '📋', title: 'نسخه ۶.۲.۴', desc: 'گزارش بازبینی، کارت مرحله پرتال مشتری' },
+    { icon: '🧠', title: 'مغز استودیو', desc: 'هشدار بدهی/چک، پاسخ مقید به داده' },
+    { icon: '🔍', title: 'سرچ سراسری', desc: 'ذره‌بین + Ctrl+K' },
+    { icon: '💰', title: 'نسخه ۶.۲.۳', desc: 'نمای مالی مدرن' },
+    { icon: '✨', title: 'نسخه ۶.۲.۲', desc: 'تم شیشه‌ای، KPI، PWA' },
     { icon: '🚀', title: 'CRMSTUDIO ERP 6.1', desc: 'پلتفرم جامع مدیریت سازمانی' }
   ]
 }
