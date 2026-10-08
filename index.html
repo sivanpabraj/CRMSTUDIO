@@ -149,14 +149,27 @@
               </button>
             </div>
             <div id="auth-login-view" class="auth-form" style="display:block">
+              <div class="auth-path-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+                <button type="button" class="auth-path-chip" data-path="auto" onclick="Portal.setLoginPath('auto')" style="flex:1;padding:7px 4px;font-size:11.5px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.12);cursor:pointer;outline:2px solid #C9A96E">خودکار</button>
+                <button type="button" class="auth-path-chip" data-path="staff" onclick="Portal.setLoginPath('staff')" style="flex:1;padding:7px 4px;font-size:11.5px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.12);cursor:pointer">پرسنل (کد دعوت)</button>
+                <button type="button" class="auth-path-chip" data-path="manager" onclick="Portal.setLoginPath('manager')" style="flex:1;padding:7px 4px;font-size:11.5px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.12);cursor:pointer">مدیر / رمز</button>
+              </div>
+              <div class="auth-field" id="login-invite-wrap" style="display:none;margin-bottom:12px">
+                <label class="auth-label" for="login-invite-code">کد دعوت / کد ورود (از مدیر)</label>
+                <div class="auth-input-wrap">
+                  <i class="fas fa-ticket-alt"></i>
+                  <input type="text" id="login-invite-code" class="ltr" dir="ltr" inputmode="numeric" placeholder="کد ۶ رقمی" autocomplete="one-time-code"/>
+                </div>
+                <p style="font-size:11px;opacity:.65;margin:6px 0 0">نام استودیو لازم نیست — فقط شماره موبایل + کد دعوت</p>
+              </div>
               <div class="auth-field">
                 <label class="auth-label" for="login-identifier">شماره موبایل یا ایمیل</label>
                 <div class="auth-input-wrap">
                   <i class="fas fa-user-circle"></i>
-                  <input type="text" id="login-identifier" class="ltr" dir="ltr" autocomplete="username" placeholder="0912..." autofocus/>
+                  <input type="text" id="login-identifier" class="ltr" dir="ltr" autocomplete="username" placeholder="0912... یا name@gmail.com" autofocus/>
                 </div>
               </div>
-              <div class="auth-field">
+              <div class="auth-field" id="login-pw-field">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
                   <label class="auth-label" for="login-password" style="margin-bottom:0">رمز عبور</label>
                   <button type="button" class="auth-forgot-link" onclick="Portal.showForgotPassword()" style="background:none;border:none;color:#f59e0b;font-size:11.5px;cursor:pointer;padding:0">فراموشی رمز عبور؟</button>
@@ -164,6 +177,9 @@
                 <div class="auth-input-wrap">
                   <i class="fas fa-lock"></i>
                   <input type="password" id="login-password" class="ltr" dir="ltr" autocomplete="current-password" placeholder="رمز یا خالی اگر کد دعوت دارید"/>
+                  <button type="button" class="auth-pw-toggle" onclick="Portal.togglePasswordVisibility('login-password', 'pw-eye-icon')" title="نمایش/پنهان‌سازی رمز" tabindex="-1">
+                    <i class="fas fa-eye" id="pw-eye-icon"></i>
+                  </button>
                 </div>
               </div>
               <div class="auth-error" id="login-error"></div>
@@ -172,12 +188,63 @@
               </button>
             </div>
             <div id="auth-register-view" class="auth-form" style="display:none">
-              <div class="auth-field">
-                <label class="auth-label" for="reg-studio-name">نام استودیو</label>
-                <div class="auth-input-wrap"><i class="fas fa-store"></i><input type="text" id="reg-studio-name"/></div>
+              <div class="auth-grid-2col">
+                <div class="auth-field">
+                  <label class="auth-label" for="reg-studio-name">نام استودیو / آتلیه</label>
+                  <div class="auth-input-wrap">
+                    <i class="fas fa-store"></i>
+                    <input type="text" id="reg-studio-name" placeholder="مثلاً استودیو ماندگار"/>
+                  </div>
+                </div>
+                <div class="auth-field">
+                  <label class="auth-label" for="reg-manager-name">نام و نام خانوادگی مدیر</label>
+                  <div class="auth-input-wrap">
+                    <i class="fas fa-user-tie"></i>
+                    <input type="text" id="reg-manager-name" placeholder="مثلاً علی محمدی"/>
+                  </div>
+                </div>
+              </div>
+
+              <div class="auth-grid-2col">
+                <div class="auth-field">
+                  <label class="auth-label" for="reg-phone">شماره همراه مدیر (جهت ورود)</label>
+                  <div class="auth-input-wrap">
+                    <i class="fas fa-mobile-alt"></i>
+                    <input type="tel" id="reg-phone" class="ltr" dir="ltr" inputmode="numeric" placeholder="09121234567"/>
+                  </div>
+                </div>
+                <div class="auth-field">
+                  <label class="auth-label" for="reg-email">ایمیل / جیمیل <small style="opacity:0.65">(جهت بکاپ)</small></label>
+                  <div class="auth-input-wrap">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="reg-email" class="ltr" dir="ltr" placeholder="name@gmail.com"/>
+                  </div>
+                </div>
+              </div>
+
+              <div class="auth-grid-2col">
+                <div class="auth-field">
+                  <label class="auth-label" for="reg-password">رمز عبور مدیر</label>
+                  <div class="auth-input-wrap">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="reg-password" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="حداقل ۶ کاراکتر"/>
+                    <button type="button" class="auth-pw-toggle" onclick="Portal.togglePasswordVisibility('reg-password', 'reg-pw-eye-icon')" title="نمایش رمز" tabindex="-1">
+                      <i class="fas fa-eye" id="reg-pw-eye-icon"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="auth-field">
+                  <label class="auth-label" for="reg-password-confirm">تکرار رمز عبور</label>
+                  <div class="auth-input-wrap">
+                    <i class="fas fa-shield-alt"></i>
+                    <input type="password" id="reg-password-confirm" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="تکرار رمز عبور"/>
+                  </div>
+                </div>
               </div>
               <div class="auth-error" id="reg-error"></div>
-              <button type="button" class="auth-btn auth-btn-primary" onclick="Portal.submitRegister()">ثبت استودیو</button>
+              <button type="button" class="auth-btn auth-btn-primary" id="reg-btn" onclick="Portal.submitRegister()" style="margin-top:6px">
+                <i class="fas fa-rocket"></i> ساخت و ثبت استودیو
+              </button>
             </div>
             <div class="auth-cinema-foot"><a href="/">صفحه اصلی</a> · <a href="join.html">عضویت پرسنل با کد استودیو</a></div>
           </div>

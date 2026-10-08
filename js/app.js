@@ -307,7 +307,10 @@ const Portal = {
       </div>
       ${isPw ? `
       <div class="auth-field" id="login-pw-field">
-        <label class="auth-label" for="login-password">رمز عبور</label>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <label class="auth-label" for="login-password" style="margin-bottom:0">رمز عبور</label>
+          <button type="button" class="auth-forgot-link" onclick="Portal.showForgotPassword()" style="background:none;border:none;color:#f59e0b;font-size:11.5px;cursor:pointer;padding:0">فراموشی رمز عبور؟</button>
+        </div>
         <div class="auth-input-wrap">
           <i class="fas fa-lock"></i>
           <input type="password" id="login-password" class="ltr" dir="ltr" autocomplete="current-password" placeholder="رمز عبور خود را وارد کنید"/>
@@ -758,6 +761,11 @@ const Portal = {
   showForgotPassword() {
     const existing = document.getElementById('forgot-pw-modal')
     if (existing) existing.remove()
+    if (this._forgotTimer) clearInterval(this._forgotTimer)
+
+    const rawId = (document.getElementById('login-identifier')?.value || document.getElementById('login-phone')?.value || '').trim()
+    const prefillEmail = rawId.includes('@') ? rawId : ''
+    const prefillPhone = !rawId.includes('@') && /^\d+$/.test(rawId.replace(/^0/, '')) ? rawId : ''
 
     const overlay = document.createElement('div')
     overlay.id = 'forgot-pw-modal'
@@ -770,7 +778,7 @@ const Portal = {
     overlay.style.backdropFilter = 'blur(10px)'
 
     overlay.innerHTML = `
-      <div class="portal-modal" style="max-width:480px;width:90%;background:#0b0f19;border:1px solid rgba(245,158,11,0.4);border-radius:24px;padding:24px;color:#fff;text-align:right;box-shadow:0 12px 40px rgba(0,0,0,0.8)">
+      <div class="portal-modal" style="max-width:500px;width:92%;background:#0b0f19;border:1px solid rgba(245,158,11,0.4);border-radius:24px;padding:24px;color:#fff;text-align:right;box-shadow:0 12px 40px rgba(0,0,0,0.85)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:10px">
           <div style="display:flex;align-items:center;gap:8px">
             <div style="width:36px;height:36px;border-radius:10px;background:rgba(245,158,11,0.15);color:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:16px">
@@ -781,22 +789,104 @@ const Portal = {
           <button type="button" onclick="document.getElementById('forgot-pw-modal').remove()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:18px;cursor:pointer">&times;</button>
         </div>
 
-        <div style="display:flex;gap:6px;margin-bottom:16px;background:rgba(255,255,255,0.04);padding:4px;border-radius:12px">
-          <button type="button" id="forgot-tab-mgr" class="portal-btn portal-btn-sm portal-btn-primary" style="flex:1;font-size:11.5px;padding:8px" onclick="Portal.setForgotTab('mgr')">مدیر استودیو</button>
-          <button type="button" id="forgot-tab-staff" class="portal-btn portal-btn-sm portal-btn-ghost" style="flex:1;font-size:11.5px;padding:8px" onclick="Portal.setForgotTab('staff')">پرسنل و عکاس</button>
-          <button type="button" id="forgot-tab-cust" class="portal-btn portal-btn-sm portal-btn-ghost" style="flex:1;font-size:11.5px;padding:8px" onclick="Portal.setForgotTab('cust')">عروس و داماد</button>
+        <div style="display:flex;gap:4px;margin-bottom:16px;background:rgba(255,255,255,0.04);padding:4px;border-radius:12px;flex-wrap:wrap">
+          <button type="button" id="forgot-tab-email" class="portal-btn portal-btn-sm portal-btn-primary" style="flex:1;font-size:11px;padding:8px 4px" onclick="Portal.setForgotTab('email')">
+            <i class="fas fa-envelope"></i> ارسال به ایمیل
+          </button>
+          <button type="button" id="forgot-tab-mgr" class="portal-btn portal-btn-sm portal-btn-ghost" style="flex:1;font-size:11px;padding:8px 4px" onclick="Portal.setForgotTab('mgr')">
+            <i class="fas fa-shield-alt"></i> کد استودیو
+          </button>
+          <button type="button" id="forgot-tab-staff" class="portal-btn portal-btn-sm portal-btn-ghost" style="flex:1;font-size:11px;padding:8px 4px" onclick="Portal.setForgotTab('staff')">
+            <i class="fas fa-user-gear"></i> پرسنل
+          </button>
+          <button type="button" id="forgot-tab-cust" class="portal-btn portal-btn-sm portal-btn-ghost" style="flex:1;font-size:11px;padding:8px 4px" onclick="Portal.setForgotTab('cust')">
+            <i class="fas fa-heart"></i> مشتری
+          </button>
         </div>
 
-        <!-- تب بازیابی مدیر -->
-        <div id="forgot-content-mgr">
+        <!-- تب ۱: بازیابی با ارسال کد به ایمیل -->
+        <div id="forgot-content-email">
+          <!-- گام ۱: وارد کردن ایمیل -->
+          <div id="forgot-email-step1">
+            <p style="font-size:12px;color:rgba(255,255,255,0.7);margin:0 0 12px;line-height:1.7">
+              آدرس ایمیل متصل به حساب خود را وارد نمایید تا کد ۶ رقمی بازیابی رمز عبور برای شما ارسال شود:
+            </p>
+            <div class="auth-field" style="margin-bottom:12px">
+              <label class="auth-label" style="font-size:11px">آدرس ایمیل کاربری یا استودیو</label>
+              <div class="auth-input-wrap">
+                <i class="fas fa-envelope"></i>
+                <input type="email" id="forgot-email-inp" class="ltr" dir="ltr" value="${Utils.escapeHtml(prefillEmail)}" placeholder="name@gmail.com" style="font-size:13px" autocomplete="email" />
+              </div>
+            </div>
+            <div class="auth-error" id="forgot-email-err1" style="display:none;margin-bottom:10px"></div>
+            <button type="button" class="portal-btn portal-btn-primary" id="forgot-email-send-btn" onclick="Portal.sendForgotPasswordEmail()" style="width:100%;padding:11px;font-size:13px">
+              <i class="fas fa-paper-plane"></i> ارسال کد بازیابی به ایمیل
+            </button>
+          </div>
+
+          <!-- گام ۲: تأیید کد ۶ رقمی و تعریف رمز جدید -->
+          <div id="forgot-email-step2" style="display:none">
+            <div style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+              <i class="fas fa-envelope-circle-check" style="color:#4ade80;font-size:18px"></i>
+              <div style="font-size:12px;color:#e2e8f0;line-height:1.5">
+                کد ۶ رقمی به <strong id="forgot-email-masked" dir="ltr" style="color:#4ade80"></strong> ارسال گردید.
+              </div>
+            </div>
+
+            <div class="auth-field" style="margin-bottom:10px">
+              <label class="auth-label" style="font-size:11px">کد ۶ رقمی دریافتی از ایمیل</label>
+              <div class="auth-input-wrap">
+                <i class="fas fa-key"></i>
+                <input type="text" id="forgot-email-otp" class="ltr" dir="ltr" maxlength="6" placeholder="مثال: 582194" style="font-size:15px;letter-spacing:4px;font-weight:bold" />
+              </div>
+            </div>
+
+            <div class="auth-field" style="margin-bottom:10px">
+              <label class="auth-label" style="font-size:11px">رمز عبور جدید</label>
+              <div class="auth-input-wrap">
+                <i class="fas fa-lock"></i>
+                <input type="password" id="forgot-email-newpw" class="ltr" dir="ltr" placeholder="حداقل ۴ کاراکتر" style="font-size:13px" />
+                <button type="button" class="auth-pw-toggle" onclick="Portal.togglePasswordVisibility('forgot-email-newpw', 'forgot-pw-eye1')" title="نمایش/پنهان‌سازی" tabindex="-1">
+                  <i class="fas fa-eye" id="forgot-pw-eye1"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="auth-field" style="margin-bottom:14px">
+              <label class="auth-label" style="font-size:11px">تکرار رمز عبور جدید</label>
+              <div class="auth-input-wrap">
+                <i class="fas fa-shield-alt"></i>
+                <input type="password" id="forgot-email-newpw-confirm" class="ltr" dir="ltr" placeholder="تکرار رمز عبور جدید" style="font-size:13px" />
+              </div>
+            </div>
+
+            <div class="auth-error" id="forgot-email-err2" style="display:none;margin-bottom:10px"></div>
+
+            <button type="button" class="portal-btn portal-btn-primary" id="forgot-email-reset-btn" onclick="Portal.submitResetPasswordEmail()" style="width:100%;padding:11px;font-size:13px;margin-bottom:8px">
+              <i class="fas fa-check-circle"></i> تأیید کد و تغییر رمز عبور
+            </button>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+              <button type="button" class="portal-btn portal-btn-ghost" onclick="Portal.resetForgotEmailStep()" style="font-size:11px;padding:4px 8px">
+                <i class="fas fa-arrow-right"></i> تغییر ایمیل
+              </button>
+              <button type="button" id="forgot-email-resend-btn" class="portal-btn portal-btn-ghost" onclick="Portal.sendForgotPasswordEmail()" style="font-size:11px;padding:4px 8px" disabled>
+                ارسال مجدد کد (<span id="forgot-resend-timer">60</span>)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- تب ۲: بازیابی مدیر با Join Code -->
+        <div id="forgot-content-mgr" style="display:none">
           <p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0 0 12px;line-height:1.7">
-            مدیر گرامی، برای بازیابی آنی رمز عبور بدون نیاز به پیامک، شماره همراه خود و <strong>کد اختصاصی اتصال به استودیو (Join Code)</strong> را وارد کنید:
+            مدیر گرامی، برای بازیابی آنی رمز عبور بدون نیاز به ایمیل یا پیامک، شماره همراه خود و <strong>کد اختصاصی اتصال به استودیو (Join Code)</strong> را وارد کنید:
           </p>
           <div class="auth-field" style="margin-bottom:10px">
             <label class="auth-label" style="font-size:11px">شماره همراه مدیر</label>
             <div class="auth-input-wrap">
               <i class="fas fa-phone"></i>
-              <input type="tel" id="reset-phone" class="ltr" dir="ltr" placeholder="09121234567" style="font-size:13px" />
+              <input type="tel" id="reset-phone" class="ltr" dir="ltr" value="${Utils.escapeHtml(prefillPhone)}" placeholder="09121234567" style="font-size:13px" />
             </div>
           </div>
           <div class="auth-field" style="margin-bottom:10px">
@@ -819,18 +909,18 @@ const Portal = {
           </button>
         </div>
 
-        <!-- تب راهنمای پرسنل -->
+        <!-- تب ۳: راهنمای پرسنل -->
         <div id="forgot-content-staff" style="display:none;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;line-height:1.8">
           <p style="font-size:12.5px;color:rgba(255,255,255,0.85);margin:0 0 10px">
             <strong style="color:#4ade80"><i class="fas fa-user-gear"></i> بازیابی رمز پرسنل و عکاسان:</strong>
           </p>
           <p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0 0 12px">
-            پرسنل و همکاران استودیو نیازی به تغییر رمز از این بخش ندارند. مدیریت استودیو می‌تواند در پنل اختصاصی خود در بخش <strong>«پرسنل»</strong>، در چند ثانیه رمز جدید یا کد ورود ۶ رقمی شما را بازنشانی کند.
+            چنانچه ایمیل خود را در سیستم ثبت کرده‌اید، می‌توانید از برگه <strong>«ارسال به ایمیل»</strong> رمز خود را تغییر دهید. همچنین مدیریت استودیو می‌تواند در پنل در بخش <strong>«پرسنل»</strong>، در چند ثانیه رمز جدید یا کد ورود شما را بازنشانی فرماید.
           </p>
           <button type="button" class="portal-btn portal-btn-ghost" onclick="document.getElementById('forgot-pw-modal').remove()" style="width:100%;font-size:12px">متوجه شدم</button>
         </div>
 
-        <!-- تب راهنمای مشتری -->
+        <!-- تب ۴: راهنمای مشتری -->
         <div id="forgot-content-cust" style="display:none;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;line-height:1.8">
           <p style="font-size:12.5px;color:rgba(255,255,255,0.85);margin:0 0 10px">
             <strong style="color:#38bdf8"><i class="fas fa-heart"></i> ورود عروس و داماد:</strong>
@@ -845,20 +935,179 @@ const Portal = {
   },
 
   setForgotTab(tab) {
+    const emailContent = document.getElementById('forgot-content-email')
     const mgrContent = document.getElementById('forgot-content-mgr')
     const staffContent = document.getElementById('forgot-content-staff')
     const custContent = document.getElementById('forgot-content-cust')
+
+    const tabEmail = document.getElementById('forgot-tab-email')
     const tabMgr = document.getElementById('forgot-tab-mgr')
     const tabStaff = document.getElementById('forgot-tab-staff')
     const tabCust = document.getElementById('forgot-tab-cust')
 
+    if (emailContent) emailContent.style.display = tab === 'email' ? 'block' : 'none'
     if (mgrContent) mgrContent.style.display = tab === 'mgr' ? 'block' : 'none'
     if (staffContent) staffContent.style.display = tab === 'staff' ? 'block' : 'none'
     if (custContent) custContent.style.display = tab === 'cust' ? 'block' : 'none'
 
+    if (tabEmail) tabEmail.className = `portal-btn portal-btn-sm ${tab === 'email' ? 'portal-btn-primary' : 'portal-btn-ghost'}`
     if (tabMgr) tabMgr.className = `portal-btn portal-btn-sm ${tab === 'mgr' ? 'portal-btn-primary' : 'portal-btn-ghost'}`
     if (tabStaff) tabStaff.className = `portal-btn portal-btn-sm ${tab === 'staff' ? 'portal-btn-primary' : 'portal-btn-ghost'}`
     if (tabCust) tabCust.className = `portal-btn portal-btn-sm ${tab === 'cust' ? 'portal-btn-primary' : 'portal-btn-ghost'}`
+  },
+
+  resetForgotEmailStep() {
+    const s1 = document.getElementById('forgot-email-step1')
+    const s2 = document.getElementById('forgot-email-step2')
+    if (s1) s1.style.display = 'block'
+    if (s2) s2.style.display = 'none'
+    if (this._forgotTimer) clearInterval(this._forgotTimer)
+  },
+
+  async sendForgotPasswordEmail() {
+    const emailInp = document.getElementById('forgot-email-inp')
+    const email = (emailInp?.value || '').trim()
+
+    const showErr = (m) => {
+      const el = document.getElementById('forgot-email-step2')?.style.display === 'block'
+        ? document.getElementById('forgot-email-err2')
+        : document.getElementById('forgot-email-err1')
+      if (el) { el.textContent = m; el.style.display = 'block' }
+    }
+    const hideErr = () => {
+      const e1 = document.getElementById('forgot-email-err1')
+      const e2 = document.getElementById('forgot-email-err2')
+      if (e1) e1.style.display = 'none'
+      if (e2) e2.style.display = 'none'
+    }
+    hideErr()
+
+    if (!email || !email.includes('@') || !email.includes('.')) {
+      showErr('لطفاً یک آدرس ایمیل معتبر (مثال: name@gmail.com) وارد کنید')
+      return
+    }
+
+    const btn = document.getElementById('forgot-email-send-btn')
+    const resendBtn = document.getElementById('forgot-email-resend-btn')
+    if (btn) {
+      btn.disabled = true
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال ارسال کد به ایمیل...'
+    }
+    if (resendBtn) resendBtn.disabled = true
+
+    try {
+      const res = await fetch('/api/auth/forgot-password/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      })
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok || !data.ok) {
+        showErr(data.error || 'خطا در ارسال کد به ایمیل')
+        if (btn) {
+          btn.disabled = false
+          btn.innerHTML = '<i class="fas fa-paper-plane"></i> ارسال کد بازیابی به ایمیل'
+        }
+        return
+      }
+
+      // Transition to Step 2
+      const s1 = document.getElementById('forgot-email-step1')
+      const s2 = document.getElementById('forgot-email-step2')
+      const maskedEl = document.getElementById('forgot-email-masked')
+      if (s1) s1.style.display = 'none'
+      if (s2) s2.style.display = 'block'
+      if (maskedEl) maskedEl.textContent = data.maskedEmail || email
+
+      Utils.toast(data.message || 'کد تأیید به ایمیل ارسال شد', 'success', 5000)
+      if (typeof AudioNotifier !== 'undefined') AudioNotifier.playPing()
+
+      document.getElementById('forgot-email-otp')?.focus()
+
+      // Start Resend Countdown
+      let countdown = 60
+      const timerSpan = document.getElementById('forgot-resend-timer')
+      if (this._forgotTimer) clearInterval(this._forgotTimer)
+      this._forgotTimer = setInterval(() => {
+        countdown--
+        if (timerSpan) timerSpan.textContent = countdown
+        if (countdown <= 0) {
+          clearInterval(this._forgotTimer)
+          if (resendBtn) {
+            resendBtn.disabled = false
+            resendBtn.innerHTML = '<i class="fas fa-redo"></i> ارسال مجدد کد'
+          }
+        }
+      }, 1000)
+    } catch (e) {
+      showErr('خطا در برقراری ارتباط با سرور: ' + e.message)
+    } finally {
+      if (btn) {
+        btn.disabled = false
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> ارسال کد بازیابی به ایمیل'
+      }
+    }
+  },
+
+  async submitResetPasswordEmail() {
+    const errEl = document.getElementById('forgot-email-err2')
+    const email = (document.getElementById('forgot-email-inp')?.value || '').trim()
+    const otpCode = (document.getElementById('forgot-email-otp')?.value || '').trim()
+    const newPassword = (document.getElementById('forgot-email-newpw')?.value || '').trim()
+    const confirmPw = (document.getElementById('forgot-email-newpw-confirm')?.value || '').trim()
+
+    const showErr = (m) => { if (errEl) { errEl.textContent = m; errEl.style.display = 'block' } }
+    if (errEl) errEl.style.display = 'none'
+
+    if (!email) return showErr('ایمیل معتبر الزامی است')
+    if (!otpCode || otpCode.length < 5) return showErr('کد ۶ رقمی دریافتی از ایمیل را وارد کنید')
+    if (!newPassword || newPassword.length < 4) return showErr('رمز عبور جدید باید حداقل ۴ کاراکتر باشد')
+    if (newPassword !== confirmPw) return showErr('تکرار رمز عبور جدید مطابقت ندارد')
+
+    const btn = document.getElementById('forgot-email-reset-btn')
+    if (btn) {
+      btn.disabled = true
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال اعتبارسنجی و ثبت رمز...'
+    }
+
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otpCode, newPassword })
+      })
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok || !data.ok) {
+        showErr(data.error || 'خطا در بازنشانی رمز عبور')
+        if (btn) {
+          btn.disabled = false
+          btn.innerHTML = '<i class="fas fa-check-circle"></i> تأیید کد و تغییر رمز عبور'
+        }
+        return
+      }
+
+      Utils.toast(data.message || 'رمز عبور با موفقیت به‌روزرسانی شد', 'success', 5000)
+      if (typeof AudioNotifier !== 'undefined') AudioNotifier.playContract()
+      if (this._forgotTimer) clearInterval(this._forgotTimer)
+      document.getElementById('forgot-pw-modal')?.remove()
+
+      // Fill login fields
+      const idInp = document.getElementById('login-identifier')
+      const pwInp = document.getElementById('login-password')
+      if (idInp) idInp.value = email
+      if (pwInp) {
+        pwInp.value = newPassword
+        pwInp.focus()
+      }
+    } catch (e) {
+      showErr('خطا در ارتباط با سرور: ' + e.message)
+      if (btn) {
+        btn.disabled = false
+        btn.innerHTML = '<i class="fas fa-check-circle"></i> تأیید کد و تغییر رمز عبور'
+      }
+    }
   },
 
   async submitResetPassword() {

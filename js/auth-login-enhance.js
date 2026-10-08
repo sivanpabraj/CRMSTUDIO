@@ -172,7 +172,7 @@
       )
     }
 
-    const origSend = PasswordReset.sendOtp.bind(PasswordReset)
+    const _origSend = PasswordReset.sendOtp.bind(PasswordReset)
     PasswordReset.sendOtp = async function (phone) {
       phone = Utils.normalizePhone(phone)
       if (!Utils.isValidPhone(phone)) return { ok: false, error: 'شماره موبایل نامعتبر است' }
@@ -254,10 +254,11 @@
     if (typeof Portal === 'undefined' || Portal.__loginEnhance) return
     Portal.__loginEnhance = true
 
-    Portal.showForgotPassword = function () {
-      document.getElementById('auth-forgot-overlay')?.remove()
-      const el = document.createElement('div')
-      el.id = 'auth-forgot-overlay'
+    if (!Portal.sendForgotPasswordEmail) {
+      Portal.showForgotPassword = function () {
+        document.getElementById('auth-forgot-overlay')?.remove()
+        const el = document.createElement('div')
+        el.id = 'auth-forgot-overlay'
       el.className = 'admin-onboarding-overlay'
       el.style.cssText =
         'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:16px'
@@ -335,8 +336,9 @@
         el.remove()
       }
     }
+  }
 
-    Portal.showForcePasswordChange = function () {
+  Portal.showForcePasswordChange = function () {
       if (document.getElementById('force-pw-overlay')) return
       const el = document.createElement('div')
       el.id = 'force-pw-overlay'
