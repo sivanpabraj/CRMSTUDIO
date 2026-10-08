@@ -1,7 +1,16 @@
 {
   "status": "ok",
   "service": "crmstudio",
-  "version": "6.2.2",
+  "version": "6.2.4",
   "branch": "eng/glass-pwa-ux-v2",
-  "features": ["pwa-v41", "glass-kpi", "share-log", "session-sign-v2"]
+  "features": [
+    "pwa-v41",
+    "glass-kpi",
+    "share-log",
+    "session-sign-v2",
+    "finance-overview",
+    "global-search",
+    "studio-ai-brain",
+    "portal-ai-stage"
+  ]
 }
