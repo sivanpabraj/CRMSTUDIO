@@ -91,6 +91,7 @@ export const browserGlobals = {
   CustomerSession: "readonly",
   CustomerLogin: "readonly",
   CustomerPortal: "readonly",
+  CustomerPro: "readonly",
   Admin: "readonly",
   AdminSections: "readonly",
   AdminTools: "readonly",
