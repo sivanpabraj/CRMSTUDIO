@@ -77,7 +77,10 @@
 
     /** ورود مستقیم با موبایل + کد دعوت پرسنل (بدون نام استودیو) */
     Auth.loginWithInviteCode = async function (phone, code) {
-      return SecureDB.runInternalAsync(async () => {
+      const exec = (typeof SecureDB !== 'undefined' && SecureDB.runInternalAsync)
+        ? (fn) => SecureDB.runInternalAsync(fn)
+        : (fn) => fn()
+      return exec(async () => {
         phone = Utils.normalizePhone(phone)
         code = String(code || '')
           .trim()
@@ -85,25 +88,91 @@
         if (!Utils.isValidPhone(phone)) return { ok: false, error: 'موبایل نامعتبر' }
         if (!code) return { ok: false, error: 'کد ورود را وارد کنید' }
 
-        const locked = this._isLocked(phone)
+        const locked = typeof this._isLocked === 'function' ? this._isLocked(phone) : 0
         if (locked) return { ok: false, error: `قفل موقت — ${locked} دقیقه دیگر` }
 
+        // گام ۱: بررسی مستقیم در سرور (قابلیت ورود پرسنل از هر دستگاه/موبایل جدید)
+        try {
+          const srvRes = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier: phone, password: code, code })
+          })
+          const srvJson = await srvRes.json().catch(() => ({}))
+          if (srvRes.ok && srvJson.ok && srvJson.user) {
+            if (srvJson.fullData && typeof DB !== 'undefined' && DB.importJSON) {
+              try { await DB.importJSON(JSON.stringify(srvJson.fullData)) } catch (e) { console.warn('DB import:', e) }
+            } else if (typeof DB !== 'undefined') {
+              const curUsers = DB.get('users') || []
+              if (!curUsers.some(u => Utils.normalizePhone(u.phone) === phone)) {
+                DB.set('users', [...curUsers, srvJson.user])
+              }
+            }
+
+            if (srvJson.tenantKey || srvJson.studioInfo?.id) {
+              const sid = srvJson.tenantKey || srvJson.studioInfo?.id
+              try {
+                localStorage.setItem('crm_studio_id', sid)
+                Utils?.storage?.set?.('talar_studio_id', sid)
+                if (typeof window !== 'undefined' && window.ServerSync?.setStudioId) {
+                  window.ServerSync.setStudioId(sid)
+                }
+              } catch (e) { console.warn('Sync studio id:', e) }
+            }
+
+            const csrf = this._regenerateCsrf()
+            await this._sessionSetSigned(this.SESSION_KEY, {
+              userId: srvJson.user.id,
+              loginAt: Date.now(),
+              expiresAt: Date.now() + this.SESSION_TIMEOUT_MS,
+              csrf,
+              inviteLogin: true
+            })
+            try { sessionStorage.setItem(this.CSRF_KEY, csrf) } catch (e) { console.warn('CSRF save:', e) }
+            this._clearAttempts(phone)
+            this._setForcePwFlag(Boolean(srvJson.mustChangePassword))
+
+            DB.log?.('login_invite_code_server', srvJson.user.name || phone)
+            return {
+              ok: true,
+              user: srvJson.user,
+              mustChangePassword: Boolean(srvJson.mustChangePassword)
+            }
+          } else if (srvJson && srvJson.error && !srvJson.error.includes('پایگاه داده یافت نشد')) {
+            // سرور صراحتاً ارور داده است (مثلاً کد اشتباه است)
+            this._recordFailedAttempt(phone)
+            return { ok: false, error: srvJson.error }
+          }
+        } catch (srvErr) {
+          console.warn('Server auth notice, checking local database:', srvErr)
+        }
+
+        // گام ۲: فال‌بک دیتابیس محلی (در صورت قطعی شبکه یا حالت آفلاین)
         const user = DB.find('users', (u) => Utils.normalizePhone(u.phone) === phone)
-        if (!user) return { ok: false, error: 'این شماره در سیستم ثبت نشده. از مدیر کد دعوت بگیرید.' }
-        if (user.status === 'pending') {
+        const personnel = DB.find('personnel', (p) => p.phone && Utils.normalizePhone(p.phone) === phone)
+        if (!user && !personnel) return { ok: false, error: 'این شماره در سیستم ثبت نشده است. از مدیر استودیو کد ورود بگیرید.' }
+        if (user && (user.status === 'pending' || user.status === 'pending_approval')) {
           return { ok: false, error: 'حساب هنوز تأیید نشده — منتظر مدیر باشید.' }
         }
-        if (user.status === 'inactive' || user.status === 'disabled') {
+        if (user && (user.status === 'inactive' || user.status === 'disabled')) {
           return { ok: false, error: 'حساب غیرفعال است' }
         }
 
         let otpOk = false
-        if (user.portalOtp) {
+        if (user?.portalOtp) {
           if (user.portalOtp.code && String(user.portalOtp.code).trim() === code) otpOk = true
           else if (user.portalOtp.codeHash && user.portalOtp.codeSalt && Utils.legacyHashPassword) {
             const hash = await Utils.legacyHashPassword(code, user.portalOtp.codeSalt)
             if (hash === user.portalOtp.codeHash) otpOk = true
           }
+        }
+        if (!otpOk && (user?.inviteCode || user?.code)) {
+          const uCode = String(user.inviteCode || user.code).trim()
+          if (uCode === code || uCode.toUpperCase() === code.toUpperCase()) otpOk = true
+        }
+        if (!otpOk && personnel && (personnel.inviteCode || personnel.code)) {
+          const pCode = String(personnel.inviteCode || personnel.code).trim()
+          if (pCode === code || pCode.toUpperCase() === code.toUpperCase()) otpOk = true
         }
         // کد موقت unified
         if (!otpOk && typeof UnifiedLogin !== 'undefined') {
@@ -116,15 +185,24 @@
           return { ok: false, error: 'کد ورود اشتباه است' }
         }
 
+        const effectiveUser = user || {
+          id: personnel?.id || ('emp_' + Date.now()),
+          name: personnel?.name || 'همکار',
+          phone,
+          roles: personnel?.roles || ['photographer'],
+          portalType: 'staff',
+          status: 'active'
+        }
+
         // تبدیل کد به رمز موقت هش‌شده + اجبار تعویض
         const creds = await this.hashCredentials(code)
-        DB.update('users', user.id, {
+        DB.update('users', effectiveUser.id, {
           password: creds.password,
           salt: creds.salt,
           portalStatus: 'active',
           mustChangePassword: true,
           portalOtp: {
-            ...(user.portalOtp || {}),
+            ...(effectiveUser.portalOtp || {}),
             verified: true,
             verifiedAt: new Date().toISOString(),
             via: 'invite_code_login'
@@ -136,7 +214,7 @@
 
         const csrf = this._regenerateCsrf()
         await this._sessionSetSigned(this.SESSION_KEY, {
-          userId: user.id,
+          userId: effectiveUser.id,
           loginAt: Date.now(),
           expiresAt: Date.now() + this.SESSION_TIMEOUT_MS,
           csrf,
@@ -145,10 +223,10 @@
         try {
           sessionStorage.setItem(this.CSRF_KEY, csrf)
         } catch { /* */ }
-        DB.log('login_invite_code', user.name)
+        DB.log('login_invite_code', effectiveUser.name)
         return {
           ok: true,
-          user: DB.find('users', (u) => u.id === user.id),
+          user: DB.find('users', (u) => u.id === effectiveUser.id) || effectiveUser,
           mustChangePassword: true
         }
       })
@@ -383,8 +461,20 @@
           show(res.error || 'خطا')
           return
         }
+
+        try {
+          const u = Auth.getUser()
+          if (u?.phone) {
+            await fetch('/api/auth/change-password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone: u.phone, newPassword: a })
+            })
+          }
+        } catch { /* ignore network */ }
+
         el.remove()
-        Utils?.toast?.('رمز ذخیره شد', 'success')
+        Utils?.toast?.('رمز شخصی با موفقیت ذخیره شد', 'success')
         const url = typeof UnifiedLogin !== 'undefined'
           ? UnifiedLogin.landingUrl(UnifiedLogin.resolveUser(Auth.getUser()))
           : Auth.getLandingUrl()
@@ -513,15 +603,21 @@
     patchPortal()
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(boot, 0)
+        setTimeout(boot, 500)
+        setTimeout(boot, 1500)
+      })
+    } else {
       setTimeout(boot, 0)
       setTimeout(boot, 500)
-      setTimeout(boot, 1500)
-    })
+    }
   } else {
-    setTimeout(boot, 0)
-    setTimeout(boot, 500)
+    boot()
   }
-  window.AuthLoginEnhance = { boot }
+  if (typeof window !== 'undefined') {
+    window.AuthLoginEnhance = { boot }
+  }
 })()

@@ -300,9 +300,26 @@ const SMEmployees = {
 
   _form(item) {
     const roles = normalizeRoles(item?.roles || [])
+    const existingCode = item?.inviteCode || item?.code || (item?.phone && DB.find('users', u => u.phone && Utils.normalizePhone(u.phone) === Utils.normalizePhone(item.phone))?.inviteCode) || ''
+    const defaultCode = existingCode || (typeof Utils !== 'undefined' ? Utils.generateOtp6() : Math.floor(100000 + Math.random() * 900000))
+
     SMUI.modal(item ? 'ویرایش پرسنل' : 'پرسنل جدید', `
       ${SMUI.formField('نام و نام‌خانوادگی', 'emp-name', { value: item?.name || '' })}
       ${SMUI.formField('موبایل', 'emp-phone', { value: item?.phone || '', dir: 'ltr' })}
+      <div class="sm-form-group">
+        <label class="sm-label" style="display:flex;justify-content:space-between;align-items:center">
+          <span>🔑 کد ورود اختصاصی همکار</span>
+          <button type="button" class="sm-btn-link" onclick="const c=typeof Utils!=='undefined'?Utils.generateOtp6():Math.floor(100000+Math.random()*900000);document.getElementById('emp-code').value=c;SM.toast('کد تصادفی جدید ایجاد شد','info')" style="font-size:11.5px;color:#f59e0b;cursor:pointer;background:none;border:none">
+            <i class="fas fa-random"></i> تولید کد تصادفی ۶ رقمی
+          </button>
+        </label>
+        <div class="sm-input-wrap">
+          <input type="text" id="emp-code" value="${SM.esc(defaultCode)}" class="ltr sm-input" dir="ltr" style="font-weight:700;letter-spacing:3px;font-size:16px;color:#38bdf8;text-align:center" placeholder="مثلاً ۱۲۳۴۵۶" autocomplete="off"/>
+        </div>
+        <p style="font-size:11px;color:rgba(255,255,255,0.55);margin:4px 0 0;line-height:1.6">
+          همکار در صفحه ورود با همین شماره موبایل و این کد وارد می‌شود، سپس رمز شخصی خود را ثبت می‌کند.
+        </p>
+      </div>
       <div class="sm-form-group"><label class="sm-label">نقش‌ها (چندتایی)</label>${this._roleCheckboxes(item?.roles)}</div>
       <label class="sm-check-row"><input type="checkbox" id="emp-pay-monthly" ${item?.payMonthly !== false ? 'checked' : ''}/> حقوق ماهانه</label>
       ${SMUI.formField('مبلغ حقوق ماهانه (تومان)', 'emp-salary', { type: 'number', value: item?.salaryMonthly ?? item?.salary ?? '', dir: 'ltr' })}
@@ -338,6 +355,9 @@ const SMEmployees = {
     const roles = [...document.querySelectorAll('input[name="emp-roles"]:checked')].map(x => x.value)
     if (!roles.length) return SM.toast('حداقل یک نقش انتخاب کنید', 'error')
 
+    const rawCode = (document.getElementById('emp-code')?.value || '').trim().replace(/[۰-۹]/g, c => '۰۱۲۳۴۵۶۷۸۹'.indexOf(c))
+    const inviteCode = rawCode || (item?.inviteCode || item?.code || (typeof Utils !== 'undefined' ? Utils.generateOtp6() : '123456'))
+
     const roleAmounts = {}
     roles.forEach(r => {
       const el = document.getElementById(`emp-rate-${r}`)
@@ -349,6 +369,8 @@ const SMEmployees = {
       name: d['emp-name'],
       phone,
       roles: normalizeRoles(roles),
+      inviteCode,
+      code: inviteCode,
       color: item?.color || this.PERSON_COLORS[idx % this.PERSON_COLORS.length],
       payMonthly: document.getElementById('emp-pay-monthly')?.checked !== false,
       salaryMonthly: +d['emp-salary'] || 0,
@@ -363,21 +385,25 @@ const SMEmployees = {
       notes: d['emp-notes']
     }
 
-    if (item) {
-      DB.update('personnel', item.id, data)
-      SMUI.closeModal()
-      if (SM.state.viewStack.length) {
-        SM.state.viewStack.pop()
-        this.view(item.id)
-      } else SM.navigate('employees')
-      SM.toast('ذخیره شد', 'success')
-      return
-    }
-
+    const creds = await Auth.hashCredentials(inviteCode)
     const existingP = phone ? DB.find('personnel', p => p.phone && Utils.normalizePhone(p.phone) === phone) : null
     const existingUser = phone ? DB.find('users', u => u.phone && Utils.normalizePhone(u.phone) === phone) : null
 
-    if (existingP) {
+    if (item) {
+      DB.update('personnel', item.id, data)
+      if (existingUser) {
+        const mergedRoles = [...new Set([...(existingUser.roles || []), ...normalizeRoles(roles)])]
+        DB.update('users', existingUser.id, {
+          roles: mergedRoles,
+          inviteCode,
+          code: inviteCode,
+          password: creds.password,
+          salt: creds.salt,
+          mustChangePassword: true,
+          portalOtp: { code: inviteCode, verified: false, sentAt: new Date().toISOString() }
+        })
+      }
+    } else if (existingP) {
       const mergedRoles = [...new Set([...(existingP.roles || []), ...normalizeRoles(roles)])]
       const mergedRoleAmounts = { ...(existingP.roleAmounts || {}), ...roleAmounts }
       DB.update('personnel', existingP.id, {
@@ -388,52 +414,117 @@ const SMEmployees = {
       })
       if (existingUser) {
         const mergedUserRoles = [...new Set([...(existingUser.roles || []), ...mergedRoles])]
-        DB.update('users', existingUser.id, { roles: mergedUserRoles })
+        DB.update('users', existingUser.id, {
+          roles: mergedUserRoles,
+          inviteCode,
+          code: inviteCode,
+          password: creds.password,
+          salt: creds.salt,
+          mustChangePassword: true,
+          portalOtp: { code: inviteCode, verified: false, sentAt: new Date().toISOString() }
+        })
       }
-      await DB.flush?.()
-      SMUI.closeModal()
-      SM.navigate('employees')
-      SM.toast('نقش‌ها و مشخصات همکار با موفقیت به‌روزرسانی شد', 'success')
-      return
-    }
-
-    if (existingUser) {
+    } else if (existingUser) {
       const mergedUserRoles = [...new Set([...(existingUser.roles || []), ...normalizeRoles(roles)])]
-      DB.update('users', existingUser.id, { roles: mergedUserRoles })
+      DB.update('users', existingUser.id, {
+        roles: mergedUserRoles,
+        inviteCode,
+        code: inviteCode,
+        password: creds.password,
+        salt: creds.salt,
+        mustChangePassword: true,
+        portalOtp: { code: inviteCode, verified: false, sentAt: new Date().toISOString() }
+      })
       DB.insert('personnel', {
         ...data,
         userId: existingUser.id,
         jobs: 0
       })
-      await DB.flush?.()
-      SMUI.closeModal()
-      SM.navigate('employees')
-      SM.toast('پرسنل با نقش‌های انتخابی اضافه شد', 'success')
-      return
-    }
-
-    DB.insert('personnel', { ...data, jobs: 0 })
-    await DB.flush?.()
-    SMUI.closeModal()
-    SM.navigate('employees')
-    SM.toast('پرسنل با موفقیت ذخیره شد', 'success')
-
-    if (phone && typeof PortalInvite !== 'undefined' && PortalInvite.inviteWithCode) {
-      const inv = await PortalInvite.inviteWithCode({
+    } else {
+      const newUserId = 'user_' + Date.now()
+      DB.insert('personnel', { ...data, userId: newUserId, jobs: 0 })
+      DB.insert('users', {
+        id: newUserId,
         name: data.name,
         phone,
-        portalType: 'staff',
+        password: creds.password,
+        salt: creds.salt,
         roles: data.roles,
-        invitedBy: SM.user()?.name || ''
+        portalType: 'staff',
+        status: 'active',
+        inviteCode,
+        code: inviteCode,
+        mustChangePassword: true,
+        portalStatus: 'active',
+        portalOtp: { code: inviteCode, verified: false, sentAt: new Date().toISOString() }
       })
-      if (inv.ok && typeof SMPortalMgmt !== 'undefined' && SMPortalMgmt._showInviteCode) {
-        SMPortalMgmt._showInviteCode(inv)
-      } else if (inv.ok) {
-        SM.toast(`کد ورود: ${inv.code || inv.demoCode}`, 'info', 12000)
-      } else {
-        SM.toast(inv.error || 'پرسنل ذخیره شد ولی کد ورود ساخته نشد', 'warning')
-      }
     }
+
+    await DB.flush?.()
+
+    // ارسال مستقیم به سرور برای ذخیره پایدار در دیتابیس مستأجران
+    try {
+      await fetch('/api/personnel/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studioId: SM.studio()?.id || '',
+          name: data.name,
+          phone,
+          roles: data.roles,
+          inviteCode
+        })
+      })
+      if (typeof ServerSync !== 'undefined' && ServerSync.push) {
+        await ServerSync.push({ force: true })
+      }
+    } catch (syncErr) {
+      console.warn('Personnel server sync notice:', syncErr)
+    }
+
+    SMUI.closeModal()
+    if (SM.state.viewStack.length) {
+      SM.state.viewStack.pop()
+      if (item) this.view(item.id)
+      else SM.navigate('employees')
+    } else {
+      SM.navigate('employees')
+    }
+
+    // پنجره مودال شیک حاوی مشخصات و دکمه کپی پیامک دعوت برای مدیر
+    const studioName = SM.studio()?.name || 'استودیو'
+    const smsInviteText = `${studioName}\nهمکار گرامی ${data.name}\nورود به پنل استودیو: ${window.location.origin}/app/\nشماره موبایل: ${phone}\nکد ورود شما: ${inviteCode}`
+
+    SMUI.modal('🎉 مشخصات و کد ورود همکار', `
+      <div style="text-align:center;padding:6px 0">
+        <div style="width:58px;height:58px;border-radius:18px;background:rgba(16,185,129,0.15);color:#10b981;font-size:26px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;border:1px solid rgba(16,185,129,0.3)">
+          <i class="fas fa-id-badge"></i>
+        </div>
+        <h3 style="margin:0 0 4px;font-size:16px;color:#fff">${SM.esc(data.name)}</h3>
+        <p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0 0 16px">مشخصات همکار در سیستم و سرور با موفقیت ثبت شد.</p>
+
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:14px;margin-bottom:16px;text-align:right">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <span style="font-size:12px;color:rgba(255,255,255,0.5)">شماره همراه همکار:</span>
+            <strong dir="ltr">${SM.esc(phone)}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <span style="font-size:12px;color:rgba(255,255,255,0.5)">کد ورود اختصاصی:</span>
+            <strong dir="ltr" style="font-size:18px;color:#38bdf8;letter-spacing:3px">${SM.esc(inviteCode)}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;color:rgba(255,255,255,0.5)">نقش‌های تعیین‌شده:</span>
+            <span style="font-size:12px;color:#f59e0b">${SM.esc(data.roles.map(r => typeof getRoleTitle === 'function' ? getRoleTitle(r) : r).join('، '))}</span>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button type="button" class="sm-btn sm-btn-primary" onclick="Utils.copyText(decodeURIComponent('${encodeURIComponent(smsInviteText)}')); SMUI.closeModal()" style="padding:11px;font-size:13px;border-radius:12px">
+            <i class="fas fa-copy"></i> کپی متن پیامک و کد ورود همکار
+          </button>
+        </div>
+      </div>
+    `, { width: 440 })
   },
 
   async sendContract(personnelId) {

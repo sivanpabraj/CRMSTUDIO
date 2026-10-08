@@ -856,6 +856,157 @@ const server = http.createServer((req, res) => {
     })
   }
 
+  // Save / Update Personnel with Custom Invite Code (Direct Server Persistence)
+  if (req.method === 'POST' && url.pathname === '/api/personnel/save') {
+    let body = ''
+    req.setEncoding('utf-8')
+    req.on('data', chunk => { body += chunk })
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const phone = normalizePhone(payload.phone)
+        const name = String(payload.name || '').trim()
+        const roles = Array.isArray(payload.roles) ? payload.roles : [payload.role || 'photographer']
+        const inviteCode = String(payload.inviteCode || payload.code || '').trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+        const studioId = String(payload.studioId || '').trim()
+
+        if (!phone || phone.length < 10) return sendJson(res, 400, { ok: false, error: 'شماره تماس الزامی است' })
+        if (!name) return sendJson(res, 400, { ok: false, error: 'نام پرسنل الزامی است' })
+
+        if (!fs.existsSync(TENANTS_DIR)) fs.mkdirSync(TENANTS_DIR, { recursive: true })
+        const files = getSortedTenantFiles()
+        let targetFile = null
+        let targetData = null
+        let targetTenantKey = null
+
+        if (studioId) {
+          for (const f of files) {
+            const p = path.join(TENANTS_DIR, f)
+            try {
+              const d = JSON.parse(fs.readFileSync(p, 'utf-8'))
+              if (d.studioInfo?.id === studioId || f.replace(/\.json$/, '') === studioId) {
+                targetFile = p; targetData = d; targetTenantKey = f.replace(/\.json$/, ''); break
+              }
+            } catch { /* skip */ }
+          }
+        }
+        if (!targetFile && files.length) {
+          targetFile = path.join(TENANTS_DIR, files[0])
+          try {
+            targetData = JSON.parse(fs.readFileSync(targetFile, 'utf-8'))
+            targetTenantKey = files[0].replace(/\.json$/, '')
+          } catch { /* skip */ }
+        }
+
+        if (!targetFile || !targetData) {
+          return sendJson(res, 404, { ok: false, error: 'استودیو برای ذخیره پرسنل یافت نشد' })
+        }
+
+        if (!Array.isArray(targetData.personnel)) targetData.personnel = []
+        if (!Array.isArray(targetData.users)) targetData.users = []
+
+        let pIdx = targetData.personnel.findIndex(p => p.phone && normalizePhone(p.phone) === phone)
+        const empId = pIdx >= 0 ? targetData.personnel[pIdx].id : ('emp_' + Date.now())
+        const pRecord = {
+          id: empId,
+          name,
+          phone,
+          roles,
+          role: roles[0] || 'photographer',
+          inviteCode: inviteCode || targetData.personnel[pIdx]?.inviteCode || '',
+          code: inviteCode || targetData.personnel[pIdx]?.code || '',
+          status: 'active',
+          updatedAt: new Date().toISOString()
+        }
+        if (pIdx >= 0) targetData.personnel[pIdx] = { ...targetData.personnel[pIdx], ...pRecord }
+        else targetData.personnel.push(pRecord)
+
+        let uIdx = targetData.users.findIndex(u => u.phone && normalizePhone(u.phone) === phone)
+        const hashed = inviteCode ? hashPasswordSync(inviteCode) : null
+        const uRecord = {
+          id: empId,
+          name,
+          phone,
+          roles,
+          portalType: 'staff',
+          status: 'active',
+          inviteCode: inviteCode || targetData.users[uIdx]?.inviteCode || '',
+          code: inviteCode || targetData.users[uIdx]?.code || '',
+          mustChangePassword: true,
+          portalStatus: 'active',
+          portalOtp: inviteCode ? { code: inviteCode, verified: false, sentAt: new Date().toISOString() } : (targetData.users[uIdx]?.portalOtp || null)
+        }
+        if (hashed) {
+          uRecord.password = hashed.password
+          uRecord.salt = hashed.salt
+        }
+        if (uIdx >= 0) targetData.users[uIdx] = { ...targetData.users[uIdx], ...uRecord }
+        else targetData.users.push(uRecord)
+
+        fs.writeFileSync(targetFile, JSON.stringify(targetData, null, 2), 'utf-8')
+        const meta = readTenantMeta(targetTenantKey)
+        writeTenantMeta(targetTenantKey, meta.revision + 1, new Date().toISOString(), meta.syncToken)
+        broadcastTenantUpdate(targetTenantKey, meta.revision + 1, new Date().toISOString())
+
+        return sendJson(res, 200, { ok: true, message: 'اطلاعات پرسنل در سرور ثبت شد', inviteCode: pRecord.inviteCode })
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: err.message })
+      }
+    })
+    return
+  }
+
+  // Change / Set Personal Password
+  if (req.method === 'POST' && url.pathname === '/api/auth/change-password') {
+    let body = ''
+    req.setEncoding('utf-8')
+    req.on('data', chunk => { body += chunk })
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const phone = normalizePhone(payload.phone)
+        const newPassword = String(payload.newPassword || '').trim()
+        if (!phone || !newPassword || newPassword.length < 4) {
+          return sendJson(res, 400, { ok: false, error: 'شماره معتبر و رمز حداقل ۴ کاراکتر الزامی است' })
+        }
+
+        const files = getSortedTenantFiles()
+        let updated = false
+        for (const f of files) {
+          const p = path.join(TENANTS_DIR, f)
+          try {
+            const data = JSON.parse(fs.readFileSync(p, 'utf-8'))
+            const users = Array.isArray(data.users) ? data.users : []
+            const uIdx = users.findIndex(u => u.phone && normalizePhone(u.phone) === phone)
+            if (uIdx !== -1) {
+              const hashed = hashPasswordSync(newPassword)
+              users[uIdx].password = hashed.password
+              users[uIdx].salt = hashed.salt
+              users[uIdx].mustChangePassword = false
+              users[uIdx].isDefaultPassword = false
+              users[uIdx].updatedAt = new Date().toISOString()
+              data.users = users
+              fs.writeFileSync(p, JSON.stringify(data, null, 2), 'utf-8')
+              updated = true
+              const tenantKey = f.replace(/\.json$/, '')
+              const meta = readTenantMeta(tenantKey)
+              writeTenantMeta(tenantKey, meta.revision + 1, new Date().toISOString(), meta.syncToken)
+              broadcastTenantUpdate(tenantKey, meta.revision + 1, new Date().toISOString())
+              break
+            }
+          } catch { /* skip */ }
+        }
+        if (updated) {
+          return sendJson(res, 200, { ok: true, message: 'رمز عبور با موفقیت ذخیره شد' })
+        }
+        return sendJson(res, 404, { ok: false, error: 'کاربر یافت نشد' })
+      } catch (e) {
+        return sendJson(res, 500, { ok: false, error: e.message })
+      }
+    })
+    return
+  }
+
   // Server-Authoritative Login (Password or 6-digit Invite Code)
   if (req.method === 'POST' && url.pathname === '/api/auth/login') {
     const check = authLimiter.check(clientIp)
@@ -934,26 +1085,44 @@ const server = http.createServer((req, res) => {
               const tenantKey = f.replace(/\.json$/, '')
               let match = false
               let usedOtp = false
+              const cleanPw = rawPw.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).trim()
 
               // Check 1: pbkdf2 password
               if (user.password && user.salt) {
                 try {
-                  match = verifyPasswordSync(rawPw, user.password, user.salt)
+                  match = verifyPasswordSync(cleanPw, user.password, user.salt)
                 } catch { /* ignore */ }
               }
 
               // Check 2: user portalOtp
               if (!match && user.portalOtp) {
-                usedOtp = verifyOtpSync(rawPw, user.portalOtp)
+                usedOtp = verifyOtpSync(cleanPw, user.portalOtp)
                 if (usedOtp) match = true
               }
 
-              // Check 3: Check persContracts verification codes for this personnel/phone
+              // Check 3: matchPersonnel inviteCode or custom code
+              if (!match && matchPersonnel) {
+                const pCode = String(matchPersonnel.inviteCode || matchPersonnel.code || '').trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+                if (pCode && (pCode === cleanPw || pCode.toUpperCase() === cleanPw.toUpperCase())) {
+                  match = true
+                  usedOtp = true
+                }
+              }
+
+              // Check 4: user inviteCode or custom code
+              if (!match && user) {
+                const uCode = String(user.inviteCode || user.code || '').trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+                if (uCode && (uCode === cleanPw || uCode.toUpperCase() === cleanPw.toUpperCase())) {
+                  match = true
+                  usedOtp = true
+                }
+              }
+
+              // Check 5: Check persContracts verification codes for this personnel/phone
               if (!match && persContracts.length && phone) {
                 const matchingContract = persContracts.find(c => {
                   const cPhone = c.verification?.phone ? normalizePhone(c.verification.phone) : ''
-                  const cCode = String(c.verification?.code || '').trim()
-                  const cleanPw = rawPw.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+                  const cCode = String(c.verification?.code || '').trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
                   return (cPhone === phone || c.personnelId === user.id) && cCode && (cCode === cleanPw)
                 })
                 if (matchingContract) {
@@ -970,6 +1139,8 @@ const server = http.createServer((req, res) => {
 
               if (match) {
                 let shouldSave = false
+                const isInviteCodeLogin = usedOtp || user.mustChangePassword || user.isDefaultPassword
+
                 if (usedOtp) {
                   user.portalStatus = 'active'
                   user.portalOtp = {
@@ -993,10 +1164,12 @@ const server = http.createServer((req, res) => {
                   broadcastTenantUpdate(tenantKey, meta.revision + 1, new Date().toISOString())
                 }
 
+                const { password: _p, salt: _s, ...safeUser } = user || {}
                 const meta = readTenantMeta(tenantKey)
                 return sendJson(res, 200, {
                   ok: true,
                   user: safeUser,
+                  mustChangePassword: Boolean(isInviteCodeLogin),
                   tenantKey,
                   syncToken: meta.syncToken,
                   studioInfo: data.studioInfo || {},
