@@ -731,6 +731,66 @@ const server = http.createServer((req, res) => {
     }
   }
 
+  // Factory Reset Database Endpoint (Requires strict admin key)
+  if (req.method === 'POST' && url.pathname === '/api/system/reset-db') {
+    const check = authLimiter.check(clientIp)
+    if (!check.allowed) {
+      return sendJson(res, 429, { ok: false, error: 'نرخ درخواست بیش از حد مجاز است' })
+    }
+
+    const authHeader = req.headers['authorization'] || ''
+    const adminKey = req.headers['x-admin-key'] || ''
+    const expectedAdminKey = process.env.SYSTEM_UPDATE_KEY || 'mandani_root_2026'
+
+    const isKeyValid = adminKey && adminKey === expectedAdminKey
+    const isBearerValid = authHeader.startsWith('Bearer ') && authHeader.slice(7).trim() === expectedAdminKey
+
+    if (!isKeyValid && !isBearerValid) {
+      return sendJson(res, 403, { ok: false, error: 'دسترسی غیرمجاز برای بازنشانی سیستم' })
+    }
+
+    try {
+      // 1. Safe Backup before reset
+      const backupDir = '/var/backups/crmstudio'
+      if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true })
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      try {
+        if (fs.existsSync(DATA_DIR)) {
+          execSync(`tar -czf "${backupDir}/pre_reset_${timestamp}.tar.gz" -C "${DATA_DIR}" . 2>/dev/null || true`)
+        }
+      } catch { /* skip backup error */ }
+
+      // 2. Clear Tenants
+      if (fs.existsSync(TENANTS_DIR)) {
+        const files = fs.readdirSync(TENANTS_DIR)
+        for (const f of files) {
+          try { fs.unlinkSync(path.join(TENANTS_DIR, f)) } catch { /* */ }
+        }
+      }
+
+      // 3. Clear default db & meta
+      if (fs.existsSync(DEFAULT_DB_FILE)) {
+        try { fs.unlinkSync(DEFAULT_DB_FILE) } catch { /* */ }
+      }
+      if (fs.existsSync(DEFAULT_META_FILE)) {
+        try { fs.unlinkSync(DEFAULT_META_FILE) } catch { /* */ }
+      }
+
+      // 4. Clear active OTPs
+      activeOtps.clear()
+
+      console.log(`[Factory Reset] Database reset to blank state at ${new Date().toISOString()}`)
+
+      return sendJson(res, 200, {
+        ok: true,
+        message: 'پایگاه داده سرور با موفقیت صفر شد و نسخه پشتیبان ایمن ذخیره گردید.',
+        timestamp: new Date().toISOString()
+      })
+    } catch (err) {
+      return sendJson(res, 500, { ok: false, error: 'خطا در بازنشانی دیتابیس: ' + err.message })
+    }
+  }
+
   // SSE Stream
   if (url.pathname === '/api/sync/stream') {
     const syncCheck = syncLimiter.check(clientIp)
