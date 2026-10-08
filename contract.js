@@ -1067,6 +1067,36 @@ async function saveContractDraft() {
         await SecureDB.insert('contracts', contractObj);
       }
       if (typeof DB !== 'undefined' && DB.flush) DB.flush();
+
+      // اتصال مستقیم از فرم قرارداد → ایجاد آفیش persProjects برای پرسنل انتخاب‌شده
+      const assignedStaff = typeof getAssignedStaff === 'function' ? getAssignedStaff() : []
+      for (const s of assignedStaff) {
+        const personnel = (typeof DB !== 'undefined' ? DB.get('personnel') : []) || []
+        const person = personnel.find(p => p.id === s.personnelId) || personnel.find(p => p.name === s.name)
+        if (!person) continue
+        const existingProjects = (typeof DB !== 'undefined' ? DB.get('persProjects') : []) || []
+        const alreadyHas = existingProjects.some(ep => ep.contractId === contractObj.id && (ep.personnelId === person.id || ep.roleId === s.roleKey.replace(/-/g, '_')))
+        if (!alreadyHas && typeof SecureDB !== 'undefined' && SecureDB.insert) {
+          const amount = typeof getStaffRate === 'function' ? getStaffRate(s.personnelId || s.name, s.roleTitle) : 0
+          await SecureDB.insert('persProjects', {
+            couple: contractObj.couple || 'قرارداد',
+            personnelId: person.id,
+            personnelName: person.name,
+            personnelPhone: person.phone,
+            role: s.roleTitle,
+            roleId: s.roleKey.replace(/-/g, '_'),
+            contractId: contractObj.id,
+            eventDate: contractObj.date || '',
+            venue: contractObj.venue || '',
+            amount,
+            paid: 0,
+            accepted: null,
+            status: 'pending',
+            deadline: contractObj.date || '',
+            assignedAt: typeof Utils !== 'undefined' ? Utils.todayJalali() : ''
+          })
+        }
+      }
     }
     toast('پیش‌نویس قرارداد با موفقیت ذخیره شد ✓', 'success');
   } catch(e) {

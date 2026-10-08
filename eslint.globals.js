@@ -84,6 +84,7 @@ export const browserGlobals = {
   PortalShared: "readonly",
   PortalProfile: "readonly",
   PortalStaffFix: "readonly",
+  PortalPro: "readonly",
   PortalDashboard: "readonly",
   PortalMessages: "readonly",
   UnifiedLogin: "readonly",
