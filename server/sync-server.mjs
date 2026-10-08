@@ -428,7 +428,10 @@ function findTenantSafe(targetPhone) {
               userKind,
               roleTitle,
               displayName,
-              contractSummary
+              contractSummary,
+              hasInviteCode: Boolean(matchPersonnel?.inviteCode || matchPersonnel?.code || matchUser?.inviteCode || matchUser?.code || (matchUser?.portalOtp?.code && !matchUser?.password)),
+              hasPassword: Boolean(matchUser?.password && !matchUser?.mustChangePassword),
+              mustChangePassword: Boolean(matchUser?.mustChangePassword)
             }
           }
         } catch { /* skip corrupted file */ }
@@ -851,9 +854,113 @@ const server = http.createServer((req, res) => {
       userKind: match.userKind,
       roleTitle: match.roleTitle,
       displayName: match.displayName,
+      hasInviteCode: match.hasInviteCode,
+      hasPassword: match.hasPassword,
+      mustChangePassword: match.mustChangePassword,
       contractId: match.contractSummary?.id || null,
       eventDate: match.contractSummary?.eventDate || null
     })
+  }
+
+  // Direct Studio & Manager Registration Endpoint (Full Server Persistence)
+  if (req.method === 'POST' && url.pathname === '/api/auth/register') {
+    let body = ''
+    req.setEncoding('utf-8')
+    req.on('data', chunk => { body += chunk })
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const studioName = String(payload.studioName || '').trim()
+        const managerName = String(payload.managerName || '').trim()
+        const phone = normalizePhone(payload.phone)
+        const password = String(payload.password || '').trim()
+        const email = String(payload.email || '').trim().toLowerCase()
+
+        if (!studioName || !managerName || !phone || !password) {
+          return sendJson(res, 400, { ok: false, error: 'تمامی فیلدهای الزامی (نام استودیو، نام مدیر، شماره و رمز) را تکمیل کنید' })
+        }
+
+        if (!fs.existsSync(TENANTS_DIR)) fs.mkdirSync(TENANTS_DIR, { recursive: true })
+
+        // Check if phone belongs to an existing studio
+        const existingLookup = findTenantSafe(phone)
+        const tenantKey = existingLookup?.tenantKey || ('studio_' + Date.now())
+        const dbFile = getTenantDbPath(tenantKey)
+        let data = {}
+
+        if (fs.existsSync(dbFile)) {
+          try { data = JSON.parse(fs.readFileSync(dbFile, 'utf-8')) } catch { data = {} }
+        }
+
+        if (!data.studioInfo) data.studioInfo = {}
+        data.studioInfo.id = data.studioInfo.id || tenantKey
+        data.studioInfo.name = studioName
+        data.studioInfo.manager = managerName
+        data.studioInfo.phone = phone
+        if (email) data.studioInfo.email = email
+        data.studioInfo.setupCompleted = true
+        data.studioInfo.joinCode = data.studioInfo.joinCode || generateOtpSync(6)
+
+        const hashed = hashPasswordSync(password)
+        if (!Array.isArray(data.users)) data.users = []
+        let uIdx = data.users.findIndex(u => u.phone && normalizePhone(u.phone) === phone)
+        const userObj = {
+          id: uIdx !== -1 ? data.users[uIdx].id : ('user_' + Date.now()),
+          name: managerName,
+          phone,
+          email,
+          password: hashed.password,
+          salt: hashed.salt,
+          roles: ['studio_manager'],
+          status: 'active',
+          mustChangePassword: false,
+          isDefaultPassword: false,
+          profileCompleted: true,
+          updatedAt: new Date().toISOString()
+        }
+
+        if (uIdx !== -1) {
+          data.users[uIdx] = { ...data.users[uIdx], ...userObj }
+        } else {
+          data.users.push(userObj)
+        }
+
+        if (!Array.isArray(data.personnel)) data.personnel = []
+        let pIdx = data.personnel.findIndex(p => p.phone && normalizePhone(p.phone) === phone)
+        if (pIdx === -1) {
+          data.personnel.push({
+            id: 'pers_' + Date.now(),
+            name: managerName,
+            phone,
+            userId: userObj.id,
+            roles: ['studio_manager'],
+            status: 'active',
+            salaryType: 'project',
+            salary: 0,
+            jobs: 0
+          })
+        }
+
+        fs.writeFileSync(dbFile, JSON.stringify(data, null, 2), 'utf-8')
+        const meta = readTenantMeta(tenantKey)
+        const newSyncToken = meta.syncToken || ('sync_' + Date.now())
+        writeTenantMeta(tenantKey, (meta.revision || 0) + 1, new Date().toISOString(), newSyncToken)
+        broadcastTenantUpdate(tenantKey, (meta.revision || 0) + 1, new Date().toISOString())
+
+        return sendJson(res, 200, {
+          ok: true,
+          message: 'استودیو و حساب مدیریت با موفقیت در سرور ثبت شد',
+          studioInfo: data.studioInfo,
+          user: userObj,
+          tenantKey,
+          syncToken: newSyncToken,
+          fullData: data
+        })
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: err.message })
+      }
+    })
+    return
   }
 
   // Save / Update Personnel with Custom Invite Code (Direct Server Persistence)

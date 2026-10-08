@@ -8,6 +8,7 @@ const JoinPortal = {
     document.body.classList.add('auth-screen')
     const params = new URLSearchParams(location.search)
     const prefill = Studio.normalizeCode(params.get('code') || '')
+    const phonePrefill = params.get('phone') ? (Utils?.normalizePhone?.(params.get('phone')) || params.get('phone')) : ''
     const app = document.getElementById('join-app')
     const studio = Studio.get()
     app.innerHTML = `
@@ -34,7 +35,7 @@ const JoinPortal = {
               </div>
               <div class="auth-field">
                 <label class="auth-label">شماره موبایل</label>
-                <div class="auth-input-wrap"><i class="fas fa-mobile-alt"></i><input type="tel" id="join-phone" class="ltr" dir="ltr" inputmode="numeric" autocomplete="tel"/></div>
+                <div class="auth-input-wrap"><i class="fas fa-mobile-alt"></i><input type="tel" id="join-phone" class="ltr" dir="ltr" inputmode="numeric" autocomplete="tel" value="${phonePrefill ? Utils.escapeHtml(phonePrefill) : ''}"/></div>
               </div>
               <div class="auth-field">
                 <label class="auth-label">رمز عبور (انگلیسی)</label>

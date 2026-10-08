@@ -240,6 +240,9 @@ const Portal = {
       ConsultationBooking.reset()
       ConsultationBooking.render('auth-booking-root')
     }
+    if (step === 'login' && authTab === 'login' && typeof PhoneFirstLogin !== 'undefined' && PhoneFirstLogin.attach) {
+      PhoneFirstLogin.attach()
+    }
   },
 
   setAuthTab(tab) {
@@ -283,7 +286,11 @@ const Portal = {
         if (wrap) wrap.classList.remove('auth-unified-wrap--wide')
         const isPw = this.state.loginMethod === 'password'
         if (subTextEl) subTextEl.textContent = isPw ? 'شماره موبایل و رمز عبور خود را وارد کنید' : 'با شماره موبایل و کد پیامک وارد شوید'
-        document.getElementById('login-identifier')?.focus()
+        if (typeof PhoneFirstLogin !== 'undefined' && PhoneFirstLogin.attach) {
+          PhoneFirstLogin.attach()
+        } else {
+          document.getElementById('login-identifier')?.focus()
+        }
       }
       this._lastRenderedTab = tab
       this._lastRenderedStep = 'login'
@@ -780,6 +787,30 @@ const Portal = {
       })
 
       Utils.applyStudioTitle(studioName)
+
+      // ثبت مستقیم و تضمینی در سرور ابری استودیوها
+      try {
+        const srvRegRes = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studioName, managerName, phone, email, password })
+        })
+        const srvRegJson = await srvRegRes.json().catch(() => ({}))
+        if (srvRegRes.ok && srvRegJson.ok) {
+          if (srvRegJson.tenantKey) {
+            localStorage.setItem('crm_studio_id', srvRegJson.tenantKey)
+            Utils?.storage?.set?.('talar_studio_id', srvRegJson.tenantKey)
+            if (typeof ServerSync !== 'undefined' && ServerSync.setStudioId) {
+              ServerSync.setStudioId(srvRegJson.tenantKey)
+            }
+          }
+          if (srvRegJson.syncToken) {
+            localStorage.setItem('crm_sync_token', srvRegJson.syncToken)
+          }
+        }
+      } catch (srvRegErr) {
+        console.warn('Server register network notice:', srvRegErr)
+      }
 
       if (typeof ServerSync !== 'undefined' && ServerSync.push) {
         try {

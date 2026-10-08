@@ -73,6 +73,7 @@ export const browserGlobals = {
   define: "readonly",
   GlassTheme: "readonly",
   PasswordSecurity: "readonly",
+  PhoneFirstLogin: "readonly",
   ServerSync: "readonly",
   Studio: "readonly",
   Bootstrap: "readonly",
