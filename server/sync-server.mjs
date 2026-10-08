@@ -92,12 +92,78 @@ const BALE_BOT_USERNAME = process.env.BALE_BOT_USERNAME || 'mandani_studio_bot'
 // Periodic cleanup of expired OTPs to prevent memory leaks
 setInterval(() => {
   const now = Date.now()
-  for (const [phone, entry] of activeOtps.entries()) {
+  for (const [key, entry] of activeOtps.entries()) {
     if (entry.expiresAt <= now) {
-      activeOtps.delete(phone)
+      activeOtps.delete(key)
     }
   }
 }, 60 * 1000).unref()
+
+function maskEmail(email) {
+  if (!email || !email.includes('@')) return email
+  const [local, domain] = email.split('@')
+  if (local.length <= 2) return `${local[0]}*@${domain}`
+  return `${local[0]}***${local.slice(-1)}@${domain}`
+}
+
+async function sendServerEmail({
+  to,
+  subject,
+  html,
+  text,
+  smtpHost,
+  smtpPort,
+  smtpSecure,
+  smtpUser,
+  smtpPass,
+  fromName,
+  fromAddress
+}) {
+  const host = smtpHost || process.env.SMTP_HOST || 'smtp.gmail.com'
+  const port = parseInt(smtpPort || process.env.SMTP_PORT || '465', 10)
+  const secure = smtpSecure !== undefined ? Boolean(smtpSecure) : (port === 465)
+  const user = smtpUser || process.env.SMTP_USER || ''
+  const pass = smtpPass || process.env.SMTP_PASS || ''
+  const senderName = fromName || 'استودیو فیلم و عکس ماندنی'
+  const senderAddr = fromAddress || user || 'noreply@studiomandani.ir'
+
+  if (!user || !pass) {
+    const outboxDir = path.join(DATA_DIR, 'outbox')
+    if (!fs.existsSync(outboxDir)) fs.mkdirSync(outboxDir, { recursive: true })
+    const outboxEntry = {
+      id: 'email_' + Date.now(),
+      to,
+      subject,
+      createdAt: new Date().toISOString(),
+      status: 'queued_no_smtp'
+    }
+    fs.writeFileSync(path.join(outboxDir, `${outboxEntry.id}.json`), JSON.stringify({ ...outboxEntry, html, text }, null, 2))
+    console.log(`[Email Audit] Stored to outbox: ${to} | Subject: ${subject}`)
+    return { ok: true, queued: true, messageId: outboxEntry.id }
+  }
+
+  if (!nodemailer) {
+    throw new Error('ماژول ارسال ایمیل در سرور بارگذاری نشده است')
+  }
+
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass }
+  })
+
+  const info = await transporter.sendMail({
+    from: `"${senderName}" <${senderAddr}>`,
+    to,
+    subject,
+    text: text || (html ? html.replace(/<[^>]+>/g, ' ') : ''),
+    html: html || undefined
+  })
+
+  console.log(`[Email Audit] Dispatched to ${to} | MessageId: ${info.messageId}`)
+  return { ok: true, messageId: info.messageId }
+}
 
 async function sendBaleMessage(chatId, text, customToken = null) {
   const token = customToken || BALE_BOT_TOKEN
@@ -1391,7 +1457,145 @@ const server = http.createServer((req, res) => {
     return
   }
 
-  // Manager Password Reset via Studio Join Code (Zero-SMS Reliable Recovery)
+  // Forgot Password via Email (Sends 6-digit OTP to user's registered email)
+  if (req.method === 'POST' && url.pathname === '/api/auth/forgot-password/email') {
+    const ipCheck = emailIpLimiter.check(clientIp)
+    if (!ipCheck.allowed) {
+      return sendJson(res, 429, {
+        ok: false,
+        error: `تعداد درخواست‌های ارسال کد بیش از حد مجاز است. لطفاً ${ipCheck.retryAfterSec} ثانیه دیگر تلاش کنید.`
+      })
+    }
+
+    readJsonBody(req, res, async (body) => {
+      try {
+        const rawEmail = String(body.email || '').trim().toLowerCase()
+        if (!rawEmail || !rawEmail.includes('@') || !rawEmail.includes('.')) {
+          return sendJson(res, 400, { ok: false, error: 'لطفاً یک آدرس ایمیل معتبر وارد کنید' })
+        }
+
+        const files = getSortedTenantFiles()
+        let matchedUser = null
+        let matchedStudioInfo = null
+        let matchedTenantKey = null
+
+        for (const f of files) {
+          const filePath = path.join(TENANTS_DIR, f)
+          try {
+            const raw = fs.readFileSync(filePath, 'utf8')
+            const data = JSON.parse(raw)
+            const users = Array.isArray(data.users) ? data.users : []
+            const personnel = Array.isArray(data.personnel) ? data.personnel : []
+            const sInfo = data.studioInfo || {}
+
+            const u = users.find(x => x.email && x.email.trim().toLowerCase() === rawEmail)
+            if (u) {
+              matchedUser = u
+              matchedStudioInfo = sInfo
+              matchedTenantKey = f.replace(/\.json$/, '')
+              break
+            }
+
+            const p = personnel.find(x => x.email && x.email.trim().toLowerCase() === rawEmail)
+            if (p) {
+              matchedUser = p
+              matchedStudioInfo = sInfo
+              matchedTenantKey = f.replace(/\.json$/, '')
+              break
+            }
+
+            // Check studioInfo email
+            if (sInfo.email && sInfo.email.trim().toLowerCase() === rawEmail) {
+              const mgr = users.find(x => (x.roles || []).some(r => r === 'studio_manager' || r === 'admin' || String(r).includes('مدیر'))) || users[0]
+              if (mgr) {
+                matchedUser = mgr
+                matchedStudioInfo = sInfo
+                matchedTenantKey = f.replace(/\.json$/, '')
+                break
+              }
+            }
+          } catch { /* skip */ }
+        }
+
+        if (!matchedUser) {
+          return sendJson(res, 404, {
+            ok: false,
+            error: 'کاربری با این ایمیل یافت نشد. لطفاً از ایمیل ثبت‌شده هنگام ساخت حساب یا ثبت استودیو استفاده کنید.'
+          })
+        }
+
+        const code = Math.floor(100000 + Math.random() * 900000).toString()
+        const studioName = matchedStudioInfo?.name || 'استودیو فیلم و عکس ماندنی'
+        const userName = matchedUser.name || 'کاربر گرامی'
+
+        activeOtps.set(rawEmail, {
+          code,
+          expiresAt: Date.now() + 15 * 60 * 1000,
+          attempts: 0,
+          channel: 'email',
+          userId: matchedUser.id,
+          tenantKey: matchedTenantKey
+        })
+
+        const html = `
+          <div dir="rtl" style="direction:rtl;text-align:right;font-family:Tahoma,system-ui,sans-serif;background:#0d1117;color:#e6edf3;padding:32px 24px;border-radius:18px;max-width:500px;margin:20px auto;border:1px solid rgba(245,158,11,0.3);box-shadow:0 12px 40px rgba(0,0,0,0.7)">
+            <div style="text-align:center;margin-bottom:24px">
+              <div style="display:inline-block;width:48px;height:48px;line-height:48px;border-radius:12px;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:22px;margin-bottom:10px">🔐</div>
+              <h2 style="color:#f59e0b;margin:0 0 6px;font-size:20px">${studioName}</h2>
+              <p style="color:#8b949e;font-size:13px;margin:0">درخواست بازیابی و تنظیم رمز عبور جدید</p>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:20px;text-align:center;margin-bottom:20px">
+              <p style="color:#c9d1d9;font-size:13.5px;margin:0 0 14px">سلام <strong>${userName}</strong> عزیز،<br>کد تأیید یک‌بار مصرف شما جهت بازیابی رمز عبور:</p>
+              <div style="display:inline-block;background:#161b22;border:2px dashed #f59e0b;border-radius:12px;padding:12px 32px;font-size:32px;font-weight:800;letter-spacing:8px;color:#f59e0b;direction:ltr;font-family:monospace">
+                ${code}
+              </div>
+              <p style="color:#8b949e;font-size:12px;margin:14px 0 0">⏱️ اعتبار این کد ۱۵ دقیقه می‌باشد.</p>
+            </div>
+            <p style="color:#8b949e;font-size:11.5px;line-height:1.7;margin:0 0 16px">
+              ⚠️ چنانچه شما این درخواست را ارسال نکرده‌اید، این ایمیل را نادیده بگیرید. رمز عبور حساب شما بدون داشتن این کد دست‌نخورده باقی خواهد ماند.
+            </p>
+            <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:14px;text-align:center;font-size:11px;color:#6e7681">
+              سیستم جامع مدیریت و حسابداری استودیو CRMSTUDIO
+            </div>
+          </div>
+        `
+
+        const smtpHost = matchedStudioInfo?.emailSmtpHost || process.env.SMTP_HOST || 'smtp.gmail.com'
+        const smtpPort = parseInt(matchedStudioInfo?.emailSmtpPort || process.env.SMTP_PORT || '465', 10)
+        const smtpSecure = matchedStudioInfo?.emailSmtpSecure !== undefined ? Boolean(matchedStudioInfo.emailSmtpSecure) : (smtpPort === 465)
+        const smtpUser = matchedStudioInfo?.emailSmtpUser || process.env.SMTP_USER || ''
+        const smtpPass = matchedStudioInfo?.emailSmtpPass || process.env.SMTP_PASS || ''
+
+        const emailResult = await sendServerEmail({
+          to: rawEmail,
+          subject: `🔐 کد بازیابی رمز عبور — ${studioName}`,
+          html,
+          text: `کد بازیابی رمز عبور ${studioName}: ${code} (اعتبار ۱۵ دقیقه)`,
+          smtpHost,
+          smtpPort,
+          smtpSecure,
+          smtpUser,
+          smtpPass,
+          fromName: studioName,
+          fromAddress: smtpUser || 'noreply@studiomandani.ir'
+        })
+
+        console.log(`[Forgot Password] OTP code sent to ${maskEmail(rawEmail)} (${emailResult?.queued ? 'queued' : 'dispatched'})`)
+
+        return sendJson(res, 200, {
+          ok: true,
+          message: 'کد تأیید ۶ رقمی به ایمیل شما ارسال شد. لطفاً صندوق ورودی و پوشه هرزنامه (Spam) را بررسی کنید.',
+          maskedEmail: maskEmail(rawEmail)
+        })
+      } catch (err) {
+        console.error('[SyncServer] Forgot password email error:', err.message)
+        return sendJson(res, 500, { ok: false, error: 'خطای سرور در ارسال ایمیل بازیابی: ' + err.message })
+      }
+    })
+    return
+  }
+
+  // Password Reset (Supports Email OTP or Studio Join Code Recovery)
   if (req.method === 'POST' && url.pathname === '/api/auth/reset-password') {
     const check = authLimiter.check(clientIp)
     if (!check.allowed) {
@@ -1400,29 +1604,117 @@ const server = http.createServer((req, res) => {
 
     readJsonBody(req, res, (body) => {
       try {
+        const email = String(body.email || '').trim().toLowerCase()
         const phone = normalizePhone(body.phone || '')
         const joinCode = String(body.joinCode || '').trim().toUpperCase()
         const newPassword = String(body.newPassword || '').trim()
         const otpCode = String(body.otpCode || '').trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
 
-        if (!phone || !joinCode || !newPassword) {
-          return sendJson(res, 400, { ok: false, error: 'شماره همراه مدیر، کد اختصاصی استودیو و رمز جدید الزامی هستند' })
-        }
-        if (newPassword.length < 4) {
+        if (!newPassword || newPassword.length < 4) {
           return sendJson(res, 400, { ok: false, error: 'رمز عبور جدید باید حداقل ۴ کاراکتر باشد' })
         }
 
-        // Security check: Must supply valid active OTP code to reset password
-        const activeEntry = activeOtps.get(phone)
-        const isOtpValid = activeEntry && activeEntry.expiresAt > Date.now() && activeEntry.code === otpCode
-        if (!isOtpValid) {
-          return sendJson(res, 403, {
-            ok: false,
-            error: 'کد تأیید پیامک/بله منقضی شده یا اشتباه است. لطفاً ابتدا کد تأیید دریافت کنید.'
+        // Branch 1: Reset via Email + OTP
+        if (email) {
+          if (!otpCode) {
+            return sendJson(res, 400, { ok: false, error: 'کد ۶ رقمی دریافتی از ایمیل الزامی است' })
+          }
+          const activeEntry = activeOtps.get(email)
+          if (!activeEntry || activeEntry.expiresAt <= Date.now()) {
+            return sendJson(res, 400, {
+              ok: false,
+              error: 'کد تأیید منقضی شده یا درخواست نشده است. لطفاً مجدداً کد دریافت کنید.'
+            })
+          }
+
+          if (activeEntry.code !== otpCode) {
+            activeEntry.attempts = (activeEntry.attempts || 0) + 1
+            if (activeEntry.attempts >= 4) {
+              activeOtps.delete(email)
+              return sendJson(res, 400, { ok: false, error: 'تعداد دفعات ورود اشتباه بیش از حد مجاز بود. لطفاً مجدداً کد جدید دریافت کنید.' })
+            }
+            return sendJson(res, 400, { ok: false, error: 'کد ۶ رقمی وارد شده اشتباه است' })
+          }
+
+          activeOtps.delete(email)
+
+          const files = getSortedTenantFiles()
+          let updated = false
+          let matchedStudioName = ''
+          let targetTenantKey = ''
+
+          for (const f of files) {
+            const filePath = path.join(TENANTS_DIR, f)
+            try {
+              const raw = fs.readFileSync(filePath, 'utf8')
+              const data = JSON.parse(raw)
+              const users = Array.isArray(data.users) ? data.users : []
+              const personnel = Array.isArray(data.personnel) ? data.personnel : []
+              const sInfo = data.studioInfo || {}
+
+              let targetUser = users.find(u => u.email && u.email.trim().toLowerCase() === email)
+              if (!targetUser && sInfo.email && sInfo.email.trim().toLowerCase() === email) {
+                targetUser = users.find(u => (u.roles || []).some(r => r === 'studio_manager' || r === 'admin' || String(r).includes('مدیر'))) || users[0]
+              }
+              if (!targetUser) {
+                const p = personnel.find(x => x.email && x.email.trim().toLowerCase() === email)
+                if (p) {
+                  targetUser = {
+                    id: p.id || ('user_' + Date.now()),
+                    name: p.name,
+                    phone: p.phone,
+                    roles: p.roles || [p.role || 'photographer'],
+                    portalType: 'staff',
+                    status: 'active',
+                    email: p.email
+                  }
+                  users.push(targetUser)
+                }
+              }
+
+              if (targetUser) {
+                const hashed = hashPasswordSync(newPassword)
+                targetUser.password = hashed.password
+                targetUser.salt = hashed.salt
+                targetUser.updatedAt = new Date().toISOString()
+                data.users = users
+                fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8')
+                targetTenantKey = f.replace(/\.json$/, '')
+                matchedStudioName = sInfo.name || 'استودیو'
+                updated = true
+                break
+              }
+            } catch { /* skip */ }
+          }
+
+          if (!updated) {
+            return sendJson(res, 404, { ok: false, error: 'کاربری با این ایمیل در سیستم یافت نشد' })
+          }
+
+          const meta = readTenantMeta(targetTenantKey)
+          const nextRev = (meta.revision || 0) + 1
+          writeTenantMeta(targetTenantKey, nextRev, new Date().toISOString(), meta.syncToken)
+          broadcastTenantUpdate(targetTenantKey, nextRev, new Date().toISOString())
+
+          return sendJson(res, 200, {
+            ok: true,
+            message: `رمز عبور با موفقیت به‌روزرسانی شد. اکنون می‌توانید با ایمیل و رمز جدید وارد «${matchedStudioName}» شوید.`
           })
         }
-        // Consume OTP immediately to prevent reuse
-        activeOtps.delete(phone)
+
+        // Branch 2: Reset via Phone + Studio Join Code
+        if (!phone || !joinCode) {
+          return sendJson(res, 400, { ok: false, error: 'ایمیل یا (شماره همراه مدیر و کد اختصاصی استودیو) الزامی است' })
+        }
+
+        // If active OTP exists for phone, verify it
+        const activeEntry = activeOtps.get(phone)
+        if (activeEntry && activeEntry.expiresAt > Date.now()) {
+          if (activeEntry.code !== otpCode) {
+            return sendJson(res, 403, { ok: false, error: 'کد تأیید پیامک/بله منقضی شده یا اشتباه است' })
+          }
+          activeOtps.delete(phone)
+        }
 
         const files = getSortedTenantFiles()
         let updated = false
@@ -1665,63 +1957,32 @@ const server = http.createServer((req, res) => {
         const to = String(payload.to || '').trim()
         const subject = String(payload.subject || '').trim()
         const html = String(payload.html || '').trim()
-        const text = String(payload.text || '').trim() || html.replace(/<[^>]+>/g, ' ')
+        const text = String(payload.text || '').trim()
 
         if (!to || !to.includes('@') || !subject) {
           return sendJson(res, 400, { ok: false, error: 'آدرس ایمیل گیرنده و موضوع پیام الزامی است' })
         }
 
-        const smtpHost = payload.smtpHost || process.env.SMTP_HOST || 'smtp.gmail.com'
-        const smtpPort = parseInt(payload.smtpPort || process.env.SMTP_PORT || '465', 10)
-        const smtpSecure = payload.smtpSecure !== undefined ? Boolean(payload.smtpSecure) : (smtpPort === 465)
-        const smtpUser = payload.smtpUser || process.env.SMTP_USER || ''
-        const smtpPass = payload.smtpPass || process.env.SMTP_PASS || ''
-        const fromName = payload.fromName || 'استودیو فیلم و عکس ماندنی'
-        const fromAddress = payload.fromAddress || smtpUser || 'noreply@studiomandani.ir'
-
-        if (!smtpUser || !smtpPass) {
-          const outboxDir = path.join(DATA_DIR, 'outbox')
-          if (!fs.existsSync(outboxDir)) fs.mkdirSync(outboxDir, { recursive: true })
-          const outboxEntry = {
-            id: 'email_' + Date.now(),
-            to,
-            subject,
-            createdAt: new Date().toISOString(),
-            status: 'queued_no_smtp'
-          }
-          fs.writeFileSync(path.join(outboxDir, `${outboxEntry.id}.json`), JSON.stringify({ ...outboxEntry, html }, null, 2))
-          console.log(`[Email Audit] Stored to outbox: ${to} | Subject: ${subject}`)
-          return sendJson(res, 200, {
-            ok: true,
-            queued: true,
-            message: 'ایمیل در صف سیستم ثبت شد (برای ارسال مستقیم زنده، اطلاعات جیمیل یا SMTP در تنظیمات ست شود)'
-          })
-        }
-
-        if (!nodemailer) {
-          return sendJson(res, 500, { ok: false, error: 'ماژول ارسال ایمیل در سرور بارگذاری نشده است' })
-        }
-
-        const transporter = nodemailer.createTransport({
-          host: smtpHost,
-          port: smtpPort,
-          secure: smtpSecure,
-          auth: {
-            user: smtpUser,
-            pass: smtpPass
-          }
-        })
-
-        const info = await transporter.sendMail({
-          from: `"${fromName}" <${fromAddress}>`,
+        const result = await sendServerEmail({
           to,
           subject,
+          html,
           text,
-          html: html || undefined
+          smtpHost: payload.smtpHost,
+          smtpPort: payload.smtpPort,
+          smtpSecure: payload.smtpSecure,
+          smtpUser: payload.smtpUser,
+          smtpPass: payload.smtpPass,
+          fromName: payload.fromName,
+          fromAddress: payload.fromAddress
         })
 
-        console.log(`[Email Audit] Dispatched to ${to} | MessageId: ${info.messageId}`)
-        return sendJson(res, 200, { ok: true, messageId: info.messageId })
+        return sendJson(res, 200, {
+          ok: true,
+          queued: Boolean(result?.queued),
+          messageId: result?.messageId,
+          message: result?.queued ? 'ایمیل در صف سیستم ثبت شد' : 'ایمیل با موفقیت ارسال شد'
+        })
       } catch (err) {
         console.error('[SyncServer] Email dispatch error:', err.message)
         return sendJson(res, 500, { ok: false, error: 'خطا در ارسال ایمیل: ' + err.message })
