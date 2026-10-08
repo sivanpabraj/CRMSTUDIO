@@ -6,9 +6,9 @@ const AppConfig = {
   APP_NAME: 'Mandani Studio ERP',
   DEFAULT_STUDIO_NAME: 'استودیو فیلم و عکس ماندنی',
   STUDIO_NAME_EN: 'Mandani Studio',
-  APP_VERSION: '6.2.3',
-  BUILD_DATE: '2026-10-07',
-  SW_CACHE: 'mandani-studio-v45',
+  APP_VERSION: '6.2.4',
+  BUILD_DATE: '2026-10-08',
+  SW_CACHE: 'mandani-studio-v46',
 
   STUDIO: {
     NAME: 'استودیو فیلم و عکس ماندنی',
@@ -54,7 +54,7 @@ const AppConfig = {
   WALLPAPER_KEY: 'talar_wallpaper',
   ACCENT_KEY: 'talar_accent',
   DRAFT_KEY: 'talar_contract_draft',
-  CHANGELOG_SEEN_KEY: 'talar_changelog_v623_seen',
+  CHANGELOG_SEEN_KEY: 'talar_changelog_v624_seen',
 
   LEGACY_DB_KEYS: ['studio_db_v4', 'talar_db_v3'],
   BACKUP_PREFIX: 'studio_bu_',
@@ -97,14 +97,12 @@ const AppConfig = {
   SHOW_DEMO_OTP: false,
 
   CHANGELOG: [
-    { icon: '💰', title: 'نسخه ۶.۲.۳', desc: 'نمای مالی مدرن: مانده خالص، نمودار، سلامت مالی، اکشن سریع در حسابداری' },
-    { icon: '✨', title: 'نسخه ۶.۲.۲', desc: 'تم شیشه‌ای ارتقا، KPI نقش‌محور، لاگ ارسال قرارداد، PWA پایدار' },
-    { icon: '🚀', title: 'CRMSTUDIO ERP 6.1', desc: 'پلتفرم جامع مدیریت سازمانی (ERP) — ترازنامه مالی، تخصیص انبار، تقویم و گردش‌کار' },
-    { icon: '🌐', title: 'نسخه ۵.۷', desc: 'سایت عمومی، کد عضویت استودیو، جداسازی ورود مدیر/پرسنل/مشتری' },
-    { icon: '🗄️', title: 'IndexedDB', desc: 'ذخیره‌سازی تا ۵۰MB+ با مهاجرت خودکار از localStorage' },
-    { icon: '🔐', title: 'امنیت', desc: 'رمز + سیستم مجوز نقش‌ها' },
-    { icon: '📦', title: 'پشتیبان‌گیری', desc: 'بک‌آپ در IndexedDB' },
-    { icon: '✨', title: 'تم شیشه‌ای', desc: 'پس‌زمینه پویا و کارت‌های شیشه‌ای' }
+    { icon: '📋', title: 'نسخه ۶.۲.۴', desc: 'گزارش بازبینی کامل، کارت مرحله پرتال مشتری، هم‌ترازی health' },
+    { icon: '🧠', title: 'مغز استودیو', desc: 'هشدار بدهی/چک، پاسخ مقید به داده، رد سؤالات نامرتبط' },
+    { icon: '🔍', title: 'سرچ سراسری', desc: 'ذره‌بین + Ctrl+K روی همه بخش‌ها' },
+    { icon: '💰', title: 'نسخه ۶.۲.۳', desc: 'نمای مالی مدرن در حسابداری' },
+    { icon: '✨', title: 'نسخه ۶.۲.۲', desc: 'تم شیشه‌ای، KPI، shareLog، PWA' },
+    { icon: '🚀', title: 'CRMSTUDIO ERP 6.1', desc: 'پلتفرم جامع مدیریت سازمانی' }
   ]
 }
 
