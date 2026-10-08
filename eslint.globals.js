@@ -83,6 +83,7 @@ export const browserGlobals = {
   PortalInvite: "readonly",
   PortalShared: "readonly",
   PortalProfile: "readonly",
+  PortalStaffFix: "readonly",
   PortalDashboard: "readonly",
   PortalMessages: "readonly",
   UnifiedLogin: "readonly",

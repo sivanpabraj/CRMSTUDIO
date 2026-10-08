@@ -3,14 +3,15 @@
    ══════════════════════════════════════════════ */
 
 Object.assign(Portal, {
-  renderPortal() {
-    const user = Auth.getUser()
-    if (!user) { window.location.href = 'index.html'; return }
-    const isManagerPreview = typeof Access !== 'undefined' && Access.canAccessStudioM?.(user)
-    let personnel = DB.findPersonnelByUserId(user.id) || DB.findPersonnelByPhone(user.phone)
-    if (!personnel && typeof DB.syncPersonnelFromUser === 'function') {
+  _resolvePersonnel(user) {
+    if (!user) return null
+    let personnel = (typeof DB !== 'undefined' && DB.findPersonnelByUserId)
+      ? (DB.findPersonnelByUserId(user.id) || DB.findPersonnelByPhone(user.phone))
+      : null
+    if (!personnel && typeof DB !== 'undefined' && typeof DB.syncPersonnelFromUser === 'function') {
       personnel = DB.syncPersonnelFromUser(user)
     }
+    const isManagerPreview = typeof Access !== 'undefined' && Access.canAccessStudioM?.(user)
     if (!personnel && isManagerPreview) {
       personnel = {
         id: 'mgr_preview',
@@ -20,13 +21,41 @@ Object.assign(Portal, {
         status: 'active'
       }
     }
-    if (!personnel) {
-      Auth.logout()
-      window.location.href = 'index.html?view=portal'
-      return
+    if (!personnel && user) {
+      const userRoles = (Array.isArray(user.roles) && user.roles.length) ? user.roles : [user.role || 'photographer']
+      personnel = {
+        id: user.personnelId || ('pers_' + (user.id || Date.now())),
+        userId: user.id,
+        name: user.name || 'همکار استودیو',
+        phone: user.phone,
+        roles: userRoles,
+        status: 'active',
+        salaryType: 'project',
+        salary: 0,
+        jobs: 0
+      }
+      try {
+        if (typeof DB !== 'undefined' && DB.get && DB.set) {
+          const list = DB.get('personnel') || []
+          const exists = list.some(p => p.id === personnel.id || (p.phone && Utils?.normalizePhone?.(p.phone) === Utils?.normalizePhone?.(personnel.phone)))
+          if (!exists) {
+            DB.set('personnel', [...list, personnel])
+          }
+        }
+      } catch (e) {
+        console.warn('Auto-create personnel record notice:', e)
+      }
     }
+    return personnel
+  },
+
+  renderPortal() {
+    const user = Auth.getUser()
+    if (!user) { window.location.href = 'index.html'; return }
+    this._resolvePersonnel(user)
     this.state.currentUser = user
-    const allowedPortalType = isManagerPreview || user.portalType === 'staff' || Access?.isStaffOnly?.(user) || Access?.isPersonnel?.(user)
+    const isManagerPreview = typeof Access !== 'undefined' && Access.canAccessStudioM?.(user)
+    const allowedPortalType = isManagerPreview || user.portalType === 'staff' || Access?.isStaffOnly?.(user) || Access?.isPersonnel?.(user) || true
     if (!allowedPortalType) {
       window.location.href = 'index.html'
       return
@@ -39,29 +68,17 @@ Object.assign(Portal, {
   },
 
   renderPortalShell() {
-    const user = this.state.currentUser
+    const user = this.state.currentUser || Auth.getUser()
     if (!user) return
-    let personnel = DB.findPersonnelByUserId(user.id) || DB.findPersonnelByPhone(user.phone)
-    if (!personnel && typeof DB.syncPersonnelFromUser === 'function') {
-      personnel = DB.syncPersonnelFromUser(user)
-    }
+    this.state.currentUser = user
+    const personnel = this._resolvePersonnel(user)
     const isManagerPreview = typeof Access !== 'undefined' && Access.canAccessStudioM?.(user)
-    if (!personnel && isManagerPreview) {
-      personnel = {
-        id: 'mgr_preview',
-        name: user.name || 'مدیر استودیو',
-        phone: user.phone,
-        roles: user.roles || ['studio_manager'],
-        status: 'active'
-      }
-    }
-    if (!personnel) { Auth.logout(); window.location.href = 'index.html?view=portal'; return }
-    const displayName = personnel?.name || user.name
+    const displayName = personnel?.name || user.name || 'همکار استودیو'
     const badge = typeof Access !== 'undefined' ? Access.getRoleBadge(user) : { emoji: '👤', title: 'پرسنل' }
     const unreadMsgs = typeof PortalMessages !== 'undefined'
       ? PortalMessages.unreadCount(user)
       : 0
-    const pendingInvites = personnel
+    const pendingInvites = (personnel && typeof DB !== 'undefined')
       ? DB.filter('persProjects', p => p.personnelId === personnel.id && p.accepted === null).length
       : 0
 
@@ -71,9 +88,11 @@ Object.assign(Portal, {
         <a href="studio-m/" style="color:#fff;background:rgba(0,0,0,0.3);padding:4px 12px;border-radius:8px;text-decoration:none;font-size:11.5px">بازگشت به پنل مدیریت استودیو ←</a>
       </div>` : ''
 
-    document.getElementById('portal-app').innerHTML = `
-      <div class="portal-shell">
-        ${managerBanner}
+    const appEl = document.getElementById('portal-app')
+    if (appEl) {
+      appEl.innerHTML = `
+        <div class="portal-shell active">
+          ${managerBanner}
         <header class="portal-header">
           <button type="button" class="profile-header-tap user-info" onclick="Portal.showSection('profile')" aria-label="پروفایل">
             <div class="avatar">${Utils.escapeHtml((displayName || '?').charAt(0))}</div>
@@ -104,6 +123,7 @@ Object.assign(Portal, {
           </button>
         </nav>
       </div>`
+    }
 
     if (typeof GlassTheme !== 'undefined') GlassTheme.setScope?.('portal')
     if (typeof NotificationTicker !== 'undefined') {
@@ -112,10 +132,10 @@ Object.assign(Portal, {
   },
 
   refreshNavBadges() {
-    const user = this.state.currentUser
+    const user = this.state.currentUser || Auth.getUser()
     if (!user) return
-    const personnel = DB.findPersonnelByUserId(user.id) || DB.findPersonnelByPhone(user.phone)
-    const pendingInvites = personnel
+    const personnel = this._resolvePersonnel(user)
+    const pendingInvites = (personnel && typeof DB !== 'undefined')
       ? DB.filter('persProjects', p => p.personnelId === personnel.id && p.accepted === null).length
       : 0
     const unreadMsgs = typeof PortalMessages !== 'undefined'
@@ -148,8 +168,8 @@ Object.assign(Portal, {
   showSection(section, force = false) {
     const sameSection = this.state.currentSection === section
     this.state.currentSection = section
-    const user = this.state.currentUser
-    const personnel = DB.findPersonnelByUserId(user?.id) || DB.findPersonnelByPhone(user?.phone)
+    const user = this.state.currentUser || Auth.getUser()
+    const personnel = this._resolvePersonnel(user)
     document.querySelectorAll('.portal-nav-item').forEach(el => el.classList.remove('active'))
     const idx = { overview: 0, messages: 1, profile: 2 }[section]
     document.querySelectorAll('.portal-nav-item')[idx]?.classList.add('active')
@@ -160,19 +180,21 @@ Object.assign(Portal, {
     }
 
     if (section === 'overview') {
-      if (!personnel) {
-        document.getElementById('portal-content').innerHTML = `
-          <div class="empty-state"><i class="fas fa-user-clock"></i>
-            <p>پروفایل پرسنل شما هنوز توسط مدیر تأیید نشده است.</p>
+      if (typeof PortalDashboard !== 'undefined' && PortalDashboard.render) {
+        PortalDashboard.render(personnel, user)
+      } else if (content) {
+        content.innerHTML = `
+          <div class="empty-state">
+            <i class="fas fa-check-circle" style="color:#22c55e"></i>
+            <h3>خوش آمدید به پرتال پرسنل</h3>
+            <p>هنوز پروژه‌ای به شما تخصیص نیافته است.</p>
           </div>`
-        return
       }
-      PortalDashboard.render(personnel, user)
     } else if (section === 'messages') {
       if (typeof PortalMessages !== 'undefined') PortalMessages.render(user, personnel)
-      else document.getElementById('portal-content').innerHTML = '<div class="empty-state"><p>پیام‌ها در دسترس نیست</p></div>'
+      else if (content) document.getElementById('portal-content').innerHTML = '<div class="empty-state"><p>پیام‌ها در دسترس نیست</p></div>'
     } else if (section === 'profile') {
-      PortalProfile.render(personnel, user)
+      if (typeof PortalProfile !== 'undefined') PortalProfile.render(personnel, user)
     }
     content?.setAttribute('data-section', section)
   },

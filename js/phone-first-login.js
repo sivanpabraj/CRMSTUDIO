@@ -17,10 +17,17 @@
 
     init() {
       if (typeof window === 'undefined' || typeof document === 'undefined') return
+      if (typeof Auth !== 'undefined' && Auth.isLoggedIn && Auth.isLoggedIn()) return
+      const params = new URLSearchParams(window.location.search || '')
+      if (params.get('view') === 'portal' && typeof Auth !== 'undefined' && Auth.getUser && Auth.getUser()) return
       this.attach()
     },
 
     attach() {
+      if (typeof Auth !== 'undefined' && Auth.isLoggedIn && Auth.isLoggedIn()) return
+      const params = new URLSearchParams(window.location.search || '')
+      if (params.get('view') === 'portal' && typeof Auth !== 'undefined' && Auth.getUser && Auth.getUser()) return
+      if (document.querySelector('.portal-shell') || document.body.classList.contains('portal-app')) return
       const container = document.getElementById('auth-login-view')
       if (!container) return
       // Render the Phone-First interface
