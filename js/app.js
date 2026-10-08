@@ -463,8 +463,9 @@ const Portal = {
             <label class="auth-label" for="reg-phone">شماره همراه مدیر (جهت ورود)</label>
             <div class="auth-input-wrap">
               <i class="fas fa-mobile-alt"></i>
-              <input type="tel" id="reg-phone" class="ltr" dir="ltr" inputmode="numeric" placeholder="09121234567"/>
+              <input type="tel" id="reg-phone" class="ltr" dir="ltr" inputmode="numeric" placeholder="09121234567" oninput="Portal.onRegisterPhoneInput(this.value)"/>
             </div>
+            <div id="reg-phone-hint" style="display:none;margin-top:4px"></div>
           </div>
           <div class="auth-field">
             <label class="auth-label" for="reg-email">ایمیل / جیمیل <small style="opacity:0.65">(جهت بکاپ)</small></label>
@@ -581,6 +582,56 @@ const Portal = {
     }
   },
 
+  _regPhoneTimer: null,
+  onRegisterPhoneInput(val) {
+    clearTimeout(this._regPhoneTimer)
+    const hintEl = document.getElementById('reg-phone-hint')
+    const raw = String(val || '').trim()
+    const digits = raw.replace(/\D/g, '')
+    if (digits.length < 10) {
+      if (hintEl) { hintEl.style.display = 'none'; hintEl.innerHTML = '' }
+      return
+    }
+    const phone = Utils.normalizePhone(raw)
+    this._regPhoneTimer = setTimeout(async () => {
+      const localUser = DB.find('users', u => (phone && Utils.normalizePhone(u.phone) === phone))
+      const localStudio = DB.get('studioInfo')
+      let foundStudioName = ''
+
+      if (localUser && localUser.roles?.includes('studio_manager') && localStudio?.name) {
+        foundStudioName = localStudio.name
+      }
+
+      if (!foundStudioName && phone.length === 11) {
+        try {
+          const res = await fetch(`/api/auth/lookup?phone=${encodeURIComponent(phone)}`, { cache: 'no-store' })
+          if (res.ok) {
+            const j = await res.json()
+            if (j.ok && j.found && j.studioName) {
+              foundStudioName = j.studioName
+            }
+          }
+        } catch { /* ignore */ }
+      }
+
+      if (hintEl) {
+        if (foundStudioName) {
+          hintEl.innerHTML = `
+            <div style="font-size:11.5px;color:#f59e0b;padding:6px 10px;background:rgba(245,158,11,0.12);border-radius:8px;border:1px solid rgba(245,158,11,0.3);display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px">
+              <span><i class="fas fa-info-circle"></i> این شماره قبلاً برای استودیو <strong>«${Utils.escapeHtml(foundStudioName)}»</strong> ثبت شده است.</span>
+              <button type="button" class="portal-btn portal-btn-sm" onclick="Portal.setAuthTab('login'); const el = document.getElementById('login-identifier'); if (el) { el.value = '${phone}'; Portal.onIdentifierInput('${phone}'); }" style="font-size:11px;padding:3px 8px;white-space:nowrap">
+                ورود <i class="fas fa-arrow-left"></i>
+              </button>
+            </div>`
+          hintEl.style.display = 'block'
+        } else {
+          hintEl.style.display = 'none'
+          hintEl.innerHTML = ''
+        }
+      }
+    }, 250)
+  },
+
   async submitRegister() {
     const errEl = document.getElementById('reg-error')
     const showErr = m => { if (errEl) { errEl.textContent = m; errEl.style.display = 'block' } }
@@ -609,11 +660,49 @@ const Portal = {
     }
 
     try {
+      // بررسی وجود استودیو برای این شماره جهت جلوگیری از ایجاد استودیوهای متعدد و متناقض
+      const existingStudio = DB.get('studioInfo')
+      const existingUser = DB.find('users', u => (phone && Utils.normalizePhone(u.phone) === phone) || (email && u.email && u.email.toLowerCase() === email.toLowerCase()))
+
+      let serverCheck = null
+      try {
+        const checkRes = await fetch(`/api/auth/lookup?phone=${encodeURIComponent(phone)}`, { cache: 'no-store' })
+        if (checkRes.ok) {
+          const cData = await checkRes.json()
+          if (cData.ok && cData.found && cData.studioName) {
+            serverCheck = cData
+          }
+        }
+      } catch { /* ignore network check error */ }
+
+      const hasExistingStudio = (existingStudio && existingStudio.name && existingUser && existingUser.roles?.includes('studio_manager')) || (serverCheck && serverCheck.userKind === 'manager')
+      if (hasExistingStudio) {
+        const foundName = serverCheck?.studioName || existingStudio?.name || studioName
+        if (btn) {
+          btn.disabled = false
+          btn.innerHTML = '<i class="fas fa-rocket"></i> ساخت و ثبت استودیو'
+        }
+        if (errEl) {
+          errEl.innerHTML = `
+            <div style="font-size:12.5px;color:#f59e0b;padding:12px;background:rgba(245,158,11,0.1);border-radius:12px;border:1px solid rgba(245,158,11,0.3);line-height:1.7">
+              <div><i class="fas fa-exclamation-triangle"></i> این شماره قبلاً به عنوان مدیر استودیو «<strong>${Utils.escapeHtml(foundName)}</strong>» ثبت شده است. نیازی به ساخت استودیو تکراری نیست.</div>
+              <div style="margin-top:8px">
+                <button type="button" class="portal-btn portal-btn-sm portal-btn-primary" onclick="Portal.setAuthTab('login'); const el = document.getElementById('login-identifier'); if (el) { el.value = '${phone}'; Portal.onIdentifierInput('${phone}'); }" style="font-size:12px">
+                  <i class="fas fa-sign-in-alt"></i> ورود به پنل استودیو «${Utils.escapeHtml(foundName)}»
+                </button>
+              </div>
+            </div>`
+          errEl.style.display = 'block'
+        }
+        return
+      }
+
       let joinCode
+      const studioId = existingStudio?.id || serverCheck?.studioId || ('studio_' + Date.now())
       await SecureDB.runInternalAsync(async () => {
-        joinCode = Studio.generateJoinCode()
+        joinCode = existingStudio?.joinCode || Studio.generateJoinCode()
         await SecureDB.merge('studioInfo', {
-          id: 'studio_' + Date.now(),
+          id: studioId,
           name: studioName,
           manager: managerName,
           phone,
@@ -638,6 +727,7 @@ const Portal = {
         const creds = await Auth.hashCredentials(password)
         const existing = DB.find('users', u => (phone && Utils.normalizePhone(u.phone) === phone) || (email && u.email && u.email.toLowerCase() === email.toLowerCase()))
         let user
+        const newRoles = [...new Set([...(existing?.roles || []), 'studio_manager'])]
         if (existing) {
           DB.update('users', existing.id, {
             name: managerName,
@@ -645,7 +735,7 @@ const Portal = {
             email,
             password: creds.password,
             salt: creds.salt,
-            roles: ['studio_manager'],
+            roles: newRoles,
             status: 'active',
             avatar: managerName.charAt(0),
             mustChangePassword: false,
@@ -660,7 +750,7 @@ const Portal = {
             email,
             password: creds.password,
             salt: creds.salt,
-            roles: ['studio_manager'],
+            roles: newRoles,
             status: 'active',
             avatar: managerName.charAt(0),
             mustChangePassword: false,
@@ -701,9 +791,38 @@ const Portal = {
     }
   },
 
+  async copyDedicatedLink(url) {
+    const link = url || this._lastRegisteredStudio?.dedicatedLink || document.getElementById('dedicated-studio-url')?.value || window.location.href
+    const ok = await Utils.copy(link)
+    if (ok) {
+      Utils.toast('لینک اختصاصی استودیو با موفقیت کپی شد', 'success')
+    } else {
+      Utils.toast('خطا در کپی — لطفاً لینک را دستی کپی کنید', 'warning')
+    }
+  },
+
+  async copyStudioPassport() {
+    const s = this._lastRegisteredStudio || {}
+    const lines = [
+      `🎉 شناسنامه استودیو: ${s.name || ''}`,
+      `👤 نام مدیر: ${s.manager || ''}`,
+      `📱 شماره همراه مدیر: ${s.phone || ''}`,
+      `🔑 کد اتصال پرسنل: ${s.joinCode || ''}`,
+      `🌐 لینک ورود اختصاصی: ${s.dedicatedLink || ''}`
+    ]
+    const text = lines.filter(Boolean).join('\n')
+    const ok = await Utils.copy(text)
+    if (ok) {
+      Utils.toast('شناسنامه کامل استودیو با موفقیت کپی شد', 'success')
+    } else {
+      Utils.toast('خطا در کپی — لطفاً متن را دستی کپی کنید', 'warning')
+    }
+  },
+
   showRegistrationSuccess(studioInfo) {
     const origin = window.location.origin
     const dedicatedLink = `${origin}/app/?studio=${encodeURIComponent(studioInfo.name)}`
+    this._lastRegisteredStudio = { ...studioInfo, dedicatedLink }
 
     const overlay = document.createElement('div')
     overlay.className = 'portal-modal-overlay open'
@@ -741,7 +860,7 @@ const Portal = {
             <span style="font-size:11.5px;color:rgba(255,255,255,0.5);display:block;margin-bottom:6px">🌐 لینک صفحه ورود با نام و برند استودیو شما:</span>
             <div style="display:flex;gap:6px;align-items:center;background:rgba(0,0,0,0.4);padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.08)">
               <input type="text" readonly value="${dedicatedLink}" style="flex:1;background:transparent;border:none;color:#60a5fa;font-size:11px;direction:ltr" id="dedicated-studio-url" />
-              <button type="button" class="portal-btn portal-btn-sm" onclick="navigator.clipboard.writeText('${dedicatedLink}'); Utils.toast('لینک کپی شد', 'success')" style="font-size:11px">کپی لینک</button>
+              <button type="button" class="portal-btn portal-btn-sm" onclick="Portal.copyDedicatedLink()" style="font-size:11px">کپی لینک</button>
             </div>
           </div>
         </div>
@@ -750,7 +869,7 @@ const Portal = {
           <button type="button" class="portal-btn portal-btn-primary" onclick="window.location.href='studio-m/'" style="padding:12px;font-size:13.5px;border-radius:12px">
             <i class="fas fa-arrow-left"></i> ورود به پنل مدیریت ${Utils.escapeHtml(studioInfo.name)}
           </button>
-          <button type="button" class="portal-btn portal-btn-ghost" onclick="navigator.clipboard.writeText('اطلاعات ورود استودیو ${studioInfo.name}\\nکد اتصال پرسنل: ${studioInfo.joinCode}\\nلینک ورود اختصاصی: ${dedicatedLink}'); Utils.toast('مشخصات استودیو کپی شد', 'success')" style="border-radius:12px;font-size:12px">
+          <button type="button" class="portal-btn portal-btn-ghost" onclick="Portal.copyStudioPassport()" style="border-radius:12px;font-size:12px">
             <i class="fas fa-copy"></i> کپی کامل شناسنامه استودیو
           </button>
         </div>
@@ -1333,11 +1452,12 @@ const Portal = {
 
     if (resolved.kind === 'manager' || resolved.kind === 'admin') {
       chip.className = 'auth-role-chip manager'
+      const descText = resolved.extraTitle ? `مدیریت استودیو • ${resolved.extraTitle}` : (resolved.roleTitle || 'مدیریت استودیو — پنل جامع سازمانی')
       chip.innerHTML = `
         <div class="auth-chip-icon"><i class="fas fa-crown"></i></div>
         <div class="auth-chip-info">
           <div class="auth-chip-title">خوش آمدید، ${Utils.escapeHtml(resolved.label)}</div>
-          <div class="auth-chip-desc">مدیریت استودیو — پنل جامع سازمانی</div>
+          <div class="auth-chip-desc">${Utils.escapeHtml(descText)}</div>
         </div>
       `
       chip.style.display = 'flex'

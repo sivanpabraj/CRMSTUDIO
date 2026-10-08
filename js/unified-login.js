@@ -48,7 +48,10 @@ const UnifiedLogin = {
           return { kind: 'staff', user, label: user.name || 'همکار گرامی', roleTitle }
         }
         if (Access.isStudioManager(user) || Access.isSystemAdmin(user)) {
-          return { kind: 'manager', user, label: user.name || 'مدیر استودیو', roleTitle: 'مدیریت استودیو' }
+          const extraRoles = (user.roles || []).filter(r => !['studio_manager', 'system_admin'].includes(r))
+          const extraTitle = extraRoles.map(r => typeof getRoleTitle === 'function' ? getRoleTitle(r) : r).join('، ')
+          const roleTitle = extraTitle ? `مدیر استودیو (${extraTitle})` : 'مدیریت استودیو'
+          return { kind: 'manager', user, label: user.name || 'مدیر استودیو', roleTitle, extraTitle }
         }
         if (Access.isManagement(user)) {
           return { kind: 'admin', user, label: typeof PortalInvite !== 'undefined' ? PortalInvite.portalLabel(user) : (user.name || 'ادمین'), roleTitle: 'مدیریت' }

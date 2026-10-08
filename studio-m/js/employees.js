@@ -374,31 +374,64 @@ const SMEmployees = {
       return
     }
 
-    if (phone && DB.get('personnel').some(p => p.phone === phone)) {
-      return SM.toast('این موبایل قبلاً ثبت شده', 'error')
+    const existingP = phone ? DB.find('personnel', p => p.phone && Utils.normalizePhone(p.phone) === phone) : null
+    const existingUser = phone ? DB.find('users', u => u.phone && Utils.normalizePhone(u.phone) === phone) : null
+
+    if (existingP) {
+      const mergedRoles = [...new Set([...(existingP.roles || []), ...normalizeRoles(roles)])]
+      const mergedRoleAmounts = { ...(existingP.roleAmounts || {}), ...roleAmounts }
+      DB.update('personnel', existingP.id, {
+        ...data,
+        name: data.name || existingP.name,
+        roles: mergedRoles,
+        roleAmounts: mergedRoleAmounts
+      })
+      if (existingUser) {
+        const mergedUserRoles = [...new Set([...(existingUser.roles || []), ...mergedRoles])]
+        DB.update('users', existingUser.id, { roles: mergedUserRoles })
+      }
+      await DB.flush?.()
+      SMUI.closeModal()
+      SM.navigate('employees')
+      SM.toast('نقش‌ها و مشخصات همکار با موفقیت به‌روزرسانی شد', 'success')
+      return
     }
+
+    if (existingUser) {
+      const mergedUserRoles = [...new Set([...(existingUser.roles || []), ...normalizeRoles(roles)])]
+      DB.update('users', existingUser.id, { roles: mergedUserRoles })
+      DB.insert('personnel', {
+        ...data,
+        userId: existingUser.id,
+        jobs: 0
+      })
+      await DB.flush?.()
+      SMUI.closeModal()
+      SM.navigate('employees')
+      SM.toast('پرسنل با نقش‌های انتخابی اضافه شد', 'success')
+      return
+    }
+
     DB.insert('personnel', { ...data, jobs: 0 })
+    await DB.flush?.()
     SMUI.closeModal()
     SM.navigate('employees')
-    SM.toast('پرسنل ذخیره شد', 'success')
+    SM.toast('پرسنل با موفقیت ذخیره شد', 'success')
 
     if (phone && typeof PortalInvite !== 'undefined' && PortalInvite.inviteWithCode) {
-      const existingUser = DB.find('users', u => Utils.normalizePhone(u.phone) === phone)
-      if (!existingUser) {
-        const inv = await PortalInvite.inviteWithCode({
-          name: data.name,
-          phone,
-          portalType: 'staff',
-          roles: data.roles,
-          invitedBy: SM.user()?.name || ''
-        })
-        if (inv.ok && typeof SMPortalMgmt !== 'undefined' && SMPortalMgmt._showInviteCode) {
-          SMPortalMgmt._showInviteCode(inv)
-        } else if (inv.ok) {
-          SM.toast(`کد ورود: ${inv.code || inv.demoCode}`, 'info', 12000)
-        } else {
-          SM.toast(inv.error || 'پرسنل ذخیره شد ولی کد ورود ساخته نشد', 'warning')
-        }
+      const inv = await PortalInvite.inviteWithCode({
+        name: data.name,
+        phone,
+        portalType: 'staff',
+        roles: data.roles,
+        invitedBy: SM.user()?.name || ''
+      })
+      if (inv.ok && typeof SMPortalMgmt !== 'undefined' && SMPortalMgmt._showInviteCode) {
+        SMPortalMgmt._showInviteCode(inv)
+      } else if (inv.ok) {
+        SM.toast(`کد ورود: ${inv.code || inv.demoCode}`, 'info', 12000)
+      } else {
+        SM.toast(inv.error || 'پرسنل ذخیره شد ولی کد ورود ساخته نشد', 'warning')
       }
     }
   },

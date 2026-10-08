@@ -77,8 +77,37 @@ const PortalInvite = {
   async createPortalUser({ name, phone, password, portalType, roles, invitedBy }) {
     phone = Utils.normalizePhone(phone)
     if (!Utils.isValidPhone(phone)) return { ok: false, error: 'موبایل نامعتبر' }
-    if (DB.find('users', u => Utils.normalizePhone(u.phone) === phone)) {
-      return { ok: false, error: 'این موبایل قبلاً ثبت شده' }
+    const existingUser = DB.find('users', u => Utils.normalizePhone(u.phone) === phone)
+    if (existingUser) {
+      const normRoles = normalizeRoles(roles || (portalType === 'admin' ? ['office_secretary'] : ['other']))
+      const mergedRoles = [...new Set([...(existingUser.roles || []), ...normRoles])]
+      await SecureDB.update('users', existingUser.id, {
+        roles: mergedRoles,
+        status: 'active'
+      })
+      if (portalType === 'staff') {
+        const pExisting = DB.findPersonnelByPhone(phone)
+        if (pExisting) {
+          const pMergedRoles = [...new Set([...(pExisting.roles || []), ...normRoles])]
+          await SecureDB.update('personnel', pExisting.id, {
+            roles: pMergedRoles,
+            status: 'active'
+          })
+        } else {
+          await SecureDB.insert('personnel', {
+            name: existingUser.name || name.trim(),
+            phone,
+            userId: existingUser.id,
+            roles: normRoles,
+            status: 'active',
+            salaryType: 'project',
+            salary: 0,
+            roleAmounts: {},
+            jobs: 0
+          })
+        }
+      }
+      return { ok: true, user: DB.find('users', u => u.id === existingUser.id), merged: true }
     }
 
     // رمز داخلی تصادفی — کاربر با پیامک وارد می‌شود، نیازی به رمز از مدیر نیست

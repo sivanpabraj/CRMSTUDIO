@@ -386,9 +386,24 @@ function findTenantSafe(targetPhone) {
             if (matchUser) {
               const roles = matchUser.roles || []
               const isManager = roles.includes('studio_manager') || roles.includes('system_admin') || roles.includes('admin')
-              const isStaff = matchUser.portalType === 'staff' || roles.some(r => ['photographer', 'videographer', 'editor', 'album_designer', 'office_secretary'].includes(r))
+              const isStaff = matchUser.portalType === 'staff' || roles.some(r => ['photographer', 'videographer', 'editor', 'album_designer', 'office_secretary', 'editor_clip', 'editor_venue'].includes(r))
               userKind = isManager ? 'manager' : (isStaff ? 'staff' : 'user')
-              roleTitle = isManager ? 'مدیر استودیو' : (roles.join('، ') || 'همکار')
+              const roleNameMap = {
+                photographer: 'عکاس',
+                photographer_clip: 'عکاس کلیپ',
+                vid_venue: 'فیلمبردار تالار',
+                vid_clip: 'فیلمبردار کلیپ',
+                helishot: 'هلی‌شات',
+                crane: 'کرین',
+                editor_venue: 'ادیتور تالار',
+                editor_clip: 'ادیتور کلیپ',
+                editor: 'تدوین‌کار',
+                album_designer: 'طراح آلبوم',
+                colorist: 'کالریست',
+                office_secretary: 'منشی دفتر'
+              }
+              const extraTitles = roles.filter(r => !['studio_manager', 'system_admin', 'admin'].includes(r)).map(r => roleNameMap[r] || r).join('، ')
+              roleTitle = isManager ? (extraTitles ? `مدیر استودیو (${extraTitles})` : 'مدیر استودیو') : (extraTitles || 'همکار')
               displayName = matchUser.name || 'همکار گرامی'
             } else if (matchPersonnel) {
               userKind = 'staff'
