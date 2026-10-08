@@ -76,9 +76,7 @@ const SMFinanceOverview = {
       const labels = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج']
       // simple: group by last char of date day if jalali
       return labels.map((label, i) => {
-        const income = tx.filter((t) => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0) / 7
-        const expense = tx.filter((t) => t.type === 'withdrawal').reduce((s, t) => s + (t.amount || 0), 0) / 7
-        // distribute evenly as fallback visual if no day parse
+        // distribute by day parse
         const dayTx = tx.filter((t) => {
           const p = String(t.date || '').split('/')
           return p[2] && (Number(p[2]) % 7) === i

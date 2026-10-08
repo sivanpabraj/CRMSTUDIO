@@ -21,11 +21,7 @@ const SMGemini = {
     localStorage.setItem(this.STORAGE_KEY, k)
     try {
       if (typeof DB !== 'undefined' && DB.get) {
-        const prev = DB.get('studioInfo') || {}
-        // Optional mirror without forcing cloud sync of secret — local only preferred
-        if (typeof SecureDB !== 'undefined' && SecureDB.set) {
-          /* keep localStorage primary */
-        }
+        // Local only storage preferred without cloud sync of secret
       }
     } catch { /* */ }
     return !!k

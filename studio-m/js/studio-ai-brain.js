@@ -30,11 +30,6 @@ const StudioAIBrain = {
         const total = Number(c.total || c.totalPrice || c.finalAmount || c.price || 0)
         const deposit = Number(c.deposit || c.prepayment || 0)
         const paidExtra = Number(c.paid || c.paidAmount || 0)
-        // تراکنش‌های مرتبط
-        const txPaid = tx
-          .filter((t) => t.type === 'deposit' && t.contractId === c.id)
-          .reduce((s, t) => s + Number(t.amount || 0), 0)
-        const paid = Math.max(deposit + paidExtra, deposit + txPaid > deposit ? deposit + txPaid - deposit + paidExtra : deposit + paidExtra)
         // دقیق‌تر: max(deposit,0) + sum deposits linked - avoid double count if deposit already in tx
         const linkedDeposits = tx
           .filter((t) => t.type === 'deposit' && (t.contractId === c.id))
@@ -104,9 +99,9 @@ const StudioAIBrain = {
     const totalPaid = txPaid > 0 ? txPaid : deposit + paidExtra
     const debt = Math.max(0, total - totalPaid)
 
-    let label = 'در حال پیگیری'
-    let detail = ''
-    let nextAction = ''
+    let label
+    let detail
+    let nextAction
 
     if (days === null) {
       label = 'ثبت اولیه'
@@ -368,7 +363,6 @@ ${JSON.stringify({
   role
 })}`
 
-    const prev = SMGemini.askStudio
     // use raw fetch with strict prompt
     const key = SMGemini.getApiKey()
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${SMGemini.MODEL}:generateContent?key=${encodeURIComponent(key)}`

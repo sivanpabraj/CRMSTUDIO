@@ -36,9 +36,9 @@
       ? Utils.daysUntil(contract.eventDate || contract.date)
       : null
     const fin = debtOf(contract)
-    let label = 'در حال پیگیری'
-    let detail = ''
-    let nextAction = fin.debt > 0 ? `مانده حساب: ${fmt(fin.debt)} تومان` : 'حساب در وضعیت مناسب است.'
+    let label
+    let detail
+    const nextAction = fin.debt > 0 ? `مانده حساب: ${fmt(fin.debt)} تومان` : 'حساب در وضعیت مناسب است.'
     if (days === null) {
       label = 'ثبت اولیه'
       detail = 'تاریخ مراسم را با استودیو تأیید کنید.'
