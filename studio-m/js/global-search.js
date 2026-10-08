@@ -1,7 +1,6 @@
 /**
  * Global Search — ذره‌بین جمع‌شو + Command Palette
- * جستجوی محلی سریع روی قرارداد، پرسنل، تراکنش، رزرو، چک
- * اتصال اختیاری به Gemini از طریق SMGemini
+ * AI از StudioAIBrain (مقید به داده استودیو)
  */
 const GlobalSearch = {
   _open: false,
@@ -20,7 +19,6 @@ const GlobalSearch = {
   },
 
   mount() {
-    this._ensureStyles()
     this._injectHeaderBtn()
     this._bindKeys()
   },
@@ -106,28 +104,28 @@ const GlobalSearch = {
       <div class="sm-gs-panel glass-card" role="dialog" aria-modal="true" aria-label="جستجوی سراسری">
         <div class="sm-gs-bar">
           <i class="fas fa-search sm-gs-ico"></i>
-          <input type="search" id="sm-gs-input" class="sm-gs-input" placeholder="جستجو در قرارداد، پرسنل، مالی، رزرو..." autocomplete="off" dir="rtl"/>
+          <input type="search" id="sm-gs-input" class="sm-gs-input" placeholder="جستجو یا سؤال استودیو (بدهی، مراسم، پرسنل)..." autocomplete="off" dir="rtl"/>
           <kbd class="sm-gs-kbd">Esc</kbd>
         </div>
         <div class="sm-gs-body">
           <div id="sm-gs-results" class="sm-gs-results"></div>
           <div class="sm-gs-ai">
             <div class="sm-gs-ai-head">
-              <span><i class="fas fa-sparkles"></i> دستیار Gemini</span>
-              <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" id="sm-gs-ai-btn">پرسش از AI</button>
+              <span><i class="fas fa-brain"></i> مغز استودیو</span>
+              <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" id="sm-gs-ai-btn">پاسخ هوشمند</button>
             </div>
-            ${hasKey ? '' : `
+            ${hasKey ? '<p class="sm-gs-ai-hint">اعداد مالی از داده محلی؛ Gemini فقط در محدوده استودیو</p>' : `
             <div class="sm-gs-key-row">
-              <input type="password" id="sm-gs-key" class="sm-input" placeholder="کلید API جمینای را یک‌بار وارد کنید" dir="ltr"/>
-              <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" id="sm-gs-key-save">ذخیره کلید</button>
+              <input type="password" id="sm-gs-key" class="sm-input" placeholder="کلید Gemini (اختیاری — بدون آن هم پاسخ محلی کار می‌کند)" dir="ltr"/>
+              <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" id="sm-gs-key-save">ذخیره</button>
             </div>`}
             <div id="sm-gs-ai-out" class="sm-gs-ai-out"></div>
           </div>
         </div>
         <div class="sm-gs-foot">
-          <span>↑↓ حرکت</span>
-          <span>Enter باز کردن</span>
-          <span>Ctrl+K همیشه</span>
+          <span>Ctrl+K</span>
+          <span>Esc بستن</span>
+          <span>فقط موضوعات استودیو</span>
         </div>
       </div>`
   },
@@ -140,7 +138,7 @@ const GlobalSearch = {
       return
     }
     if (typeof SMGemini !== 'undefined') SMGemini.setApiKey(key)
-    SM?.toast?.('کلید Gemini ذخیره شد (فقط روی این دستگاه)', 'success')
+    SM?.toast?.('کلید ذخیره شد', 'success')
     this.open()
   },
 
@@ -216,9 +214,9 @@ const GlobalSearch = {
       route: 'hint',
       label: 'پیشنهاد',
       items: [
-        { id: 'h1', title: 'نام عروس/داماد یا شماره قرارداد', sub: 'مثال: علی و مریم', route: 'contracts' },
-        { id: 'h2', title: 'نام پرسنل یا نقش', sub: 'مثال: عکاس', route: 'employees' },
-        { id: 'h3', title: 'مبلغ یا عنوان تراکنش', sub: 'مثال: بیعانه', route: 'accounting' }
+        { id: 'h1', title: 'بدهی‌های مشتریان چقدر است؟', sub: 'پاسخ هوشمند مالی', route: 'contracts' },
+        { id: 'h2', title: 'نام عروس/داماد یا شماره قرارداد', sub: 'جستجوی مستقیم', route: 'contracts' },
+        { id: 'h3', title: 'چک‌های این هفته', sub: 'هشدار سررسید', route: 'accounting' }
       ]
     }]
   },
@@ -264,20 +262,21 @@ const GlobalSearch = {
       out.textContent = 'ابتدا عبارت یا سؤال را بنویسید.'
       return
     }
-    if (typeof SMGemini === 'undefined' || !SMGemini.getApiKey()) {
-      out.textContent = 'کلید API جمینای را ذخیره کنید.'
-      return
-    }
-    out.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال تحلیل...'
+    out.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال تحلیل داده استودیو...'
     try {
-      const text = await SMGemini.askStudio(q)
+      let text
+      if (typeof StudioAIBrain !== 'undefined' && StudioAIBrain.answer) {
+        text = await StudioAIBrain.answer(q, 'manager')
+      } else if (typeof SMGemini !== 'undefined' && SMGemini.getApiKey()) {
+        text = await SMGemini.askStudio(q)
+      } else {
+        text = 'موتور هوش استودیو بارگذاری نشده. صفحه را رفرش کنید.'
+      }
       out.textContent = text || 'پاسخی دریافت نشد.'
     } catch (e) {
       out.textContent = 'خطا: ' + (e.message || e)
     }
-  },
-
-  _ensureStyles() { /* CSS file loaded separately */ }
+  }
 }
 
 window.GlobalSearch = GlobalSearch
@@ -296,7 +295,6 @@ window.GlobalSearch = GlobalSearch
     setTimeout(tryMount, 800)
   }
   window.addEventListener('hashchange', () => setTimeout(tryMount, 100))
-  // Re-mount after shell re-render
   const obs = new MutationObserver(() => tryMount())
   document.addEventListener('DOMContentLoaded', () => {
     const root = document.getElementById('sm-root')
