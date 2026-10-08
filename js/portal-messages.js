@@ -56,7 +56,7 @@ const PortalMessages = {
     </div>`
   },
 
-  _card(req, user, personnel) {
+  _card(req, user, _personnel) {
     const type = InboxShared?.typeInfo?.(req.type) || PortalShared.REQUEST_TYPES[req.type] || { icon: '📝', label: 'درخواست' }
     const st = InboxShared?.statusInfo?.(req.status) || { label: req.status, badge: 'muted' }
     const thread = typeof InboxShared !== 'undefined' ? InboxShared.ensureThread(req) : [{ author: 'customer', text: req.text, date: req.createdAt, time: req.createdTime }]
@@ -164,7 +164,7 @@ const PortalMessages = {
 
   async markRead(id) {
     const user = Auth.getUser()
-    const personnel = DB.findPersonnelByUserId(user?.id) || DB.findPersonnelByPhone(user?.phone)
+    const _personnel = DB.findPersonnelByUserId(user?.id) || DB.findPersonnelByPhone(user?.phone)
     const req = DB.find('customerRequests', r => r.id === id)
     if (!req || !Access.canViewCustomerRequest(user, req)) {
       Utils.toast('دسترسی ندارید', 'error')

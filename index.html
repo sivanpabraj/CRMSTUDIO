@@ -6,16 +6,6 @@
   <meta name="theme-color" content="#0071E3"/>
   <title>ورود</title>
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(regs) {
-        for (var i = 0; i < regs.length; i++) regs[i].unregister();
-      });
-    }
-    if ('caches' in window) {
-      caches.keys().then(function(keys) {
-        for (var i = 0; i < keys.length; i++) caches.delete(keys[i]);
-      });
-    }
     function purgeStuckLoader() {
       var l = document.getElementById('talar-loader');
       if (l && (l.innerText.indexOf('6.1.0') !== -1 || l.innerText.indexOf('Studio ERP') !== -1)) {

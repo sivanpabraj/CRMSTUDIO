@@ -204,6 +204,28 @@ const SMAttendance = {
     const recs = this._forDate(date, this._filterPersonId || null)
     const p = Utils.parseJalali(date)
     const title = p ? `${p.jd.toLocaleString('fa-IR')} ${Utils.jalaliMonthName(p.jm)} ${p.jy.toLocaleString('fa-IR')}` : date
+    const personnel = DB.get('personnel').filter(p => p.status !== 'inactive')
+
+    let emptyHtml
+    if (!personnel.length) {
+      emptyHtml = `<div style="background:rgba(201,169,110,0.08);border:1px dashed rgba(201,169,110,0.3);border-radius:12px;padding:16px;text-align:center;margin-top:10px">
+        <i class="fas fa-users-gear" style="font-size:24px;color:var(--sm-gold);margin-bottom:8px"></i>
+        <div style="font-weight:700;font-size:13px;margin-bottom:4px">پرسنل فعالی در سیستم ثبت نشده است</div>
+        <p style="font-size:12px;color:var(--sm-text-muted);margin:0 0 12px">برای شروع، همکاران استودیو را ثبت کنید یا از نمونه پیش‌فرض استفاده نمایید.</p>
+        <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMAttendance.seedSamplePersonnel()"><i class="fas fa-magic"></i> ایجاد پرسنل و ثبت نمونه</button>
+      </div>`
+    } else {
+      emptyHtml = `<div class="sm-cal-empty-day">
+        <p style="margin:0 0 10px;font-size:13px;color:var(--sm-text-muted)">برای این روز حضور ثبت نشده است.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center">
+          ${personnel.slice(0, 4).map(staff => `
+            <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost" onclick="SMAttendance.quickRecord('${date}', '${staff.id}', '${SM.esc(staff.name)}', 'present')">
+              <i class="fas fa-check"></i> ثبت حضور ${SM.esc(staff.name.split(' ')[0])}
+            </button>
+          `).join('')}
+        </div>
+      </div>`
+    }
 
     return `<div class="sm-cal-day-panel">
       <div class="sm-cal-day-panel-head">
@@ -213,8 +235,7 @@ const SMAttendance = {
         </div>
         <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMAttendance.add('${date}')"><i class="fas fa-plus"></i> ثبت</button>
       </div>
-      ${recs.length ? `<div class="sm-att-rec-list">${recs.map(r => this._recordCard(r)).join('')}</div>` :
-        `<div class="sm-cal-empty-day">برای این روز حضور ثبت نشده — پرسنل را انتخاب و وضعیت را مشخص کنید.</div>`}
+      ${recs.length ? `<div class="sm-att-rec-list">${recs.map(r => this._recordCard(r)).join('')}</div>` : emptyHtml}
     </div>`
   },
 
@@ -324,6 +345,62 @@ const SMAttendance = {
     if (!rec) return
     await SecureDB.update('attendance', id, { checkOut: this._nowTime(), status: 'completed' })
     SM.toast('خروج ثبت شد', 'success')
+    SM.navigate('attendance')
+  },
+
+  async quickRecord(date, personnelId, personnelName, status = 'present') {
+    const d = Utils.normJalali(date) || date
+    const dup = this._forDate(d, personnelId).length
+    if (dup) return SM.toast('قبلاً برای این روز ثبت شده است', 'info')
+    await SecureDB.insert('attendance', {
+      personnelId,
+      personnelName,
+      date: d,
+      checkIn: this._nowTime(),
+      checkOut: '',
+      status,
+      source: 'admin',
+      notes: ''
+    })
+    SM.toast(`حضور ${personnelName} ثبت شد`, 'success')
+    this._selectedDate = d
+    SM.navigate('attendance')
+  },
+
+  async seedSamplePersonnel() {
+    const defaultStaff = [
+      { name: 'مدیر آتلیه و هماهنگی', role: 'office_secretary', phone: '09181110001', status: 'active' },
+      { name: 'عکاس ارشد مراسم', role: 'photographer', phone: '09181110002', status: 'active' },
+      { name: 'فیلمبردار سینمایی (FX3)', role: 'vid_venue', phone: '09181110003', status: 'active' },
+      { name: 'ادیتور و طراح آلبوم', role: 'editor_venue', phone: '09181110004', status: 'active' }
+    ]
+    const createdPersonnel = []
+    for (const s of defaultStaff) {
+      const existing = (DB.get('personnel') || []).find(p => p.name === s.name)
+      if (!existing) {
+        const id = await SecureDB.insert('personnel', s)
+        createdPersonnel.push({ id, ...s })
+      } else {
+        createdPersonnel.push(existing)
+      }
+    }
+    const today = Utils.todayJalali()
+    for (const p of createdPersonnel.slice(0, 3)) {
+      const dup = this._forDate(today, p.id).length
+      if (!dup) {
+        await SecureDB.insert('attendance', {
+          personnelId: p.id,
+          personnelName: p.name,
+          date: today,
+          checkIn: '09:30',
+          checkOut: '18:00',
+          status: 'completed',
+          source: 'admin',
+          notes: 'ثبت خودکار نمونه استودیو'
+        })
+      }
+    }
+    SM.toast('پرسنل و نمونه ثبت حضور با موفقیت افزوده شدند', 'success')
     SM.navigate('attendance')
   },
 
@@ -447,7 +524,9 @@ SMModules.attendance = {
   add() { SMAttendance.add() },
   edit(id) { SMAttendance.edit(id) },
   checkIn() { SMAttendance.quickCheckIn() },
-  checkOut(id) { SMAttendance.checkOut(id) }
+  checkOut(id) { SMAttendance.checkOut(id) },
+  seed() { return SMAttendance.seedSamplePersonnel() },
+  quickRecord(date, pId, pName, status) { return SMAttendance.quickRecord(date, pId, pName, status) }
 }
 
 window.SMAttendance = SMAttendance

@@ -74,7 +74,19 @@ const UnifiedLogin = {
     return { kind: 'guest', phone, label: 'مشتری جدید', roleTitle: 'مشاوره و رزرو' }
   },
 
-  landingUrl(resolved) {
+  landingUrl(resolved, requestedNext = null) {
+    if (requestedNext && typeof Utils !== 'undefined') {
+      try {
+        const decoded = decodeURIComponent(requestedNext)
+        const safe = Utils.safeRedirectPath?.(decoded.startsWith('/') ? decoded : `/${decoded}`) || Utils.safeAppRedirect?.(decoded)
+        if (safe) {
+          if (resolved?.kind === 'customer' && safe.includes('studio-m')) {
+            return 'customer.html'
+          }
+          return safe
+        }
+      } catch { /* ignore */ }
+    }
     if (!resolved) return 'index.html'
     if (resolved.kind === 'manager') return 'studio-m/'
     if (resolved.kind === 'admin') return 'studio-m/'
@@ -349,8 +361,8 @@ const UnifiedLogin = {
     const loginResult = await Auth.loginWithOtp(user.id)
     if (!loginResult.ok) return loginResult
 
-    await DB.flush?.()
-    return { ok: true, url: this.landingUrl(resolved), user }
+    const nextParam = (typeof window !== 'undefined' && window.location?.search) ? new URLSearchParams(window.location.search).get('next') : null
+    return { ok: true, url: this.landingUrl(resolved, nextParam), user }
   },
 
   async verifyPortalInviteCode(phone, inviteCode) {
@@ -451,7 +463,8 @@ const UnifiedLogin = {
       return { ok: false, error: 'این حساب در سیستم ثبت نشده است.' }
     }
 
-    return { ok: true, user: user || result.user, url: this.landingUrl(resolved), resolved }
+    const nextParam = (typeof window !== 'undefined' && window.location?.search) ? new URLSearchParams(window.location.search).get('next') : null
+    return { ok: true, user: user || result.user, url: this.landingUrl(resolved, nextParam), resolved }
   },
 
   async saveConsultation({ phone, name, date, time, notes }) {
@@ -499,4 +512,5 @@ const UnifiedLogin = {
   }
 }
 
-window.UnifiedLogin = UnifiedLogin
+if (typeof window !== 'undefined') window.UnifiedLogin = UnifiedLogin
+if (typeof globalThis !== 'undefined') globalThis.UnifiedLogin = UnifiedLogin

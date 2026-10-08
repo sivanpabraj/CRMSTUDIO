@@ -938,7 +938,7 @@ const Portal = {
 
   _otpStep(phone) {
     const mask = phone ? `${phone.slice(0, 4)}•••${phone.slice(-4)}` : ''
-    const pending = UnifiedLogin?.getPending?.()
+    const _pending = UnifiedLogin?.getPending?.()
     const channelName = this.state._otpChannel === 'bale' ? 'پیام‌رسان بله' : this.state._otpChannel === 'whatsapp' ? 'واتساپ' : 'پیامک'
     return `
       <div class="auth-form">
@@ -1360,8 +1360,19 @@ const Portal = {
     }
 
     const finish = () => {
-      const target = result.url || (resolved ? UnifiedLogin.landingUrl(resolved) : 'index.html')
-      const safe = Utils.safeAppRedirect?.(target)
+      const params = new URLSearchParams(window.location.search)
+      const nextParam = params.get('next')
+      let target = null
+      if (nextParam) {
+        try {
+          const decoded = decodeURIComponent(nextParam)
+          target = Utils.safeRedirectPath?.(decoded.startsWith('/') ? decoded : `/${decoded}`) || Utils.safeAppRedirect?.(decoded)
+        } catch { /* ignore */ }
+      }
+      if (!target) {
+        target = result.url || (resolved ? UnifiedLogin.landingUrl(resolved, nextParam) : 'index.html')
+      }
+      const safe = Utils.safeRedirectPath?.(target.startsWith('/') ? target : `/${target}`) || Utils.safeAppRedirect?.(target)
       window.location.href = safe || target || 'index.html'
     }
     if (typeof PortalInvite !== 'undefined' && PortalInvite.needsOtpVerification(result.user)) {
@@ -1571,8 +1582,18 @@ const Portal = {
       return
     }
 
-    const safe = Utils.safeAppRedirect?.(result.url)
-    window.location.href = safe || result.url || 'index.html'
+    const params = new URLSearchParams(window.location.search)
+    const nextParam = params.get('next')
+    let target = null
+    if (nextParam) {
+      try {
+        const decoded = decodeURIComponent(nextParam)
+        target = Utils.safeRedirectPath?.(decoded.startsWith('/') ? decoded : `/${decoded}`) || Utils.safeAppRedirect?.(decoded)
+      } catch { /* ignore */ }
+    }
+    if (!target) target = result.url
+    const safe = Utils.safeRedirectPath?.(target.startsWith('/') ? target : `/${target}`) || Utils.safeAppRedirect?.(target)
+    window.location.href = safe || target || 'index.html'
   },
 
   async verifyPortalInvite() {

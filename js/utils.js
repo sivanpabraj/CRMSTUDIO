@@ -514,7 +514,7 @@ const Utils = {
     let leapJ = -14
     let jp = breaks[0]
     let jump = 0
-    let jmBreak = 0
+    let jmBreak
 
     const div = (a, b) => ~~(a / b)
     const mod = (a, b) => a - ~~(a / b) * b

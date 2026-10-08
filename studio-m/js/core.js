@@ -4,12 +4,10 @@ const SM = {
   _routes: null,
 
   /** بخش‌های موقتاً غیرفعال */
-  DISABLED_MODULES: {
-    files: 'مدیریت فایل'
-  },
+  DISABLED_MODULES: {},
 
   _normalizeRoute(route) {
-    if (route === 'gallery' || route === 'media') return 'dashboard'
+    if (route === 'gallery') return 'media'
     return route
   },
 
@@ -106,6 +104,7 @@ const SM = {
       { id: 'calendar', icon: 'fa-calendar-days', group: 'main', perm: 'calendar' },
       { id: 'timeline', icon: 'fa-clock', group: 'main', perm: 'view_contract' },
       { id: 'contracts', icon: 'fa-file-signature', group: 'business', perm: 'view_contract' },
+      { id: 'signatures', icon: 'fa-signature', group: 'business', perm: 'view_contract' },
       { id: 'packages', icon: 'fa-box-open', group: 'business', perm: 'view_all' },
       { id: 'invoices', icon: 'fa-file-invoice-dollar', group: 'finance', perm: 'view_all' },
       { id: 'accounting', icon: 'fa-calculator', group: 'finance', perm: 'view_all' },
@@ -117,6 +116,7 @@ const SM = {
       { id: 'equipment', icon: 'fa-camera', group: 'assets', perm: 'view_all' },
       { id: 'custody', icon: 'fa-right-left', group: 'assets', perm: 'view_all' },
       { id: 'files', icon: 'fa-folder-open', group: 'assets', perm: 'view_all' },
+      { id: 'media', icon: 'fa-photo-film', group: 'assets', perm: 'view_contract' },
       { id: 'workflow', icon: 'fa-diagram-project', group: 'assets', perm: 'editing' },
       { id: 'notifications', icon: 'fa-bell', group: 'comms', perm: null },
       { id: 'inbox', icon: 'fa-inbox', group: 'comms', perm: 'view_contract' },
@@ -189,6 +189,7 @@ const SM = {
       calendar: ['تقویم', ''],
       timeline: ['تایم‌لاین عروسی', ''],
       contracts: ['قراردادها', ''],
+      signatures: ['امضای دیجیتال', ''],
       packages: ['پکیج قیمت', ''],
       invoices: ['فاکتور', ''],
       accounting: ['حسابداری', ''],
@@ -418,7 +419,11 @@ const SM = {
     }
     if (Auth.getSession()?._sigInvalid) {
       Auth.logout?.()
-      window.location.replace('../index.html?next=' + encodeURIComponent('/studio-m/'))
+      const returnPath = location.pathname.includes('studio-m')
+        ? location.pathname + (location.search || '') + (location.hash || '#dashboard')
+        : '/studio-m/index.html' + (location.hash || '#dashboard')
+      const next = encodeURIComponent(returnPath.startsWith('/') ? returnPath : `/${returnPath}`)
+      window.location.replace(`../index.html?next=${next}`)
       return false
     }
     Auth.getCsrfToken?.()
@@ -451,6 +456,7 @@ const ROUTE_TITLES = {
   calendar: ['Calendar', 'Events & appointments'],
   timeline: ['Wedding Timeline', 'Day-of schedule'],
   contracts: ['Contracts', 'Client agreements'],
+  signatures: ['Digital Signatures', 'Client agreements & biometric seals'],
   packages: ['Packages', 'Pricing tiers'],
   invoices: ['Invoices', 'Billing documents'],
   accounting: ['Accounting', 'Ledger & banks'],
@@ -477,7 +483,7 @@ const I18N = {
     group_main: 'اصلی', group_business: 'کسب‌وکار', group_finance: 'مالی',
     group_hr: 'منابع انسانی', group_assets: 'دارایی', group_comms: 'ارتباطات', group_system: 'سیستم',
     dashboard: 'داشبورد', crm: 'لید / CRM', bookings: 'رزرو', calendar: 'تقویم',
-    timeline: 'تایم‌لاین عروسی', contracts: 'قراردادها',
+    timeline: 'تایم‌لاین عروسی', contracts: 'قراردادها', signatures: 'امضای دیجیتال',
     packages: 'پکیج قیمت', invoices: 'فاکتور', accounting: 'حسابداری', expenses: 'هزینه‌های جاری',
     reports: 'گزارش‌ها', employees: 'پرسنل', attendance: 'حضور و غیاب', payroll: 'حقوق',
     equipment: 'تجهیزات', custody: 'امانات مشتری', files: 'مدیریت فایل', workflow: 'گردش کار تدوین', media: 'کتابخانه رسانه',
@@ -492,7 +498,7 @@ const I18N = {
     group_main: 'Main', group_business: 'Business', group_finance: 'Finance',
     group_hr: 'HR', group_assets: 'Assets', group_comms: 'Communications', group_system: 'System',
     dashboard: 'Dashboard', crm: 'CRM / Leads', bookings: 'Bookings', calendar: 'Calendar',
-    timeline: 'Wedding Timeline', contracts: 'Contracts',
+    timeline: 'Wedding Timeline', contracts: 'Contracts', signatures: 'Digital Signatures',
     packages: 'Price Packages', invoices: 'Invoices', accounting: 'Accounting', expenses: 'Expenses',
     reports: 'Reports', employees: 'Employees', attendance: 'Attendance', payroll: 'Payroll',
     equipment: 'Equipment', files: 'File Management', workflow: 'Editing Pipeline', media: 'Media Library',

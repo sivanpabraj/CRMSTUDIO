@@ -21,7 +21,7 @@
         const enc = new TextEncoder()
         const buf = await crypto.subtle.digest('SHA-256', enc.encode(payload))
         return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
-      } catch (e) {
+      } catch {
         return 'sig_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
       }
     },

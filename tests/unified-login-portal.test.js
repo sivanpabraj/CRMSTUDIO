@@ -75,4 +75,25 @@ describe('UnifiedLogin portal gate', () => {
       portalOtp: expect.objectContaining({ verified: true, via: 'unified_sms_login' })
     }))
   })
+
+  it('preserves next parameter and hash in landingUrl for manager', async () => {
+    await import('../js/unified-login.js')
+    const UnifiedLogin = globalThis.UnifiedLogin || window.UnifiedLogin
+
+    vi.stubGlobal('Utils', {
+      safeRedirectPath: (url) => url,
+      safeAppRedirect: (url) => url
+    })
+
+    const managerResolved = { kind: 'manager', label: 'مدیر استودیو' }
+    const url = UnifiedLogin.landingUrl(managerResolved, '/app/studio-m/#attendance')
+    expect(url).toBe('/app/studio-m/#attendance')
+
+    const defaultUrl = UnifiedLogin.landingUrl(managerResolved)
+    expect(defaultUrl).toBe('studio-m/')
+
+    const customerResolved = { kind: 'customer', label: 'مشتری' }
+    const customerUrl = UnifiedLogin.landingUrl(customerResolved, '/app/studio-m/#attendance')
+    expect(customerUrl).toBe('customer.html')
+  })
 })

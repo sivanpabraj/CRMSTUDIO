@@ -21,12 +21,17 @@ document.addEventListener('DOMContentLoaded', () => {
       return
     }
 
-    const route = (location.hash || '#dashboard').replace('#', '') || 'dashboard'
-    const r = route === 'gallery' || route === 'media' || route === 'crm' ? 'dashboard' : route
+    const resolveRoute = (key) => {
+      const k = String(key || '').replace('#', '').trim()
+      if (k === 'gallery') return 'media'
+      if (k === 'crm') return 'bookings'
+      return k || 'dashboard'
+    }
+
+    const r = resolveRoute(location.hash)
     SM.navigate(SMModules[r] ? r : 'dashboard')
     window.addEventListener('hashchange', () => {
-      const raw = (location.hash || '#dashboard').replace('#', '') || 'dashboard'
-      const hr = raw === 'gallery' || raw === 'media' || raw === 'crm' ? 'dashboard' : raw
+      const hr = resolveRoute(location.hash)
       if (SMModules[hr]) SM.navigate(hr)
     })
     if (typeof Auth !== 'undefined') {

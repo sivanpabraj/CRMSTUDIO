@@ -14,7 +14,7 @@ export function jalaliToGregorian(jy, jm, jd) {
   let leapJ = -14
   let jp = BREAKS[0]
   let jump = 0
-  let jmBreak = 0
+  let jmBreak
 
   for (let i = 1; i < bl; i++) {
     jmBreak = BREAKS[i]

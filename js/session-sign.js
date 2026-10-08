@@ -115,4 +115,5 @@ const SessionSign = {
   }
 }
 
-window.SessionSign = SessionSign
+if (typeof window !== 'undefined') window.SessionSign = SessionSign
+if (typeof globalThis !== 'undefined') globalThis.SessionSign = SessionSign

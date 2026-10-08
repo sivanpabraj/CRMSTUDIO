@@ -69,7 +69,7 @@
       const contracts = ctx.contracts || []
       const cheques = ctx.cheques || []
       const tx = ctx.tx || []
-      const expenses = ctx.expenses || []
+      const _expenses = ctx.expenses || []
 
       // ۱. هشدار چک‌های سررسید نزدیک
       const upcomingCheques = cheques
@@ -266,7 +266,7 @@
      */
     getStaffInsights(staffId, ctx = {}) {
       const insights = []
-      const workflows = ctx.workflows || []
+      const _workflows = ctx.workflows || []
       const custody = ctx.custody || ctx.equipmentCustody || []
       const contracts = ctx.contracts || []
 
@@ -334,8 +334,8 @@
       const couple = contract.couple || `${contract.bride || ''} و ${contract.groom || ''}`.trim() || 'همراه گرامی'
 
       let stageKey = 'before'
-      let message = ''
-      let tip = ''
+      let message
+      let tip
       let icon = 'fa-heart'
       let action = null
 

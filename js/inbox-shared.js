@@ -123,7 +123,7 @@ const InboxShared = {
     if (!isSender) return ''
 
     // بررسی اینکه آیا طرف مقابل پیام را خوانده است
-    let isRead = false
+    let isRead
     const readBy = entry.readBy || {}
 
     if (entry.author === 'customer') {
