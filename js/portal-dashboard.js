@@ -76,7 +76,15 @@ const PortalDashboard = {
       <div class="portal-section">
         <h2>📋 پروژه‌های من</h2>
         ${normalActive.length ? normalActive.map(p => this._renderProjectCard(p, issues, false)).join('')
-          : '<div class="empty-state"><i class="fas fa-folder-open"></i><p>پروژه فعالی در این بخش ندارید</p></div>'}
+          : `<div class="empty-state" style="background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.12);padding:24px 16px;border-radius:14px;text-align:center">
+              <div style="width:48px;height:48px;border-radius:14px;background:rgba(255,85,0,0.12);color:#ff5500;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:22px">
+                <i class="fas fa-briefcase"></i>
+              </div>
+              <p style="font-weight:700;color:#fff;margin:0 0 6px">هنوز آفیش یا پروژه‌ای به شما تخصیص نیافته است</p>
+              <p style="font-size:12px;color:rgba(255,255,255,0.55);max-width:380px;margin:0 auto;line-height:1.6">
+                به محض اینکه مدیریت استودیو شما را در مراسمی (عکاسی، تصویربرداری یا تدوین) آفیش کند، اعلان و جزئیات قرارداد در این بخش ظاهر می‌شود.
+              </p>
+            </div>`}
       </div>
 
       ${this.state.tab === 'photo' ? `
@@ -135,12 +143,41 @@ const PortalDashboard = {
   },
 
   _renderEmploymentContracts(personnel) {
-    const pending = (DB.get('persContracts') || []).filter(c =>
+    let pending = (DB.get('persContracts') || []).filter(c =>
       c.personnelId === personnel.id && c.type === 'employment' && c.status !== 'verified' && c.status !== 'rejected'
     )
     const verified = (DB.get('persContracts') || []).filter(c =>
       c.personnelId === personnel.id && c.type === 'employment' && c.status === 'verified'
     ).slice(-1)
+
+    if (!pending.length && !verified.length && personnel && personnel.id) {
+      const studio = (typeof DB !== 'undefined' && DB.get('studioInfo')) || {}
+      const studioName = studio.name || 'استودیو'
+      const roleList = (typeof RolesHelper !== 'undefined' ? RolesHelper.normalize(personnel.roles || []).map(r => RolesHelper.title(r)) : (personnel.roles || [])).join('، ') || 'همکار تخصصی'
+      const today = (typeof Utils !== 'undefined' && Utils.todayJalali) ? Utils.todayJalali() : ''
+      const paySummary = personnel.payMonthly ? `ماهانه ${Utils.fmtNum(personnel.salaryMonthly || personnel.salary || 0)} تومان` : 'بر اساس آفیش‌ها و توافق طرفین'
+      const newContract = {
+        id: 'pcon_' + Date.now(),
+        type: 'employment',
+        personnelId: personnel.id,
+        personnelName: personnel.name,
+        studioName,
+        roles: personnel.roles || [],
+        paySummary,
+        body: `قرارداد همکاری بین ${studioName} و ${personnel.name} — سمت: ${roleList} — ${paySummary}`,
+        salaryMonthly: personnel.salaryMonthly || personnel.salary || 0,
+        payMonthly: Boolean(personnel.payMonthly),
+        payPerProject: Boolean(personnel.payPerProject),
+        status: 'pending',
+        sentAt: today,
+        createdAt: today,
+        verification: { code: personnel.inviteCode || '', sentAt: today, verified: false, phone: personnel.phone }
+      }
+      if (typeof DB !== 'undefined' && DB.insert) {
+        DB.insert('persContracts', newContract)
+        pending = [newContract]
+      }
+    }
 
     if (!pending.length && !verified.length) return ''
 

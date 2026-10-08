@@ -6,13 +6,19 @@ Object.assign(Portal, {
   renderPortal() {
     const user = Auth.getUser()
     if (!user) { window.location.href = 'index.html'; return }
-    if (typeof Access !== 'undefined' && Access.canAccessStudioM?.(user)) {
-      window.location.href = 'studio-m/'
-      return
-    }
+    const isManagerPreview = typeof Access !== 'undefined' && Access.canAccessStudioM?.(user)
     let personnel = DB.findPersonnelByUserId(user.id) || DB.findPersonnelByPhone(user.phone)
     if (!personnel && typeof DB.syncPersonnelFromUser === 'function') {
       personnel = DB.syncPersonnelFromUser(user)
+    }
+    if (!personnel && isManagerPreview) {
+      personnel = {
+        id: 'mgr_preview',
+        name: user.name || 'مدیر استودیو',
+        phone: user.phone,
+        roles: user.roles || ['studio_manager'],
+        status: 'active'
+      }
     }
     if (!personnel) {
       Auth.logout()
@@ -20,7 +26,7 @@ Object.assign(Portal, {
       return
     }
     this.state.currentUser = user
-    const allowedPortalType = user.portalType === 'staff' || Access?.isStaffOnly?.(user) || Access?.isPersonnel?.(user)
+    const allowedPortalType = isManagerPreview || user.portalType === 'staff' || Access?.isStaffOnly?.(user) || Access?.isPersonnel?.(user)
     if (!allowedPortalType) {
       window.location.href = 'index.html'
       return
@@ -39,6 +45,16 @@ Object.assign(Portal, {
     if (!personnel && typeof DB.syncPersonnelFromUser === 'function') {
       personnel = DB.syncPersonnelFromUser(user)
     }
+    const isManagerPreview = typeof Access !== 'undefined' && Access.canAccessStudioM?.(user)
+    if (!personnel && isManagerPreview) {
+      personnel = {
+        id: 'mgr_preview',
+        name: user.name || 'مدیر استودیو',
+        phone: user.phone,
+        roles: user.roles || ['studio_manager'],
+        status: 'active'
+      }
+    }
     if (!personnel) { Auth.logout(); window.location.href = 'index.html?view=portal'; return }
     const displayName = personnel?.name || user.name
     const badge = typeof Access !== 'undefined' ? Access.getRoleBadge(user) : { emoji: '👤', title: 'پرسنل' }
@@ -49,8 +65,15 @@ Object.assign(Portal, {
       ? DB.filter('persProjects', p => p.personnelId === personnel.id && p.accepted === null).length
       : 0
 
+    const managerBanner = isManagerPreview ? `
+      <div style="background:linear-gradient(90deg, #b45309, #d97706);color:#fff;padding:8px 16px;font-size:12px;font-weight:600;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:9999;box-shadow:0 2px 10px rgba(0,0,0,0.3)">
+        <span style="display:flex;align-items:center;gap:6px"><i class="fas fa-eye"></i> پیش‌نمایش پرتال پرسنل (دیدگاه همکار) — مدیریت استودیو</span>
+        <a href="studio-m/" style="color:#fff;background:rgba(0,0,0,0.3);padding:4px 12px;border-radius:8px;text-decoration:none;font-size:11.5px">بازگشت به پنل مدیریت استودیو ←</a>
+      </div>` : ''
+
     document.getElementById('portal-app').innerHTML = `
       <div class="portal-shell">
+        ${managerBanner}
         <header class="portal-header">
           <button type="button" class="profile-header-tap user-info" onclick="Portal.showSection('profile')" aria-label="پروفایل">
             <div class="avatar">${Utils.escapeHtml((displayName || '?').charAt(0))}</div>

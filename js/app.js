@@ -39,17 +39,21 @@ const Portal = {
       if (safeNext) { window.location.href = safeNext; return }
       if (params.get('view') === 'portal') {
         const u = Auth.getUser()
-        // اگر ادمین/مدیر باشد، او را به پنل اصلی بفرست
-        if (typeof Access !== 'undefined' && Access.canAccessStudioM?.(u)) {
-          window.location.href = 'studio-m/'
-          return
-        }
         this.state.currentUser = u
         this.renderPortal()
         return
       }
       window.location.href = Auth.getLandingUrl()
       return
+    }
+
+    if (params.get('view') === 'portal') {
+      this.state.loginPath = 'staff'
+      setTimeout(() => {
+        if (typeof Portal !== 'undefined' && Portal.setLoginPath) {
+          Portal.setLoginPath('staff')
+        }
+      }, 0)
     }
 
     const pending = typeof UnifiedLogin !== 'undefined' ? UnifiedLogin.getPending?.() : null
