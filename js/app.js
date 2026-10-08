@@ -4,6 +4,18 @@ const Portal = {
 
   async init() {
     const params = new URLSearchParams(location.search)
+    if (params.get('reset') === '1' || params.get('wipe') === '1') {
+      try {
+        localStorage.clear()
+        sessionStorage.clear()
+        if (typeof DB !== 'undefined' && DB.reset) await DB.reset()
+      } catch { /* ignore */ }
+      params.delete('reset')
+      params.delete('wipe')
+      window.location.replace(location.pathname + (params.toString() ? `?${params}` : ''))
+      return
+    }
+
     if (params.get('logout') === '1') {
       Auth.logout()
       CustomerSession?.clear?.()
