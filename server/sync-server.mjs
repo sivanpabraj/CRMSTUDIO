@@ -315,6 +315,12 @@ function verifyOtpSync(code, portalOtp) {
   return false
 }
 
+function generateOtpSync(length = 6) {
+  const min = Math.pow(10, length - 1)
+  const max = Math.pow(10, length) - 1
+  return String(Math.floor(min + Math.random() * (max - min + 1)))
+}
+
 function hashPasswordSync(password) {
   const salt = crypto.randomBytes(16).toString('hex')
   const cleanPw = String(password).trim().replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
