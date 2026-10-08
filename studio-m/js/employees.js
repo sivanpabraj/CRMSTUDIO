@@ -170,6 +170,41 @@ const SMEmployees = {
       .sort((a, b) => String(b.sentAt || b.createdAt || '').localeCompare(String(a.sentAt || a.createdAt || '')))[0]
   },
 
+  ensureContract(p, inviteCode = '') {
+    if (!p) return null
+    let contract = this._latestContract(p.id)
+    if (contract) return contract
+
+    const studio = SM.studio() || {}
+    const studioName = studio.name || 'استودیو'
+    const paySummary = this._paySummary(p)
+    const roleList = normalizeRoles(p.roles || []).map(r => typeof getRoleTitle === 'function' ? getRoleTitle(r) : r).join('، ') || 'همکار تخصصی'
+    const today = (typeof Utils !== 'undefined' && Utils.todayJalali) ? Utils.todayJalali() : ''
+    const code = inviteCode || p.inviteCode || p.code || (typeof Utils !== 'undefined' ? Utils.generateOtp6() : '123456')
+
+    const contractBody = `قرارداد همکاری تخصصی بین ${studioName} و ${p.name} — سمت: ${roleList} — ${paySummary}`
+    const item = {
+      type: 'employment',
+      personnelId: p.id,
+      personnelName: p.name,
+      studioName,
+      roles: p.roles || [],
+      paySummary,
+      body: contractBody,
+      salaryMonthly: p.salaryMonthly || p.salary || 0,
+      payMonthly: Boolean(p.payMonthly),
+      payPerProject: Boolean(p.payPerProject),
+      roleAmounts: p.roleAmounts || {},
+      monthlyProjectPercent: p.monthlyProjectPercent || 0,
+      status: 'pending',
+      sentAt: today,
+      createdAt: today,
+      verification: { code, sentAt: today, verified: false, phone: p.phone }
+    }
+    contract = DB.insert('persContracts', item)
+    return contract
+  },
+
   _approvalsHtml() {
     const contracts = (DB.get('persContracts') || []).filter(c => c.type === 'employment')
       .sort((a, b) => String(b.sentAt || '').localeCompare(String(a.sentAt || '')))
@@ -221,7 +256,7 @@ const SMEmployees = {
     const p = DB.find('personnel', x => x.id === id)
     if (!p) return
     const projects = DB.filter('persProjects', pr => pr.personnelId === id)
-    const contract = this._latestContract(id)
+    const contract = this._latestContract(id) || this.ensureContract(p)
     const color = this._color(p, 0)
 
     SM.pushSubView(p.name, () => `
@@ -240,16 +275,16 @@ const SMEmployees = {
           <p><strong>موبایل:</strong> <span dir="ltr">${SM.esc(p.phone || '—')}</span></p>
           <p style="margin-top:8px"><strong>نحوه پرداخت:</strong> ${SM.esc(this._paySummary(p))}</p>
           <p style="margin-top:8px"><strong>وضعیت:</strong> ${SMUI.badge(p.status === 'active' ? 'فعال' : 'غیرفعال', p.status === 'active' ? 'success' : 'muted')}</p>
-          <p style="margin-top:8px"><strong>پروژه‌ها:</strong> ${p.jobs || 0}</p>
+          <p style="margin-top:8px"><strong>تعداد پروژه‌ها:</strong> ${projects.length || p.jobs || 0}</p>
           ${p.notes ? `<p style="margin-top:8px"><strong>یادداشت:</strong> ${SM.esc(p.notes)}</p>` : ''}
         </div></div>
-        <div class="sm-card"><div class="sm-card-head"><div class="sm-card-title">قرارداد همکاری</div></div>
+        <div class="sm-card"><div class="sm-card-head"><div class="sm-card-title">قرارداد رسمی همکاری</div></div>
           <div class="sm-card-body">
             ${contract ? `
-              <p>${SMUI.badge(contract.status === 'verified' ? 'تأیید شده' : contract.status === 'sms_sent' ? 'منتظر کد SMS' : 'ارسال‌شده', contract.status === 'verified' ? 'success' : 'warning')}</p>
+              <p>${SMUI.badge(contract.status === 'verified' ? 'تأییدشده توسط همکار' : contract.status === 'sms_sent' ? 'منتظر کد SMS' : 'تنظیم‌شده — آماده تأیید و امضا', contract.status === 'verified' ? 'success' : 'warning')}</p>
               <p style="margin-top:8px;font-size:.85rem;color:var(--sm-text-muted)">${SM.esc(contract.paySummary || '')}</p>
-              <p style="margin-top:8px;font-size:.82rem">ارسال: ${SM.esc(contract.sentAt || '—')}</p>
-            ` : '<p class="sm-emp-meta">هنوز قرارداد همکاری ارسال نشده</p>'}
+              <p style="margin-top:8px;font-size:.82rem">تاریخ ثبت: ${SM.esc(contract.sentAt || contract.createdAt || '—')}</p>
+            ` : '<p class="sm-emp-meta">قرارداد همکاری در حال تنظیم</p>'}
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
               <button type="button" class="sm-btn sm-btn-primary sm-btn-sm" onclick="SMEmployees.showContractModal('${p.id}')">
                 <i class="fas fa-file-contract"></i> مشاهده و چاپ قرارداد رسمی
@@ -260,13 +295,114 @@ const SMEmployees = {
             </div>
           </div></div>
       </div>
-      <div class="sm-card" style="margin-top:16px"><div class="sm-card-head"><div class="sm-card-title">پروژه‌های اخیر</div></div>
-        <div class="sm-card-body">${projects.length ? projects.slice(0, 8).map(pr => `
-          <div style="padding:10px 0;border-bottom:1px solid var(--sm-border)">
-            <strong>${SM.esc(pr.couple || pr.contractName || '—')}</strong>
-            <div style="font-size:.78rem;color:var(--sm-text-muted)">${SM.esc(pr.role || '')} — ${SM.fmt(pr.amount || 0)} تومان</div>
-          </div>`).join('') : SMUI.empty('fa-briefcase', 'پروژه‌ای ثبت نشده')}</div>
+      <div class="sm-card" style="margin-top:16px">
+        <div class="sm-card-head" style="display:flex;justify-content:space-between;align-items:center">
+          <div class="sm-card-title">پروژه‌ها و آفیش‌های محوله (${projects.length})</div>
+          <button type="button" class="sm-btn sm-btn-primary sm-btn-sm" onclick="SMEmployees.assignProject('${p.id}')">
+            <i class="fas fa-plus"></i> تخصیص آفیش / کار جدید
+          </button>
+        </div>
+        <div class="sm-card-body">${projects.length ? projects.map(pr => `
+          <div style="padding:10px 0;border-bottom:1px solid var(--sm-border);display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <strong>${SM.esc(pr.couple || pr.contractName || '—')}</strong>
+              <div style="font-size:.78rem;color:var(--sm-text-muted)">${SM.esc(pr.role || '')} — ${SM.fmt(pr.amount || 0)} تومان ${pr.date ? `(${pr.date})` : ''}</div>
+              ${pr.notes ? `<div style="font-size:.75rem;color:rgba(255,255,255,0.5);margin-top:2px">${SM.esc(pr.notes)}</div>` : ''}
+            </div>
+            <div>
+              ${pr.accepted === true ? SMUI.badge('پذیرفته‌شده', 'success') : pr.accepted === false ? SMUI.badge('ردشده', 'danger') : SMUI.badge('در انتظار پذیرش', 'warning')}
+            </div>
+          </div>`).join('') : `
+          <div style="text-align:center;padding:24px 12px;color:rgba(255,255,255,0.5)">
+            <i class="fas fa-briefcase" style="font-size:32px;display:block;margin-bottom:8px;opacity:0.4"></i>
+            هنوز کاری به این همکار تخصیص داده نشده است.
+            <div style="margin-top:10px">
+              <button type="button" class="sm-btn sm-btn-primary sm-btn-sm" onclick="SMEmployees.assignProject('${p.id}')">
+                <i class="fas fa-plus"></i> تخصیص اولین آفیش یا کار به همکار
+              </button>
+            </div>
+          </div>`}</div>
       </div>`)
+  },
+
+  assignProject(personnelId) {
+    const p = DB.find('personnel', x => x.id === personnelId)
+    if (!p) return SM.toast('همکار یافت نشد', 'error')
+
+    const contracts = (DB.get('contracts') || []).filter(c => c.status !== 'cancelled')
+    const roles = normalizeRoles(p.roles || [])
+    const roleOpts = roles.map(r => ({
+      value: r,
+      label: (typeof getRoleTitle === 'function' ? getRoleTitle(r) : r)
+    }))
+    if (!roleOpts.length) {
+      roleOpts.push({ value: 'other', label: 'همکار پروژه' })
+    }
+
+    const contractOpts = [
+      { value: '', label: '— پروژه آزاد / خارج از مجالس ثبت‌شده —' },
+      ...contracts.map(c => ({
+        value: c.id,
+        label: `${c.couple || c.contractNum || 'قرارداد'} (${c.date || c.ceremonyDate || 'تاریخ ثبت‌نشده'})`
+      }))
+    ]
+
+    const defaultRole = roles[0] || 'other'
+    const defaultAmount = (p.roleAmounts && p.roleAmounts[defaultRole]) || ''
+
+    SMUI.modal('➕ تخصیص آفیش و کار جدید به همکار', `
+      <div style="margin-bottom:12px;font-size:13px;color:rgba(255,255,255,0.7)">
+        تخصیص کار به: <strong>${SM.esc(p.name)}</strong> (${SM.esc(p.phone || '—')})
+      </div>
+      ${SMUI.formField('انتخاب قرارداد یا مجلس مشتری', 'ap-contract', { type: 'select', options: contractOpts })}
+      ${SMUI.formField('عنوان کار / پروژه (در صورت خالی بودن مجلس)', 'ap-title', { placeholder: 'مثلاً: مراسم نامزدی رضایی یا تدوین تیزر فرمالیته' })}
+      ${SMUI.formField('نقش همکار در این پروژه', 'ap-role', { type: 'select', options: roleOpts, value: defaultRole })}
+      ${SMUI.formField('تاریخ اجرا / تحویل', 'ap-date', { value: typeof Utils !== 'undefined' ? Utils.todayJalali() : '', dir: 'ltr' })}
+      ${SMUI.formField('دستمزد این کار (تومان)', 'ap-amount', { type: 'number', value: defaultAmount, dir: 'ltr', placeholder: 'مثلاً ۲۰۰۰۰۰۰' })}
+      ${SMUI.formField('شرح وظایف و توضیحات برای همکار', 'ap-notes', { type: 'textarea', placeholder: 'شرح آفیش، آدرس لوکیشن، ساعت حضور، جزئیات تحویل راش‌ها...' })}
+    `, {
+      onSave: async () => {
+        const d = SMUI.readForm(['ap-contract', 'ap-title', 'ap-role', 'ap-date', 'ap-amount', 'ap-notes'])
+        const roleId = d['ap-role'] || defaultRole
+        const roleTitle = typeof getRoleTitle === 'function' ? getRoleTitle(roleId) : roleId
+        const contractId = d['ap-contract'] || ''
+        const selectedContract = contractId ? contracts.find(c => c.id === contractId) : null
+        const title = d['ap-title'] || selectedContract?.couple || selectedContract?.contractNum || 'پروژه استودیو'
+        const date = d['ap-date'] || (typeof Utils !== 'undefined' ? Utils.todayJalali() : '')
+        const amount = Number(d['ap-amount']) || 0
+        const notes = d['ap-notes'] || ''
+
+        await SecureDB.insert('persProjects', {
+          personnelId: p.id,
+          personnelName: p.name,
+          personnelPhone: p.phone,
+          contractId: contractId || null,
+          contractName: title,
+          couple: title,
+          roleId,
+          role: roleTitle,
+          date,
+          deadline: date,
+          amount,
+          paid: 0,
+          notes,
+          status: 'active',
+          accepted: null,
+          createdAt: typeof Utils !== 'undefined' ? Utils.todayJalali() : ''
+        })
+
+        const curJobs = (p.jobs || 0) + 1
+        await SecureDB.update('personnel', p.id, { jobs: curJobs })
+
+        if (typeof ServerSync !== 'undefined' && ServerSync.push) {
+          ServerSync.push({ force: true })
+        }
+
+        SMUI.closeModal()
+        SM.toast('آفیش جدید با موفقیت تخصیص یافت و به کارتابل همکار ارسال شد', 'success')
+        this.view(p.id)
+      }
+    })
   },
 
   add() { this._form(null) },
@@ -461,6 +597,11 @@ const SMEmployees = {
     }
 
     await DB.flush?.()
+
+    const targetP = DB.find('personnel', x => x.phone && Utils.normalizePhone(x.phone) === phone)
+    if (targetP) {
+      this.ensureContract(targetP, inviteCode)
+    }
 
     // ارسال مستقیم به سرور برای ذخیره پایدار در دیتابیس مستأجران
     try {
