@@ -8,108 +8,36 @@
   <script>
     function purgeStuckLoader() {
       var l = document.getElementById('talar-loader');
-      if (l && (l.innerText.indexOf('6.1.0') !== -1 || l.innerText.indexOf('Studio ERP') !== -1)) {
-        l.remove();
-      }
+      if (l && (l.innerText.indexOf('6.1.0') !== -1 || l.innerText.indexOf('Studio ERP') !== -1)) l.remove();
     }
     document.addEventListener('DOMContentLoaded', purgeStuckLoader);
     setTimeout(purgeStuckLoader, 200);
-    setTimeout(purgeStuckLoader, 1000);
   </script>
   <script src="js/title-bootstrap.js"></script>
   <script>
     window.Portal = window.Portal || {
       state: { authTab: 'login', step: 'login', loginMethod: 'password', _phone: '' },
       setAuthTab: function(tab) {
-        this.state.authTab = tab;
-        this.state.step = 'login';
+        this.state.authTab = tab; this.state.step = 'login';
         var loginView = document.getElementById('auth-login-view');
         var regView = document.getElementById('auth-register-view');
-        var tabLogin = document.getElementById('tab-btn-login');
-        var tabReg = document.getElementById('tab-btn-register');
-        var wrap = document.getElementById('auth-card-wrap');
-        var subEl = document.getElementById('auth-sub-text');
-        if (tab === 'register') {
-          if (loginView) loginView.style.display = 'none';
-          if (regView) regView.style.display = 'block';
-          if (tabLogin) tabLogin.className = 'auth-method-tab auth-cinema-tab';
-          if (tabReg) tabReg.className = 'auth-method-tab auth-cinema-tab auth-method-tab--active';
-          if (wrap) wrap.classList.add('auth-unified-wrap--wide');
-          if (subEl) subEl.textContent = 'اطلاعات استودیو و مدیر را برای ساخت پنل وارد کنید';
-          try { history.replaceState(null, '', '?tab=register'); } catch(e) {}
-        } else {
-          if (regView) regView.style.display = 'none';
-          if (loginView) loginView.style.display = 'block';
-          if (tabReg) tabReg.className = 'auth-method-tab auth-cinema-tab';
-          if (tabLogin) tabLogin.className = 'auth-method-tab auth-cinema-tab auth-method-tab--active';
-          if (wrap) wrap.classList.remove('auth-unified-wrap--wide');
-          if (subEl) subEl.textContent = 'شماره موبایل و رمز عبور خود را وارد کنید';
-          try { history.replaceState(null, '', location.pathname); } catch(e) {}
-        }
-        if (window.Portal._appLoaded && typeof window.Portal.renderAuth === 'function') {
-          window.Portal.setAuthTab(tab);
-        }
+        if (tab === 'register') { if (loginView) loginView.style.display = 'none'; if (regView) regView.style.display = 'block'; }
+        else { if (regView) regView.style.display = 'none'; if (loginView) loginView.style.display = 'block'; }
+        if (window.Portal._appLoaded && typeof window.Portal.renderAuth === 'function') window.Portal.setAuthTab(tab);
       },
-      setLoginMethod: function(m) {
-        this.state.loginMethod = m;
-        var b = document.getElementById('login-btn');
-        if (b && m === 'sms') b.innerHTML = '<i class="fas fa-paper-plane"></i> ارسال کد پیامکی';
-      },
+      setLoginMethod: function(m) { this.state.loginMethod = m; },
       togglePasswordVisibility: function(id, iconId) {
-        var inp = document.getElementById(id);
-        var ico = document.getElementById(iconId);
-        if (inp) {
-          var isPw = inp.type === 'password';
-          inp.type = isPw ? 'text' : 'password';
-          if (ico) ico.className = isPw ? 'fas fa-eye-slash' : 'fas fa-eye';
-        }
+        var inp = document.getElementById(id); var ico = document.getElementById(iconId);
+        if (inp) { var isPw = inp.type === 'password'; inp.type = isPw ? 'text' : 'password'; if (ico) ico.className = isPw ? 'fas fa-eye-slash' : 'fas fa-eye'; }
       },
-      loginPassword: function() {
-        if (window.Portal._appLoaded && typeof window.Portal.loginPassword === 'function') {
-          return window.Portal.loginPassword();
-        }
-        var id = document.getElementById('login-identifier')?.value?.trim();
-        var pw = document.getElementById('login-password')?.value;
-        var err = document.getElementById('login-error');
-        if (!id || !pw) {
-          if (err) { err.textContent = 'شماره موبایل/ایمیل و رمز عبور را وارد کنید'; err.style.display = 'block'; }
-          return;
-        }
-        var btn = document.getElementById('login-btn');
-        if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال ورود...';
-      },
-      submitRegister: function() {
-        if (window.Portal._appLoaded && typeof window.Portal.submitRegister === 'function') {
-          return window.Portal.submitRegister();
-        }
-        var name = document.getElementById('reg-studio-name')?.value?.trim();
-        var err = document.getElementById('reg-error');
-        if (!name) {
-          if (err) { err.textContent = 'لطفاً نام استودیو را وارد کنید'; err.style.display = 'block'; }
-          return;
-        }
-      },
-      submitPasswordLogin: function() {
-        return this.loginPassword();
-      },
-      showForgotPassword: function() {
-        if (window.Portal._appLoaded && window.Portal.showForgotPassword !== this.showForgotPassword) {
-          return window.Portal.showForgotPassword();
-        }
-        alert('در حال بارگذاری — چند ثانیه صبر کنید');
-      }
+      loginPassword: function() { if (window.Portal._appLoaded) return window.Portal.loginPassword(); },
+      submitRegister: function() { if (window.Portal._appLoaded) return window.Portal.submitRegister(); },
+      submitPasswordLogin: function() { return this.loginPassword(); },
+      showForgotPassword: function() { if (window.Portal._appLoaded && window.Portal.showForgotPassword !== this.showForgotPassword) return window.Portal.showForgotPassword(); }
     };
-
-    if (location.search.includes('tab=register') || location.hash === '#register') {
-      window.addEventListener('DOMContentLoaded', function() {
-        window.Portal.setAuthTab('register');
-      });
-    }
   </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Estedad:wght@600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" media="print" onload="this.media='all'">
+  <link href="https://fonts.googleapis.com/css2?family=Estedad:wght@600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link rel="stylesheet" href="css/ui-kit.css"/>
   <link rel="stylesheet" href="css/portal.css"/>
   <link rel="stylesheet" href="css/portal-pro.css"/>
@@ -122,132 +50,27 @@
 <body class="auth-screen">
   <div id="portal-app">
     <div class="auth-page auth-page--cinema">
-      <canvas class="auth-ambient" data-auth-ambient aria-hidden="true"></canvas>
-      <div class="auth-ambient-fallback" aria-hidden="true"></div>
       <div class="auth-cinema-container">
-        <div class="auth-cinema-hero">
-          <div class="auth-hero-badge">
-            <span class="auth-hero-badge-dot"></span>
-            <i class="fas fa-camera"></i>
-            <span id="auth-hero-badge-text">Mandani Studio ERP</span>
-          </div>
-          <h1 class="auth-hero-title">اکوسیستم یکپارچه<br><span class="auth-hero-title-accent" id="auth-hero-accent-text">استودیو فیلم و عکس ماندنی</span></h1>
-          <p class="auth-hero-subtitle">قرارداد دیجیتال، آفیش، حسابداری و تحویل فایل.</p>
-        </div>
         <div class="auth-cinema-form-wrap" id="auth-card-wrap">
           <div class="auth-card glass-panel auth-cinema-card">
             <div class="auth-cinema-head">
-              <div class="auth-cinema-logo"><i class="fas fa-camera-retro"></i></div>
-              <h2 class="auth-cinema-title" id="auth-title-text">ورود به سیستم</h2>
-              <p class="auth-cinema-sub" id="auth-sub-text">شماره موبایل و رمز یا کد دعوت پرسنل</p>
+              <h2 class="auth-cinema-title" id="auth-title-text">ورود</h2>
+              <p class="auth-cinema-sub" id="auth-sub-text">موبایل · رمز · کد دعوت</p>
             </div>
-            <div class="auth-method-tabs auth-cinema-tabs" style="margin-bottom:20px">
-              <button type="button" id="tab-btn-login" class="auth-method-tab auth-cinema-tab auth-method-tab--active" onclick="Portal.setAuthTab('login')">
-                <i class="fas fa-sign-in-alt"></i> ورود
-              </button>
-              <button type="button" id="tab-btn-register" class="auth-method-tab auth-cinema-tab" onclick="Portal.setAuthTab('register')">
-                <i class="fas fa-user-plus"></i> ثبت‌نام استودیو
-              </button>
+            <div class="auth-method-tabs" style="margin-bottom:16px">
+              <button type="button" id="tab-btn-login" class="auth-method-tab auth-method-tab--active" onclick="Portal.setAuthTab('login')">ورود</button>
+              <button type="button" id="tab-btn-register" class="auth-method-tab" onclick="Portal.setAuthTab('register')">ثبت‌نام استودیو</button>
             </div>
-            <div id="auth-login-view" class="auth-form" style="display:block">
-              <div class="auth-path-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-                <button type="button" class="auth-path-chip" data-path="auto" onclick="Portal.setLoginPath('auto')" style="flex:1;padding:7px 4px;font-size:11.5px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.12);cursor:pointer;outline:2px solid #C9A96E">خودکار</button>
-                <button type="button" class="auth-path-chip" data-path="staff" onclick="Portal.setLoginPath('staff')" style="flex:1;padding:7px 4px;font-size:11.5px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.12);cursor:pointer">پرسنل (کد دعوت)</button>
-                <button type="button" class="auth-path-chip" data-path="manager" onclick="Portal.setLoginPath('manager')" style="flex:1;padding:7px 4px;font-size:11.5px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.12);cursor:pointer">مدیر / رمز</button>
-              </div>
-              <div class="auth-field" id="login-invite-wrap" style="display:none;margin-bottom:12px">
-                <label class="auth-label" for="login-invite-code">کد دعوت / کد ورود (از مدیر)</label>
-                <div class="auth-input-wrap">
-                  <i class="fas fa-ticket-alt"></i>
-                  <input type="text" id="login-invite-code" class="ltr" dir="ltr" inputmode="numeric" placeholder="کد ۶ رقمی" autocomplete="one-time-code"/>
-                </div>
-                <p style="font-size:11px;opacity:.65;margin:6px 0 0">نام استودیو لازم نیست — فقط شماره موبایل + کد دعوت</p>
-              </div>
-              <div class="auth-field">
-                <label class="auth-label" for="login-identifier">شماره موبایل یا ایمیل</label>
-                <div class="auth-input-wrap">
-                  <i class="fas fa-user-circle"></i>
-                  <input type="text" id="login-identifier" class="ltr" dir="ltr" autocomplete="username" placeholder="0912... یا name@gmail.com" autofocus/>
-                </div>
-              </div>
-              <div class="auth-field" id="login-pw-field">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                  <label class="auth-label" for="login-password" style="margin-bottom:0">رمز عبور</label>
-                  <button type="button" class="auth-forgot-link" onclick="Portal.showForgotPassword()" style="background:none;border:none;color:#f59e0b;font-size:11.5px;cursor:pointer;padding:0">فراموشی رمز عبور؟</button>
-                </div>
-                <div class="auth-input-wrap">
-                  <i class="fas fa-lock"></i>
-                  <input type="password" id="login-password" class="ltr" dir="ltr" autocomplete="current-password" placeholder="رمز یا خالی اگر کد دعوت دارید"/>
-                  <button type="button" class="auth-pw-toggle" onclick="Portal.togglePasswordVisibility('login-password', 'pw-eye-icon')" title="نمایش/پنهان‌سازی رمز" tabindex="-1">
-                    <i class="fas fa-eye" id="pw-eye-icon"></i>
-                  </button>
-                </div>
-              </div>
-              <div class="auth-error" id="login-error"></div>
-              <button type="button" class="auth-btn auth-btn-primary" id="login-btn" onclick="Portal.loginPassword()">
-                <i class="fas fa-sign-in-alt"></i> ورود
-              </button>
-            </div>
+            <div id="auth-login-view" class="auth-form"><p style="opacity:.6;font-size:12px">بارگذاری…</p></div>
             <div id="auth-register-view" class="auth-form" style="display:none">
-              <div class="auth-grid-2col">
-                <div class="auth-field">
-                  <label class="auth-label" for="reg-studio-name">نام استودیو / آتلیه</label>
-                  <div class="auth-input-wrap">
-                    <i class="fas fa-store"></i>
-                    <input type="text" id="reg-studio-name" placeholder="مثلاً استودیو ماندگار"/>
-                  </div>
-                </div>
-                <div class="auth-field">
-                  <label class="auth-label" for="reg-manager-name">نام و نام خانوادگی مدیر</label>
-                  <div class="auth-input-wrap">
-                    <i class="fas fa-user-tie"></i>
-                    <input type="text" id="reg-manager-name" placeholder="مثلاً علی محمدی"/>
-                  </div>
-                </div>
-              </div>
-
-              <div class="auth-grid-2col">
-                <div class="auth-field">
-                  <label class="auth-label" for="reg-phone">شماره همراه مدیر (جهت ورود)</label>
-                  <div class="auth-input-wrap">
-                    <i class="fas fa-mobile-alt"></i>
-                    <input type="tel" id="reg-phone" class="ltr" dir="ltr" inputmode="numeric" placeholder="09121234567"/>
-                  </div>
-                </div>
-                <div class="auth-field">
-                  <label class="auth-label" for="reg-email">ایمیل / جیمیل <small style="opacity:0.65">(جهت بکاپ)</small></label>
-                  <div class="auth-input-wrap">
-                    <i class="fas fa-envelope"></i>
-                    <input type="email" id="reg-email" class="ltr" dir="ltr" placeholder="name@gmail.com"/>
-                  </div>
-                </div>
-              </div>
-
-              <div class="auth-grid-2col">
-                <div class="auth-field">
-                  <label class="auth-label" for="reg-password">رمز عبور مدیر</label>
-                  <div class="auth-input-wrap">
-                    <i class="fas fa-lock"></i>
-                    <input type="password" id="reg-password" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="حداقل ۶ کاراکتر"/>
-                    <button type="button" class="auth-pw-toggle" onclick="Portal.togglePasswordVisibility('reg-password', 'reg-pw-eye-icon')" title="نمایش رمز" tabindex="-1">
-                      <i class="fas fa-eye" id="reg-pw-eye-icon"></i>
-                    </button>
-                  </div>
-                </div>
-                <div class="auth-field">
-                  <label class="auth-label" for="reg-password-confirm">تکرار رمز عبور</label>
-                  <div class="auth-input-wrap">
-                    <i class="fas fa-shield-alt"></i>
-                    <input type="password" id="reg-password-confirm" class="ltr" dir="ltr" lang="en" autocomplete="new-password" placeholder="تکرار رمز عبور"/>
-                  </div>
-                </div>
-              </div>
+              <div class="auth-field"><label class="auth-label">نام استودیو</label><input type="text" id="reg-studio-name"/></div>
+              <div class="auth-field"><label class="auth-label">نام مدیر</label><input type="text" id="reg-manager-name"/></div>
+              <div class="auth-field"><label class="auth-label">موبایل</label><input type="tel" id="reg-phone" class="ltr" dir="ltr"/></div>
+              <div class="auth-field"><label class="auth-label">رمز</label><input type="password" id="reg-password" class="ltr" dir="ltr"/></div>
+              <div class="auth-field"><label class="auth-label">تکرار رمز</label><input type="password" id="reg-password-confirm" class="ltr" dir="ltr"/></div>
               <div class="auth-error" id="reg-error"></div>
-              <button type="button" class="auth-btn auth-btn-primary" id="reg-btn" onclick="Portal.submitRegister()" style="margin-top:6px">
-                <i class="fas fa-rocket"></i> ساخت و ثبت استودیو
-              </button>
+              <button type="button" class="auth-btn auth-btn-primary" onclick="Portal.submitRegister()">ساخت</button>
             </div>
-            <div class="auth-cinema-foot"><a href="/">صفحه اصلی</a> · <a href="join.html">عضویت پرسنل با کد استودیو</a></div>
           </div>
         </div>
       </div>
@@ -279,7 +102,6 @@
   <script src="js/password-reset.js" defer></script>
   <script src="js/auth-login-enhance.js" defer></script>
   <script src="js/glass-theme.js" defer></script>
-  <script src="js/auth-ambient.js" defer></script>
   <script src="js/bootstrap.js" defer></script>
   <script type="module" src="js/server-sync.js"></script>
   <script src="js/audio-notifier.js" defer></script>
@@ -297,5 +119,6 @@
   <script src="js/portal-shell.js" defer></script>
   <script src="js/portal-staff-fix.js" defer></script>
   <script src="js/portal-pro.js" defer></script>
+  <script src="js/eng-index-loader.js" defer></script>
 </body>
 </html>
