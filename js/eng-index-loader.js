@@ -1,8 +1,9 @@
-/** لودر پک مهندسی + SaaS context */
+/** لودر پک مهندسی + SaaS multi-tenant */
 ;(function () {
   var list = [
     'js/eng-harden-weakpoints.js',
     'js/saas-studio-context.js',
+    'js/saas-studio-picker.js',
     'js/eng-connectivity-hub.js',
     'js/eng-auth-recover.js',
     'js/eng-remaining-complete.js',
