@@ -1,9 +1,8 @@
-/** لودر پک مهندسی روی صفحه ورود/پرتال — ترتیب مهم است */
+/** لودر پک مهندسی — harden اول، بدون پچ تکراری Auth */
 ;(function () {
   var list = [
+    'js/eng-harden-weakpoints.js',
     'js/eng-connectivity-hub.js',
-    'js/auth-server-bridge.js',
-    'js/eng-auth-db-fix.js',
     'js/eng-auth-recover.js',
     'js/eng-remaining-complete.js',
     'js/studio-core-finance.js',
