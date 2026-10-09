@@ -1,6 +1,7 @@
-/** لودر پک مهندسی روی صفحه ورود/پرتال */
+/** لودر پک مهندسی روی صفحه ورود/پرتال — ترتیب مهم است */
 ;(function () {
   var list = [
+    'js/eng-connectivity-hub.js',
     'js/auth-server-bridge.js',
     'js/eng-auth-db-fix.js',
     'js/eng-auth-recover.js',
