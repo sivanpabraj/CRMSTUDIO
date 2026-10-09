@@ -1,5 +1,5 @@
 /**
- * سرچ سراسری مدیر — ذره‌بین + Ctrl/Cmd+K
+ * سرچ سراسری مدیر — Ctrl/Cmd+K (بدون FAB پایین‌چپ؛ سرچ بالا کافی است)
  * قرارداد، پرسنل، مشتری، چک
  */
 ;(function (w) {
@@ -118,45 +118,17 @@
       })
     },
 
-    injectFab() {
-      if (document.getElementById('eng-search-fab')) return
-      // فقط محیط مدیریت
-      const isMgr =
-        location.pathname.includes('studio-m') ||
-        document.body.classList.contains('studio-m') ||
-        document.getElementById('app-root')
-      if (!isMgr && !location.pathname.includes('studio')) return
-
-      const btn = document.createElement('button')
-      btn.id = 'eng-search-fab'
-      btn.type = 'button'
-      btn.title = 'جستجو (Ctrl+K)'
-      btn.innerHTML = '<i class="fas fa-search"></i>'
-      Object.assign(btn.style, {
-        position: 'fixed',
-        bottom: '24px',
-        left: '24px',
-        zIndex: '9000',
-        width: '52px',
-        height: '52px',
-        borderRadius: '16px',
-        border: 'none',
-        background: 'linear-gradient(135deg,#c9a96e,#a67c3a)',
-        color: '#111',
-        fontSize: '18px',
-        cursor: 'pointer',
-        boxShadow: '0 8px 24px rgba(201,169,110,.4)'
-      })
-      btn.onclick = () => this.open()
-      document.body.appendChild(btn)
+    /** حذف FAB پایین‌چپ اگر از قبل در DOM مانده */
+    removeFab() {
+      document.getElementById('eng-search-fab')?.remove()
     }
   }
 
   function escapeHtml(s) {
     return String(s || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
+      .replace(/&/g, '&')
+      .replace(/</g, '<')
+      .replace(/>/g, '>')
   }
 
   document.addEventListener('keydown', (e) => {
@@ -167,5 +139,8 @@
   })
 
   w.EngSearch = EngSearch
-  setTimeout(() => EngSearch.injectFab(), 1200)
+  // فقط پاک کردن FAB — دیگر ساخته نمی‌شود
+  EngSearch.removeFab()
+  setTimeout(() => EngSearch.removeFab(), 500)
+  setTimeout(() => EngSearch.removeFab(), 1500)
 })(typeof window !== 'undefined' ? window : globalThis)
