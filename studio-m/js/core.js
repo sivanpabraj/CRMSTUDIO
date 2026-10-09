@@ -67,7 +67,21 @@ const SM = {
   },
 
   studio() {
-    return typeof DB !== 'undefined' ? (DB.get('studioInfo') || {}) : {}
+    const s = typeof DB !== 'undefined' ? (DB.get('studioInfo') || {}) : {}
+    if (typeof SaasContext !== 'undefined' && SaasContext.getStudioId) {
+      const activeId = SaasContext.getStudioId()
+      const mems = SaasContext.getMemberships?.() || []
+      const current = mems.find(m => m.studioId === activeId) || mems[0]
+      if (current && current.studioName) {
+        return {
+          ...s,
+          id: current.studioId,
+          name: current.studioName,
+          slug: current.studioSlug || s.slug
+        }
+      }
+    }
+    return s
   },
 
   initPrefs() {
@@ -335,8 +349,12 @@ const SM = {
               <div class="sm-brand-icon">${studio.logo
                 ? (Utils.safeImgHtml(studio.logo, 'class="sm-brand-logo"') || '<i class="fas fa-camera-retro"></i>')
                 : '<i class="fas fa-camera-retro"></i>'}</div>
-              <div>
-                <div class="sm-brand-text">${this.esc(studio.name || 'Studio M')}</div>
+              <div style="flex:1;min-width:0">
+                <div class="sm-brand-text" style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this.esc(studio.name || 'Studio M')}</span>
+                  ${(typeof SaasContext !== 'undefined' && SaasContext.getMemberships?.()?.length > 1) ? `
+                  <button type="button" class="sm-btn-icon" style="width:24px;height:24px;font-size:11px;flex-shrink:0" onclick="window.SaasStudioPicker?.open(null, () => location.reload())" title="تغییر استودیو"><i class="fas fa-repeat"></i></button>` : ''}
+                </div>
                 <div class="sm-brand-sub">${roleBadge.emoji} ${this.esc(roleBadge.title)} · Pro v${AppConfig.APP_VERSION}</div>
               </div>
             </div>
@@ -365,6 +383,8 @@ const SM = {
               <div class="sm-header-sub" id="sm-header-sub" hidden></div>
             </div>
             <div class="sm-header-actions">
+              ${(typeof SaasContext !== 'undefined' && SaasContext.getMemberships?.()?.length > 1) ? `
+              <button type="button" class="sm-btn-icon" onclick="window.SaasStudioPicker?.open(null, () => location.reload())" title="تغییر استودیو"><i class="fas fa-store"></i></button>` : ''}
               <button type="button" class="sm-btn-icon" onclick="SM.toggleTheme()" title="${this.t('theme')}"><i class="fas fa-${this.state.theme === 'light' ? 'moon' : 'sun'}"></i></button>
             </div>
           </header>

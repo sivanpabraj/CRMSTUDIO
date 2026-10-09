@@ -101,7 +101,31 @@ export function createAuthService(pool, opts = {}) {
         [user.id, studio.rows[0].id]
       )
       await client.query('COMMIT')
-      return { user: publicUser(user), studio: studio.rows[0] }
+      const token = signAccessToken(
+        {
+          sub: user.id,
+          phone: user.phone,
+          studioId: studio.rows[0].id,
+          role: 'studio_manager'
+        },
+        secret
+      )
+      const memberships = [
+        {
+          studioId: studio.rows[0].id,
+          role: 'studio_manager',
+          roles: ['studio_manager'],
+          title: 'مدیر استودیو',
+          studioName: studio.rows[0].name,
+          studioSlug: studio.rows[0].slug
+        }
+      ]
+      return {
+        user: publicUser(user),
+        studio: studio.rows[0],
+        accessToken: token,
+        memberships
+      }
     } catch (e) {
       await client.query('ROLLBACK')
       throw e

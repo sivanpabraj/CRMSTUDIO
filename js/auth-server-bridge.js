@@ -469,14 +469,27 @@
           const name = document.getElementById('reg-manager-name')?.value
           const studio = document.getElementById('reg-studio-name')?.value
           const password = document.getElementById('reg-password')?.value
+          const cleanPhone = (typeof Utils !== 'undefined' && Utils.normalizePhone?.(phone)) || phone
           await serverRegister({
-            phone: Utils.normalizePhone?.(phone) || phone,
+            phone: cleanPhone,
             email,
             name,
             studioName: studio,
             password,
             role: 'studio_manager'
           })
+          if (w.SaasContext?.registerStudio) {
+            const saasRes = await w.SaasContext.registerStudio({
+              studioName: studio,
+              managerName: name,
+              phone: cleanPhone,
+              email,
+              password
+            })
+            if (saasRes && saasRes.accessToken && saasRes.memberships) {
+              w.SaasContext.setSession(saasRes)
+            }
+          }
         } catch { /* */ }
         return result
       }

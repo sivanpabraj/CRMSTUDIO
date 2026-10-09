@@ -179,4 +179,8 @@ export const browserGlobals = {
   EngWhatsApp: "readonly",
   EngCustomerReceipt: "readonly",
   EngErrorGuard: "readonly",
+  SaasContext: "readonly",
+  SaasStudioPicker: "readonly",
+  SaasDual: "readonly",
+  SaasWriteBridge: "readonly",
 };
