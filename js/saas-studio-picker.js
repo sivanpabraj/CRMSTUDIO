@@ -49,14 +49,16 @@
   }
 
   function maybeShow() {
-    if (typeof SaasContext === 'undefined') return
-    const r = SaasContext.ensureStudioSelected()
-    if (r.needSelect) openPicker(r.memberships)
+    if (!w.SaasContext?.ensureStudioSelected) return
+    const r = w.SaasContext.ensureStudioSelected()
+    if (r?.needSelect) openPicker(r.memberships)
   }
 
   w.SaasStudioPicker = { open: openPicker, maybeShow }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(maybeShow, 900))
-  } else setTimeout(maybeShow, 900)
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => setTimeout(maybeShow, 900))
+    } else setTimeout(maybeShow, 900)
+  }
 })(typeof window !== 'undefined' ? window : globalThis)

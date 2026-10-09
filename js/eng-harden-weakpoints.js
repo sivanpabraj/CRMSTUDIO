@@ -147,10 +147,12 @@
     hardenShell()
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 200))
-  } else setTimeout(boot, 200)
-  setTimeout(boot, 800)
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 200))
+    } else setTimeout(boot, 200)
+    setTimeout(boot, 800)
+  }
 
   w.EngHarden = { boot, normPhone, phonesMatch }
 })(typeof window !== 'undefined' ? window : globalThis)

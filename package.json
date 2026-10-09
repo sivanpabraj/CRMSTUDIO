@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",
-    "nodemailer": "^10.0.14"
+    "nodemailer": "^10.0.14",
+    "pg": "^8.23.1"
   }
 }

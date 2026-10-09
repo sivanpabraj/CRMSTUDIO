@@ -8,49 +8,76 @@
   const KEY = 'saas_current_studio_id'
   const TOKEN_KEY = 'saas_access_token'
   const MEM_KEY = 'saas_memberships'
+  const memStore = {}
+
+  function getItem(k) {
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage?.getItem) {
+        const val = localStorage.getItem(k)
+        if (val !== null) return val
+      }
+    } catch { /* */ }
+    return memStore[k] ?? null
+  }
+
+  function setItem(k, v) {
+    memStore[k] = String(v ?? '')
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage?.setItem) {
+        localStorage.setItem(k, String(v ?? ''))
+      }
+    } catch { /* */ }
+  }
+
+  function getSessionItem(k) {
+    try {
+      if (typeof sessionStorage !== 'undefined' && sessionStorage?.getItem) {
+        const val = sessionStorage.getItem(k)
+        if (val !== null) return val
+      }
+    } catch { /* */ }
+    return getItem(k)
+  }
+
+  function setSessionItem(k, v) {
+    try {
+      if (typeof sessionStorage !== 'undefined' && sessionStorage?.setItem) {
+        sessionStorage.setItem(k, String(v ?? ''))
+      }
+    } catch { /* */ }
+    setItem(k, v)
+  }
 
   const SaasContext = {
     getStudioId() {
-      try {
-        return localStorage.getItem(KEY) || ''
-      } catch {
-        return ''
-      }
+      return getItem(KEY) || ''
     },
 
     setStudioId(id) {
-      try {
-        localStorage.setItem(KEY, id || '')
-      } catch { /* */ }
+      setItem(KEY, id || '')
       w.dispatchEvent?.(new CustomEvent('saas-studio-changed', { detail: { studioId: id } }))
     },
 
     getToken() {
-      try {
-        return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || ''
-      } catch {
-        return ''
-      }
+      return getSessionItem(TOKEN_KEY) || getItem(TOKEN_KEY) || ''
     },
 
     setSession({ accessToken, memberships, user }) {
-      try {
-        if (accessToken) {
-          sessionStorage.setItem(TOKEN_KEY, accessToken)
-          localStorage.setItem(TOKEN_KEY, accessToken)
-        }
-        if (memberships) localStorage.setItem(MEM_KEY, JSON.stringify(memberships))
-        if (user) localStorage.setItem('saas_user', JSON.stringify(user))
-        if (memberships?.length === 1) this.setStudioId(memberships[0].studioId)
-        else if (memberships?.length && !this.getStudioId()) {
-          this.setStudioId(memberships[0].studioId)
-        }
-      } catch { /* */ }
+      if (accessToken) {
+        setSessionItem(TOKEN_KEY, accessToken)
+        setItem(TOKEN_KEY, accessToken)
+      }
+      if (memberships) setItem(MEM_KEY, JSON.stringify(memberships))
+      if (user) setItem('saas_user', JSON.stringify(user))
+      if (memberships?.length === 1) this.setStudioId(memberships[0].studioId)
+      else if (memberships?.length && !this.getStudioId()) {
+        this.setStudioId(memberships[0].studioId)
+      }
     },
 
     getMemberships() {
       try {
-        return JSON.parse(localStorage.getItem(MEM_KEY) || '[]')
+        return JSON.parse(getItem(MEM_KEY) || '[]')
       } catch {
         return []
       }

@@ -87,3 +87,38 @@ describe('Engineering Pack v6.3.0 — EngRemainingComplete', () => {
     expect(globalThis.__MANDANI_BUILD__.sw).toBe('mandani-studio-v48')
   })
 })
+
+describe('SaaS Multi-Tenant — SaasContext & StudioPicker', () => {
+  it('manages studioId and headers in SaasContext', async () => {
+    await import('../js/saas-studio-context.js')
+    const ctx = globalThis.SaasContext
+    expect(ctx).toBeDefined()
+    ctx.setStudioId('studio_123')
+    expect(ctx.getStudioId()).toBe('studio_123')
+    const headers = ctx.headers({ 'X-Custom': '1' })
+    expect(headers['X-Studio-Id']).toBe('studio_123')
+    expect(headers['X-Custom']).toBe('1')
+  })
+
+  it('evaluates ensureStudioSelected correctly', async () => {
+    const ctx = globalThis.SaasContext
+    ctx.setStudioId('')
+    expect(ctx.ensureStudioSelected().ok).toBe(true) // 0 memberships
+
+    ctx.setSession({
+      accessToken: 'test-token',
+      memberships: [
+        { studioId: 's1', studioName: 'Studio 1' },
+        { studioId: 's2', studioName: 'Studio 2' }
+      ]
+    })
+    ctx.setStudioId('')
+    const check = ctx.ensureStudioSelected()
+    expect(check.needSelect).toBe(true)
+    expect(check.memberships).toHaveLength(2)
+
+    await import('../js/saas-studio-picker.js')
+    expect(globalThis.SaasStudioPicker).toBeDefined()
+  })
+})
+
