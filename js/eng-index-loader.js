@@ -1,7 +1,8 @@
-/** لودر کامل: harden + SaaS A/B/C */
+/** لودر کامل + رفع تعویض رمز اجباری پرسنل */
 ;(function () {
   var list = [
     'js/eng-harden-weakpoints.js',
+    'js/eng-force-pw-fix.js',
     'js/saas-studio-context.js',
     'js/saas-studio-picker.js',
     'js/saas-dual-read.js',
