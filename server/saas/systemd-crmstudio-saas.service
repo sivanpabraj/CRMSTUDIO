@@ -1,0 +1,16 @@
+[Unit]
+Description=CRMSTUDIO SaaS API v2 (multi-tenant)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/crmstudio
+EnvironmentFile=-/etc/crmstudio/saas.env
+ExecStart=/usr/bin/node server/saas-server.mjs
+Restart=on-failure
+RestartSec=3
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target
