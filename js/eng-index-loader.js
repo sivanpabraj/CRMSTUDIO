@@ -2,6 +2,7 @@
 ;(function () {
   var list = [
     'js/auth-server-bridge.js',
+    'js/eng-auth-db-fix.js',
     'js/studio-core-finance.js',
     'js/eng-error-guard.js',
     'js/eng-contract-afish.js',
