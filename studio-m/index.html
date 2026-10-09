@@ -12,13 +12,10 @@
   <script>
     function purgeStuckLoader() {
       var l = document.getElementById('talar-loader');
-      if (l && (l.innerText.indexOf('6.1.0') !== -1 || l.innerText.indexOf('Studio ERP') !== -1)) {
-        l.remove();
-      }
+      if (l && (l.innerText.indexOf('6.1.0') !== -1 || l.innerText.indexOf('Studio ERP') !== -1)) l.remove();
     }
     document.addEventListener('DOMContentLoaded', purgeStuckLoader);
     setTimeout(purgeStuckLoader, 200);
-    setTimeout(purgeStuckLoader, 1000);
   </script>
   <link rel="manifest" href="../manifest.json"/>
   <link rel="apple-touch-icon" href="../icons/icon-192.png"/>
@@ -115,6 +112,7 @@
   <script src="../js/eng-contract-afish.js" defer></script>
   <script src="../js/eng-global-search.js" defer></script>
   <script src="../js/eng-whatsapp.js" defer></script>
+  <script src="../js/eng-connectivity-hub.js" defer></script>
   <script src="js/app.js" defer></script>
   <script src="js/glass-boot.js" defer></script>
   <script src="../js/sw-register.js"></script>
