@@ -112,10 +112,12 @@
     stampVersion()
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 500))
-  } else setTimeout(boot, 500)
-  setTimeout(boot, 2000)
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 500))
+    } else setTimeout(boot, 500)
+    setTimeout(boot, 2000)
+  }
 
   w.EngRemainingComplete = { forceSyncPull, boot }
 })(typeof window !== 'undefined' ? window : globalThis)

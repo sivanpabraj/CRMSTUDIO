@@ -73,3 +73,17 @@ describe('Engineering Pack v6.3.0 — EngExpenseLink', () => {
     expect(enriched.category).toBe('salary_personnel')
   })
 })
+
+describe('Engineering Pack v6.3.0 — EngRemainingComplete', () => {
+  it('registers and boots without throwing in SSR/Node', async () => {
+    globalThis.AppConfig = { APP_VERSION: '6.3.0', SW_CACHE: 'mandani-studio-v48' }
+    await import('../js/eng-remaining-complete.js')
+    const EngRemainingComplete = globalThis.EngRemainingComplete
+    expect(EngRemainingComplete).toBeDefined()
+    expect(typeof EngRemainingComplete.forceSyncPull).toBe('function')
+    EngRemainingComplete.boot()
+    expect(globalThis.__MANDANI_BUILD__).toBeDefined()
+    expect(globalThis.__MANDANI_BUILD__.version).toBe('6.3.0')
+    expect(globalThis.__MANDANI_BUILD__.sw).toBe('mandani-studio-v48')
+  })
+})
