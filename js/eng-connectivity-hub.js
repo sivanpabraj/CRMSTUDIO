@@ -175,9 +175,11 @@
 
   w.EngRouter = EngRouter
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(() => EngRouter.boot(), 300))
-  } else {
-    setTimeout(() => EngRouter.boot(), 300)
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => setTimeout(() => EngRouter.boot(), 300))
+    } else {
+      setTimeout(() => EngRouter.boot(), 300)
+    }
   }
 })(typeof window !== 'undefined' ? window : globalThis)

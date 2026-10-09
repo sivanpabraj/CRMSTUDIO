@@ -180,10 +180,11 @@
   function enrichPayload(data) {
     if (!data || typeof data !== 'object') return data
     try {
-      const contractId = document.getElementById('tx-contract')?.value || data.contractId || ''
-      const personnelId = document.getElementById('tx-personnel')?.value || data.personnelId || ''
-      const album = document.getElementById('tx-album')?.value?.trim() || data.album || ''
-      const clientField = document.getElementById('tx-client')?.value || data.client || ''
+      const doc = typeof document !== 'undefined' ? document : null
+      const contractId = doc?.getElementById('tx-contract')?.value || data.contractId || ''
+      const personnelId = doc?.getElementById('tx-personnel')?.value || data.personnelId || ''
+      const album = doc?.getElementById('tx-album')?.value?.trim() || data.album || ''
+      const clientField = doc?.getElementById('tx-client')?.value || data.client || ''
 
       if (contractId) data.contractId = contractId
       if (personnelId) data.personnelId = personnelId
@@ -240,14 +241,16 @@
     patchSecureDb()
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(boot, 600)
+        setTimeout(boot, 2000)
+      })
+    } else {
       setTimeout(boot, 600)
       setTimeout(boot, 2000)
-    })
-  } else {
-    setTimeout(boot, 600)
-    setTimeout(boot, 2000)
+    }
   }
 
   w.EngExpenseLink = { enrichPayload, showPersonnel }

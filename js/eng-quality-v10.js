@@ -274,14 +274,16 @@
     authHealthLog()
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(boot, 700)
+        setTimeout(boot, 2200)
+      })
+    } else {
       setTimeout(boot, 700)
       setTimeout(boot, 2200)
-    })
-  } else {
-    setTimeout(boot, 700)
-    setTimeout(boot, 2200)
+    }
   }
 
   w.EngQualityV10 = { boot }

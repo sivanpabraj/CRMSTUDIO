@@ -1,8 +1,8 @@
-/* Studio ERP — Service Worker v47
+/* Studio ERP — Service Worker v48
  * Offline-first shell + stale-while-revalidate for static assets.
  * Network-only for API / Supabase / non-GET.
  */
-const CACHE_VERSION = 'mandani-studio-v47'
+const CACHE_VERSION = 'mandani-studio-v48'
 const SHELL_CACHE = `${CACHE_VERSION}-shell`
 const ASSET_CACHE = `${CACHE_VERSION}-assets`
 
