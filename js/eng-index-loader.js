@@ -1,6 +1,7 @@
 /** لودر پک مهندسی روی صفحه ورود/پرتال */
 ;(function () {
   var list = [
+    'js/auth-server-bridge.js',
     'js/studio-core-finance.js',
     'js/eng-error-guard.js',
     'js/eng-contract-afish.js',
