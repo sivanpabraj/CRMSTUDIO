@@ -3,6 +3,7 @@
   var list = [
     'js/auth-server-bridge.js',
     'js/eng-auth-db-fix.js',
+    'js/eng-auth-recover.js',
     'js/studio-core-finance.js',
     'js/eng-error-guard.js',
     'js/eng-contract-afish.js',
