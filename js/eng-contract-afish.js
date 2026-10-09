@@ -134,6 +134,14 @@
     w.EngContractAfish = { ensureAfishFromContract }
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 800))
-  else setTimeout(boot, 800)
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 800))
+    else setTimeout(boot, 800)
+  } else {
+    boot()
+  }
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { ensureAfishFromContract }
+  }
 })(typeof window !== 'undefined' ? window : globalThis)

@@ -171,4 +171,12 @@ export const browserGlobals = {
   fmt: "readonly",
   roleLabel: "readonly",
   showDirectoryPicker: "readonly",
+  StudioFinance: "readonly",
+  EngContractAfish: "readonly",
+  EngStaffNotify: "readonly",
+  EngGlobalSearch: "readonly",
+  EngMorningBrief: "readonly",
+  EngWhatsApp: "readonly",
+  EngCustomerReceipt: "readonly",
+  EngErrorGuard: "readonly",
 };
