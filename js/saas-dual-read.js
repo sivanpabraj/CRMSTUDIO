@@ -5,11 +5,11 @@
   'use strict'
 
   async function apiGet(path) {
-    if (typeof SaasContext === 'undefined' || !SaasContext.getToken()) {
+    if (!w.SaasContext?.getToken?.()) {
       return { ok: false, offline: true }
     }
     try {
-      const res = await fetch(path, { headers: SaasContext.headers() })
+      const res = await fetch(path, { headers: w.SaasContext.headers() })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) return { ok: false, error: data.error, status: res.status }
       return data
@@ -95,13 +95,13 @@
     },
 
     async createTransaction(body) {
-      if (typeof SaasContext === 'undefined' || !SaasContext.getToken()) {
+      if (!w.SaasContext?.getToken?.()) {
         return { ok: false, error: 'SaaS session نیست — از مسیر محلی استفاده کنید' }
       }
       try {
         const res = await fetch('/api/v2/transactions', {
           method: 'POST',
-          headers: SaasContext.headers(),
+          headers: w.SaasContext.headers(),
           body: JSON.stringify(body)
         })
         return await res.json()

@@ -120,5 +120,31 @@ describe('SaaS Multi-Tenant — SaasContext & StudioPicker', () => {
     await import('../js/saas-studio-picker.js')
     expect(globalThis.SaasStudioPicker).toBeDefined()
   })
+
+  it('provides dual-read fallbacks in SaasDual', async () => {
+    globalThis.DB = {
+      get: (table) => {
+        if (table === 'contracts') return [{ id: 'c1', bride: 'سارا', groom: 'امید' }]
+        if (table === 'banks') return [{ id: 'b1', name: 'ملت' }]
+        return []
+      }
+    }
+    await import('../js/saas-dual-read.js')
+    const SaasDual = globalThis.SaasDual
+    expect(SaasDual).toBeDefined()
+
+    // Without token, falls back to local
+    const cRes = await SaasDual.contracts()
+    expect(cRes.source).toBe('local')
+    expect(cRes.items).toHaveLength(1)
+    expect(cRes.items[0].id).toBe('c1')
+
+    const bRes = await SaasDual.banks()
+    expect(bRes.source).toBe('local')
+    expect(bRes.items).toHaveLength(1)
+
+    const txRes = await SaasDual.createTransaction({ amount: 1000 })
+    expect(txRes.ok).toBe(false) // No active SaaS session
+  })
 })
 
