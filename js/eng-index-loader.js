@@ -1,10 +1,11 @@
-/** لودر پک مهندسی + SaaS multi-tenant + dual-read */
+/** لودر کامل: harden + SaaS A/B/C */
 ;(function () {
   var list = [
     'js/eng-harden-weakpoints.js',
     'js/saas-studio-context.js',
     'js/saas-studio-picker.js',
     'js/saas-dual-read.js',
+    'js/saas-write-bridge.js',
     'js/eng-connectivity-hub.js',
     'js/eng-auth-recover.js',
     'js/eng-remaining-complete.js',
