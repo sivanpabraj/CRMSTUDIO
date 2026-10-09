@@ -113,6 +113,32 @@ async function main() {
     }
     console.log('contracts imported', n)
 
+    const persList = Array.isArray(data.personnel) ? data.personnel : []
+    let pCount = 0
+    for (const p of persList) {
+      const ph = phone(p.phone)
+      let userId = null
+      if (ph) {
+        const uRow = await client.query('SELECT id FROM users WHERE phone = $1', [ph])
+        userId = uRow.rows[0]?.id || null
+      }
+      await client.query(
+        `INSERT INTO personnel (studio_id, user_id, name, phone, roles, status, payload)
+         VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7)`,
+        [
+          studioId,
+          userId,
+          p.name || 'پرسنل',
+          ph,
+          JSON.stringify(p.roles || []),
+          p.status || 'active',
+          JSON.stringify(p)
+        ]
+      )
+      pCount++
+    }
+    console.log('personnel imported', pCount)
+
     await client.query('COMMIT')
     console.log('✓ done')
   } catch (e) {
