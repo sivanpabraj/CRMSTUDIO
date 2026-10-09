@@ -257,6 +257,52 @@ const Auth = {
       return Utils.normalizePhone(u.phone) === phone
     })
     if (!user) {
+      if (typeof fetch !== 'undefined') {
+        try {
+          const sRes = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ identifier: rawId, phone: phone || rawId, email, password })
+          })
+          const sData = await sRes.json().catch(() => ({}))
+          if (sRes.ok && sData?.ok && sData?.user) {
+            const uList = DB.get('users') || []
+            const existingIdx = uList.findIndex(x => x.id === sData.user.id || (phone && Utils.normalizePhone(x.phone) === phone))
+            const savedUser = {
+              ...(existingIdx >= 0 ? uList[existingIdx] : {}),
+              ...sData.user,
+              phone: sData.user.phone || phone,
+              status: sData.user.status || 'active'
+            }
+            if (existingIdx >= 0) uList[existingIdx] = savedUser
+            else uList.push(savedUser)
+            DB.set('users', uList)
+            if (sData.studioInfo) {
+              DB.set('studioInfo', { ...(DB.get('studioInfo') || {}), ...sData.studioInfo })
+            }
+            if (sData.tenantKey) {
+              try { localStorage.setItem('current_tenant_id', sData.tenantKey) } catch { /* */ }
+            }
+            await DB.flush?.()
+
+            const session = {
+              userId: savedUser.id,
+              loginTime: Date.now(),
+              role: (savedUser.roles && savedUser.roles[0]) || 'studio_manager',
+              roles: savedUser.roles || ['studio_manager'],
+              studioId: sData.tenantKey || savedUser.studioId || 'global',
+              csrf: this._regenerateCsrf()
+            }
+            await this._sessionSetSigned(this.SESSION_KEY, session)
+            this._sessionSet(this.CURRENT_USER_KEY, savedUser)
+            this._clearFailedAttempts(lockKey)
+            return { ok: true, user: savedUser, mustChangePassword: sData.mustChangePassword }
+          } else if (sData && sData.error && sData.code !== 'server') {
+            return { ok: false, error: sData.error, code: sData.code || 'invalid_credentials' }
+          }
+        } catch { /* offline or network failure, proceed to not_found */ }
+      }
       return { ok: false, error: isEmail ? 'ایمیل در سیستم ثبت نشده است' : 'شماره موبایل در سیستم ثبت نشده است', code: 'not_found' }
     }
     if (user.status === 'pending') {
