@@ -6,13 +6,14 @@
   'use strict'
 
   function hasSaas() {
-    return typeof SaasContext !== 'undefined' && !!SaasContext.getToken?.() && !!SaasContext.getStudioId?.()
+    return !!w.SaasContext?.getToken?.() && !!w.SaasContext?.getStudioId?.()
   }
 
   async function post(path, body) {
+    const headers = w.SaasContext?.headers ? w.SaasContext.headers() : { 'Content-Type': 'application/json' }
     const res = await fetch(path, {
       method: 'POST',
-      headers: SaasContext.headers(),
+      headers,
       body: JSON.stringify(body)
     })
     return res.json().catch(() => ({ ok: false }))
@@ -93,16 +94,18 @@
 
     // بعد از ورود SaaS، یک‌بار hydrate
     w.addEventListener?.('saas-studio-changed', () => {
-      if (typeof SaasDual !== 'undefined') {
-        SaasDual.hydrateLocalFromSnapshot?.().catch(() => {})
+      if (w.SaasDual) {
+        w.SaasDual.hydrateLocalFromSnapshot?.().catch(() => {})
       }
     })
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 600))
-  } else setTimeout(boot, 600)
-  setTimeout(boot, 2000)
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 600))
+    } else setTimeout(boot, 600)
+    setTimeout(boot, 2000)
+  }
 
   w.SaasWriteBridge = { boot, hasSaas }
 })(typeof window !== 'undefined' ? window : globalThis)
