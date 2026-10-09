@@ -1,7 +1,8 @@
-/** لودر پک مهندسی — harden اول، بدون پچ تکراری Auth */
+/** لودر پک مهندسی + SaaS context */
 ;(function () {
   var list = [
     'js/eng-harden-weakpoints.js',
+    'js/saas-studio-context.js',
     'js/eng-connectivity-hub.js',
     'js/eng-auth-recover.js',
     'js/eng-remaining-complete.js',
