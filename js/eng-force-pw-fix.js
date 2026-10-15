@@ -79,7 +79,7 @@
     if (Auth.__forcePwFixed) return
     Auth.__forcePwFixed = true
 
-    const orig = Auth.changeOwnPassword?.bind(Auth)
+    const _orig = Auth.changeOwnPassword?.bind(Auth)
     Auth.changeOwnPassword = async function (currentPassword, newPassword) {
       return SecureDB.runInternalAsync(async () => {
         let user = resolveUserForForcePw()

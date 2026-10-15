@@ -29,7 +29,8 @@ function verifyPassword(password, storedHash, salt) {
     const derived = crypto
       .pbkdf2Sync(clean, Buffer.from(salt || '', 'hex'), parseInt(iterStr, 10), 32, 'sha256')
       .toString('hex')
-    return derived === expected
+    if (derived.length !== expected.length) return false
+    return crypto.timingSafeEqual(Buffer.from(derived, 'utf8'), Buffer.from(expected, 'utf8'))
   }
   return false
 }
@@ -48,8 +49,10 @@ function verifyAccessToken(token, secret) {
     const [h, b, s] = String(token || '').split('.')
     if (!h || !b || !s) return null
     const expected = crypto.createHmac('sha256', secret).update(`${h}.${b}`).digest('base64url')
-    if (expected !== s) return null
-    const payload = JSON.parse(Buffer.from(b, 'base64url').toString())
+    const sBuf = Buffer.from(s, 'utf8')
+    const expBuf = Buffer.from(expected, 'utf8')
+    if (sBuf.length !== expBuf.length || !crypto.timingSafeEqual(sBuf, expBuf)) return null
+    const payload = JSON.parse(Buffer.from(b, 'base64url').toString('utf8'))
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null
     return payload
   } catch {
@@ -78,16 +81,23 @@ export function createAuthService(pool, opts = {}) {
         `INSERT INTO studios (slug, name, phone, email) VALUES ($1,$2,$3,$4) RETURNING *`,
         [slug, studioName || 'استودیو', p, email || null]
       )
-      const { password_hash, password_salt } = hashPassword(password)
+
       let userRes = await client.query(`SELECT * FROM users WHERE phone = $1`, [p])
       let user
       if (userRes.rows[0]) {
         user = userRes.rows[0]
+        if (!verifyPassword(password, user.password_hash, user.password_salt)) {
+          throw Object.assign(
+            new Error('این شماره موبایل قبلاً ثبت شده است؛ رمز عبور وارد شده برای این شماره صحیح نیست'),
+            { status: 401, code: 'wrong_password_for_existing_account' }
+          )
+        }
         await client.query(
-          `UPDATE users SET password_hash=$1, password_salt=$2, name=COALESCE(NULLIF($3,''), name), email=COALESCE($4, email), updated_at=now() WHERE id=$5`,
-          [password_hash, password_salt, managerName || '', email || null, user.id]
+          `UPDATE users SET name=COALESCE(NULLIF($1,''), name), email=COALESCE($2, email), updated_at=now() WHERE id=$3`,
+          [managerName || '', email || null, user.id]
         )
       } else {
+        const { password_hash, password_salt } = hashPassword(password)
         userRes = await client.query(
           `INSERT INTO users (phone, email, password_hash, password_salt, name) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
           [p, email || null, password_hash, password_salt, managerName || 'مدیر']

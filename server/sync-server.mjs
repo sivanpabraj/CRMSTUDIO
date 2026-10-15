@@ -548,6 +548,27 @@ function getPersonnelScopedData(tenantKey, phoneOrId) {
   }
 }
 
+function sanitizeTenantDataForClient(data) {
+  if (!data || typeof data !== 'object') return data
+  try {
+    const copy = JSON.parse(JSON.stringify(data))
+    if (Array.isArray(copy.users)) {
+      copy.users = copy.users.map(u => {
+        if (!u) return u
+        const { password: _p, salt: _s, portalOtp: _o, ...safe } = u
+        return safe
+      })
+    }
+    if (copy.studioInfo) {
+      const { baleBotToken: _b, smsApiKey: _k, smsSecret: _sec, ...safeStudio } = copy.studioInfo
+      copy.studioInfo = safeStudio
+    }
+    return copy
+  } catch {
+    return data
+  }
+}
+
 // Client entry: { res, tenantKey }
 const sseClients = new Set()
 
@@ -960,7 +981,7 @@ const server = http.createServer((req, res) => {
           user: userObj,
           tenantKey,
           syncToken: newSyncToken,
-          fullData: data
+          fullData: sanitizeTenantDataForClient(data)
         })
       } catch (err) {
         return sendJson(res, 500, { ok: false, error: err.message })
@@ -1092,6 +1113,18 @@ const server = http.createServer((req, res) => {
             const users = Array.isArray(data.users) ? data.users : []
             const uIdx = users.findIndex(u => u.phone && normalizePhone(u.phone) === phone)
             if (uIdx !== -1) {
+              const u = users[uIdx]
+              const isMandatoryChange = Boolean(u.mustChangePassword || u.isDefaultPassword)
+              if (!isMandatoryChange) {
+                const currentPassword = String(payload.currentPassword || '').trim()
+                if (!currentPassword) {
+                  return sendJson(res, 401, { ok: false, error: 'ورود رمز عبور فعلی الزامی است' })
+                }
+                const match = (u.password && u.salt) ? verifyPasswordSync(currentPassword, u.password, u.salt) : false
+                if (!match) {
+                  return sendJson(res, 401, { ok: false, error: 'رمز عبور فعلی اشتباه است' })
+                }
+              }
               const hashed = hashPasswordSync(newPassword)
               users[uIdx].password = hashed.password
               users[uIdx].salt = hashed.salt
@@ -1286,7 +1319,7 @@ const server = http.createServer((req, res) => {
                   tenantKey,
                   syncToken: meta.syncToken,
                   studioInfo: data.studioInfo || {},
-                  fullData: data
+                  fullData: sanitizeTenantDataForClient(data)
                 })
               }
               // If not matched in this tenant, DO NOT abort immediately! Check next tenant file
@@ -1467,7 +1500,7 @@ const server = http.createServer((req, res) => {
                   user: safeUser,
                   tenantKey,
                   studioInfo: data.studioInfo || {},
-                  fullData: data
+                  fullData: sanitizeTenantDataForClient(data)
                 })
               }
             }
@@ -1506,8 +1539,15 @@ const server = http.createServer((req, res) => {
                   user: safeUser,
                   contract: matchCust,
                   tenantKey,
-                  studioInfo: data.studioInfo || {},
-                  fullData: data
+                  studioInfo: {
+                    name: data.studioInfo?.name || 'استودیو',
+                    phone: data.studioInfo?.phone || '',
+                    address: data.studioInfo?.address || ''
+                  },
+                  scopedData: getCustomerScopedData(tenantKey, matchCust.id) || {
+                    contract: matchCust,
+                    studioInfo: data.studioInfo || {}
+                  }
                 })
               }
             }
@@ -1705,9 +1745,8 @@ const server = http.createServer((req, res) => {
           ok: true,
           channel,
           baleDelivered: Boolean(baleResult?.ok),
-          message: channel === 'bale' ? 'کد تأیید به پیام‌رسان بله ارسال گردید' : 'کد تأیید آماده ارسال در واتساپ است',
+          message: channel === 'bale' ? 'کد تأیید به پیام‌رسان بله ارسال گردید' : 'کد تأیید ارسال گردید',
           baleBotUrl: `https://ble.ir/${studioBaleUser}`,
-          whatsAppUrl: `https://api.whatsapp.com/send?phone=98${phone.slice(1)}&text=${encodeURIComponent(msgText)}`,
           retryAfterSec: 60
         })
       } catch (err) {
@@ -1764,7 +1803,7 @@ const server = http.createServer((req, res) => {
                 user: safeUser,
                 tenantKey,
                 studioInfo: data.studioInfo || {},
-                fullData: data
+                fullData: sanitizeTenantDataForClient(data)
               })
             }
 

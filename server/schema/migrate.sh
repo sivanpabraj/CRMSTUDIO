@@ -6,4 +6,5 @@ DATABASE_URL="${DATABASE_URL:-postgresql://crmstudio:crmstudio@127.0.0.1:5432/cr
 
 echo "→ migrate: $DATABASE_URL"
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT/server/schema/001_multi_tenant.sql"
-echo "✓ schema applied"
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT/server/schema/002_enterprise_hardening.sql"
+echo "✓ schema applied (001 + 002)"

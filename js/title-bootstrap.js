@@ -14,11 +14,13 @@
         studioName = decodeURIComponent(queryStudio.trim());
       }
 
+      var storage = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage : (typeof localStorage !== 'undefined' ? localStorage : null);
+
       // اولویت ۲: استودیوی فعال در SaaS context
-      if (!studioName) {
+      if (!studioName && storage) {
         try {
-          var saasMems = localStorage.getItem('saas_memberships');
-          var saasCur = localStorage.getItem('saas_current_studio_id');
+          var saasMems = storage.getItem('saas_memberships');
+          var saasCur = storage.getItem('saas_current_studio_id');
           if (saasMems) {
             var memList = JSON.parse(saasMems);
             var activeMem = memList.find(function (m) { return m.studioId === saasCur; }) || memList[0];
@@ -30,9 +32,9 @@
       }
 
       // اولویت ۳: استودیوی فعال از دیتابیس محلی
-      if (!studioName) {
+      if (!studioName && storage) {
         try {
-          var raw = localStorage.getItem('studio_db_v5') || localStorage.getItem('studio_db_v4');
+          var raw = storage.getItem('studio_db_v5') || storage.getItem('studio_db_v4');
           if (raw) {
             var d = JSON.parse(raw);
             var n = d.studioInfo && d.studioInfo.name;

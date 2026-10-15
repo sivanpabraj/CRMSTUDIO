@@ -15,6 +15,11 @@ export function createSaasHandler(pool, opts = {}) {
     if (arr.length >= max) return false
     arr.push(now)
     hits.set(key, arr)
+    if (hits.size > 3000) {
+      for (const [k, v] of hits) {
+        if (!v.some((t) => now - t < 60000)) hits.delete(k)
+      }
+    }
     return true
   }
 
@@ -107,7 +112,7 @@ export function createSaasHandler(pool, opts = {}) {
     }
 
     try {
-      if (pathname === '/api/v2/health' && req.method === 'GET') {
+      if (pathname === '/api/v2/health' && (req.method === 'GET' || req.method === 'HEAD')) {
         let db = false
         try {
           await pool.query('SELECT 1')
@@ -287,6 +292,13 @@ export function createSaasHandler(pool, opts = {}) {
               studioId
             ])
             if (!c.rows[0]) throw Object.assign(new Error('قرارداد متعلق به این استودیو نیست'), { status: 400 })
+          }
+          if (personnelId) {
+            const p = await client.query(`SELECT id FROM personnel WHERE id=$1 AND studio_id=$2`, [
+              personnelId,
+              studioId
+            ])
+            if (!p.rows[0]) throw Object.assign(new Error('پرسنل متعلق به این استودیو نیست'), { status: 400 })
           }
           const r = await client.query(
             `INSERT INTO transactions (studio_id, type, amount, date_jalali, bank_id, contract_id, personnel_id, purpose_category, purpose, client_name, payload)
