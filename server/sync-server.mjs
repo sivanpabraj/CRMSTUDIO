@@ -1739,7 +1739,12 @@ const server = http.createServer((req, res) => {
           baleResult = await sendBaleMessage(phone, msgText, studioBaleToken)
         }
 
-        console.log(`[OTP Audit] Code dispatched to ${maskPhone(phone)} via ${channel}`)
+        if (channel === 'bale' && (!baleResult?.ok || baleResult?.mocked)) {
+          return sendJson(res, 400, {
+            ok: false,
+            error: 'ربات بله استودیو هنوز تنظیم و متصل نشده است. لطفاً مستقیماً با «رمز عبور» وارد شوید.'
+          })
+        }
 
         return sendJson(res, 200, {
           ok: true,
