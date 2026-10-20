@@ -626,6 +626,39 @@ function formatTermsHtml(text) {
   return escapeHtml(text).replace(/\n/g, '<br>')
 }
 
+function openOfficialInvoiceModal() {
+  if (typeof InvoiceGenerator !== 'undefined') {
+    calcTotals()
+    const contractNum = gv('contract-num') || ''
+    const contractDate = gv('contract-date') || todayFa()
+    const groom = gv('groom-name') || ''
+    const bride = gv('bride-name') || ''
+    const bridePhone = gv('bride-phone') || ''
+    const groomPhone = gv('groom-phone') || ''
+    const brideNid = gv('bride-nid') || ''
+    const groomNid = gv('groom-nid') || ''
+    const total = moneyEntered('total-price') || 0
+    const prepay = moneyEntered('prepay-amount') || 0
+
+    InvoiceGenerator.openModal({
+      invoiceNumber: 'FAC-' + (contractNum || Date.now().toString().slice(-6)),
+      issueDate: contractDate,
+      type: 'official_sale',
+      title: 'صورتحساب رسمی خدمات فیلمبرداری و عکاسی',
+      customerName: bride && groom ? `${bride} و ${groom}` : (bride || groom || 'مشتری'),
+      customerPhone: bridePhone || groomPhone,
+      customerNid: brideNid || groomNid,
+      amount: total,
+      subtotal: total,
+      contractNum: contractNum,
+      purpose: `خدمات تصویربرداری و عکاسی مراسم عقد و عروسی (${bride} و ${groom})`,
+      notes: prepay > 0 ? `بیعانه دریافتی: ${prepay.toLocaleString('fa-IR')} تومان` : ''
+    })
+  } else {
+    openInvoice()
+  }
+}
+
 function openInvoice() {
   if (!validateStep(1)) return gotoStep(1)
   calcTotals()

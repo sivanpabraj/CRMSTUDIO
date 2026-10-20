@@ -303,3 +303,140 @@ describe('Engineering Pack v6.4.0 — Bank Management & Auto Card Detection', ()
     expect(acc.detectBankFromCard('5041721234567890')).toContain('رسالت')
   })
 })
+
+describe('Engineering Pack v6.4.0 — Multi-Template Invoice & Receipt Generator', () => {
+  const invoiceSource = fs.readFileSync('js/invoice-generator.js', 'utf8')
+
+  function getInvoiceGenerator(dbStore = {}) {
+    const context = {
+      window: {},
+      document: {
+        getElementById: () => null,
+        createElement: () => ({ style: {} }),
+        body: { appendChild: () => {} }
+      },
+      DB: {
+        get: (k) => dbStore[k] || null,
+        find: (k, pred) => (dbStore[k] || []).find(pred) || null
+      },
+      Utils: {
+        todayJalali: () => '1405/01/15',
+        toast: () => {}
+      }
+    }
+    vm.runInNewContext(invoiceSource, context)
+    return context.window.InvoiceGenerator
+  }
+
+  it('converts numbers to Persian words accurately', () => {
+    const gen = getInvoiceGenerator()
+    expect(gen.numberToWordsFa(0)).toBe('صفر')
+    expect(gen.numberToWordsFa(15000000)).toBe('پانزده میلیون')
+    expect(gen.numberToWordsFa(23500000)).toBe('بیست و سه میلیون و پانصد هزار')
+    expect(gen.numberToWordsFa(150000)).toBe('یکصد و پنجاه هزار')
+    expect(gen.numberToWordsFa(1250000)).toBe('یک میلیون و دویست و پنجاه هزار')
+  })
+
+  it('prepares invoice data from a transaction with VAT tax calculation', () => {
+    const dbStore = {
+      studioInfo: {
+        name: 'استودیو ماندنی',
+        taxEnabled: true,
+        taxRate: 10,
+        taxEconomyCode: '4111222333'
+      },
+      transactions: [
+        {
+          id: 'tx101',
+          type: 'deposit',
+          amount: 20000000,
+          date: '1405/01/20',
+          client: 'شادی و پیمان',
+          purpose: 'بیعانه پکیج VIP فرمالیته',
+          referenceId: 'REF-7890'
+        }
+      ]
+    }
+
+    const gen = getInvoiceGenerator(dbStore)
+    const data = gen.prepareData({ txId: 'tx101' })
+
+    expect(data.invoiceNumber).toBe('REF-7890')
+    expect(data.customerName).toBe('شادی و پیمان')
+    expect(data.amount).toBe(20000000)
+    expect(data.taxRate).toBe(10)
+    expect(data.taxAmount).toBe(2000000) // 10% of 20,000,000
+    expect(data.finalTotal).toBe(22000000)
+    expect(data.studioEconomicCode).toBe('4111222333')
+  })
+
+  it('prepares contract cancellation and refund invoice correctly', () => {
+    const dbStore = {
+      studioInfo: { name: 'استودیو ماندنی' },
+      contracts: [
+        {
+          id: 'c-cancel-1',
+          contractNum: '1405-99',
+          couple: 'نیلوفر و رامین',
+          status: 'cancelled',
+          total: 35000000,
+          cancelRecord: {
+            paidAmount: 15000000,
+            cancellationFee: 3000000,
+            refundAmount: 12000000,
+            refundMethod: 'shaba',
+            bankAccount: 'IR880170000000111222333444',
+            paidTo: 'رامین کاظمی',
+            refundNotes: 'استرداد وجه طبق ضوابط کنسلی اتحادیه',
+            recordedAt: '1405/01/22 14:30'
+          }
+        }
+      ]
+    }
+
+    const gen = getInvoiceGenerator(dbStore)
+    const data = gen.prepareData({ contractId: 'c-cancel-1', type: 'cancellation' })
+
+    expect(data.type).toBe('cancellation')
+    expect(data.contractNum).toBe('1405-99')
+    expect(data.customerName).toBe('نیلوفر و رامین')
+    expect(data.cancellationFee).toBe(3000000)
+    expect(data.refundAmount).toBe(12000000)
+    expect(data.notes).toContain('استرداد وجه طبق ضوابط کنسلی اتحادیه')
+  })
+
+  it('renders all 4 selectable invoice templates without throwing', () => {
+    const dbStore = {
+      studioInfo: {
+        name: 'استودیو ماندنی',
+        taxEconomyCode: '987654321',
+        nationalId: '1010101010'
+      }
+    }
+    const gen = getInvoiceGenerator(dbStore)
+    const testData = gen.prepareData({
+      amount: 10000000,
+      customerName: 'فرهاد مجیدی',
+      purpose: 'فیلمبرداری مراسم'
+    })
+
+    const officialHtml = gen.renderOfficialHtml(testData)
+    expect(officialHtml).toContain('صورتحساب رسمی فروش کالا و خدمات')
+    expect(officialHtml).toContain('اتحادیه صنف عکاسان')
+    expect(officialHtml).toContain('فرهاد مجیدی')
+
+    const cinemaHtml = gen.renderCinemaLuxuryHtml(testData)
+    expect(cinemaHtml).toContain('#d4af37') // Gold accent
+    expect(cinemaHtml).toContain('CINEMA & PHOTOGRAPHY STUDIO')
+
+    const a5Html = gen.renderStandardA5Html(testData)
+    expect(a5Html).toContain('سند اداری مالی و رسید حسابداری')
+    expect(a5Html).toContain('برگه دریافت وجه (واریز)')
+    expect(a5Html).toContain('مدیر مالی استودیو')
+
+    const thermalHtml = gen.renderThermalPosHtml(testData)
+    expect(thermalHtml).toContain('فیش صندوق و تایید تراکنش')
+    expect(thermalHtml).toContain('تومان')
+    expect(thermalHtml).toContain('فرهاد مجیدی')
+  })
+})

@@ -487,6 +487,11 @@ SMModules.contracts = {
               <p><strong>نحوه برگشت:</strong> ${SM.esc(this._refundLabel(c.cancelRecord.refundMethod))}</p>
               ${c.cancelRecord.refundNotes ? `<p><strong>توضیحات:</strong> ${SM.esc(c.cancelRecord.refundNotes)}</p>` : ''}
               <p class="sm-cancel-meta">ثبت: ${SM.esc(c.cancelRecord.recordedAt || '—')} · ${SM.esc(c.cancelRecord.recordedBy || 'سیستم')}</p>
+              <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--sm-border,#eee)">
+                <button type="button" class="sm-btn sm-btn-primary sm-btn-sm" onclick="InvoiceGenerator.openModal({ contractId: '${c.id}', type: 'cancellation', title: 'سند رسمی کنسلی و استرداد وجه' })">
+                  <i class="fas fa-file-invoice-dollar"></i> صدور سند رسمی کنسلی و استرداد وجه (PDF / JPG)
+                </button>
+              </div>
             </div>
           </div>` : ''}
       </div>`)

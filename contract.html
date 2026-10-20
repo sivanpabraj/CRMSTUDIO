@@ -335,9 +335,10 @@
       <!-- Totals Box -->
       <div class="totals-box" id="totals-box"></div>
 
-      <div class="step-foot" style="margin-top:20px">
+      <div class="step-foot" style="margin-top:20px; display:flex; flex-wrap:wrap; gap:10px">
         <button class="btn-prev" onclick="gotoStep(2)">← مرحله قبل</button>
         <button class="btn-invoice" onclick="openInvoice()">📄 صدور قرارداد رسمی</button>
+        <button type="button" class="btn-invoice" style="background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff" onclick="openOfficialInvoiceModal()">📑 فاکتور رسمی دارایی و صنف (PDF / JPG)</button>
         <button class="btn-save" style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;padding:12px 32px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer" onclick="finalizeContract()">✅ ثبت نهایی و ابلاغ به پرسنل</button>
       </div>
     </div>
@@ -375,6 +376,7 @@
         <div class="pdf-format-grid" id="pdf-format-grid"></div>
         <div class="pdf-actions">
           <button class="inv-tb-btn primary" id="btn-pdf-download" onclick="exportPDF()">📄 دانلود PDF</button>
+          <button class="inv-tb-btn" style="background:#0284c7;color:#fff" onclick="openOfficialInvoiceModal()">📑 صدور فاکتور رسمی دارایی / اتحادیه</button>
           <button class="inv-tb-btn" onclick="printContract()">🖨️ چاپ</button>
         </div>
         <div class="pdf-selected-hint" id="pdf-selected-hint"></div>
@@ -474,6 +476,7 @@
 <script src="js/eng-contract-afish.js" defer></script>
 <script src="js/smart-conflict-detector.js" defer></script>
 <script src="js/payment-gateway.js" defer></script>
+<script src="js/invoice-generator.js" defer></script>
 <script src="js/eng-whatsapp.js" defer></script>
 <script src="contract.js" defer></script>
 <script src="js/sw-register.js"></script>

@@ -53,6 +53,7 @@ export const browserGlobals = {
   SignedProof: "readonly",
   SignaturePad: "readonly",
   PaymentGateway: "readonly",
+  InvoiceGenerator: "readonly",
   SmartConflictDetector: "readonly",
   AuthBridge: "readonly",
   FinanceSync: "readonly",

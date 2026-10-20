@@ -439,7 +439,7 @@ const SMAccounting = {
       <div class="sm-acc-tx-side">
         <div class="sm-acc-tx-amt">${isIn ? '+' : '−'} ${SM.fmt(t.amount || 0)} <small>تومان</small></div>
         <div class="sm-acc-tx-btns">
-          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.printReceipt('${t.id}')" title="PDF"><i class="fas fa-file-pdf"></i></button>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.printReceipt('${t.id}')" title="صدور فاکتور و رسید رسمی (PDF / JPG)"><i class="fas fa-file-invoice"></i></button>
           <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.editTx('${t.id}')"><i class="fas fa-pen"></i></button>
         </div>
       </div>
@@ -498,8 +498,12 @@ const SMAccounting = {
     </div>`
   },
 
-  /* ── PDF رسید ── */
+  /* ── PDF / JPG صدور انواع فاکتور و رسید رسمی ── */
   printReceipt(txId) {
+    if (typeof InvoiceGenerator !== 'undefined') {
+      InvoiceGenerator.openModal({ txId })
+      return
+    }
     const t = DB.find('transactions', x => x.id === txId)
     if (!t) return
     const studio = SM.studio()
