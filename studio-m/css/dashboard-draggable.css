@@ -1,0 +1,474 @@
+/* ═════════════════════════════════════════════════════════════════════════
+   CRMSTUDIO — Modern Luxury Draggable Dashboard Engine (v6.4.0)
+   Cutting-edge Glassmorphism 3.0, Touch & Desktop Drag & Drop, KPI Cards Reordering
+   ═════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --dash-gold: #C9A96E;
+  --dash-emerald: #10B981;
+  --dash-rose: #F43F5E;
+  --dash-sky: #38BDF8;
+  --dash-violet: #8B5CF6;
+  --dash-amber: #F59E0B;
+  --dash-obsidian: #0B0E14;
+  --dash-card-bg: linear-gradient(145deg, rgba(26, 32, 48, 0.7) 0%, rgba(13, 17, 27, 0.82) 100%);
+  --dash-card-border: rgba(255, 255, 255, 0.08);
+  --dash-card-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.45);
+  --dash-glow: rgba(201, 169, 110, 0.25);
+  --dash-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─── Modern Toolbar & Executive Header ─── */
+.sm-exec-dashboard {
+  position: relative;
+  max-width: 1540px;
+  margin: 0 auto;
+}
+
+.sm-exec-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--dash-card-border);
+}
+
+.sm-exec-toolbar h2 {
+  font-size: 1.55rem;
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  margin: 2px 0 4px;
+  background: linear-gradient(135deg, #FFFFFF 30%, #C9A96E 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.sm-exec-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--dash-gold);
+  letter-spacing: 0.08em;
+}
+
+.sm-exec-eyebrow::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dash-gold);
+  box-shadow: 0 0 8px var(--dash-gold);
+}
+
+.sm-exec-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ─── Luxury Floating Quick-Action Dock ─── */
+.sm-quick-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 22px;
+  background: linear-gradient(135deg, rgba(22, 28, 44, 0.7) 0%, rgba(13, 17, 28, 0.85) 100%);
+  border: 1px solid var(--dash-card-border);
+  border-radius: 18px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.sm-quick-actions-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.sm-quick-actions-bar .sm-btn {
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  transition: all 0.2s var(--dash-ease);
+}
+
+.sm-quick-actions-bar .sm-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── KPI Cards Grid with Drag & Drop ─── */
+.sm-exec-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.sm-exec-kpi {
+  position: relative;
+  appearance: none;
+  border: 1px solid var(--dash-card-border);
+  border-radius: 20px;
+  background: var(--dash-card-bg);
+  color: var(--sm-text, #F8FAFC);
+  padding: 16px 18px 14px;
+  min-height: 146px;
+  text-align: start;
+  font-family: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: var(--dash-card-shadow);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: transform 0.22s var(--dash-ease), border-color 0.22s ease, box-shadow 0.22s ease, opacity 0.2s ease;
+  user-select: none;
+}
+
+/* Gradient accent light bar on top */
+.sm-exec-kpi::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--kpi-color, var(--dash-gold)), transparent);
+  opacity: 0.85;
+}
+
+.sm-exec-kpi:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--kpi-color, var(--dash-gold)) 45%, var(--dash-card-border));
+  box-shadow: 0 20px 40px -10px color-mix(in srgb, var(--kpi-color, var(--dash-gold)) 16%, transparent), 0 0 0 1px color-mix(in srgb, var(--kpi-color) 20%, transparent);
+}
+
+/* Top bar inside KPI: icon + drag grip */
+.sm-exec-kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.sm-exec-kpi-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--kpi-color) 16%, transparent);
+  color: var(--kpi-color);
+  font-size: 0.95rem;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--kpi-color) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--kpi-color) 25%, transparent);
+}
+
+.sm-kpi-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  color: var(--sm-text-muted, #94A3B8);
+  font-size: 0.8rem;
+  opacity: 0.4;
+  cursor: grab;
+  transition: opacity 0.2s, background 0.2s, color 0.2s;
+}
+
+.sm-exec-kpi:hover .sm-kpi-drag-handle {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--dash-gold);
+}
+
+.sm-kpi-drag-handle:active {
+  cursor: grabbing;
+}
+
+.sm-exec-kpi-label {
+  display: block;
+  color: var(--sm-text-muted, #94A3B8);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.sm-exec-kpi > strong {
+  display: block;
+  direction: ltr;
+  text-align: right;
+  font-size: clamp(1.15rem, 1.45vw, 1.55rem);
+  font-weight: 850;
+  margin: 6px 0 8px;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  color: #FFFFFF;
+}
+
+.sm-exec-kpi-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 22px;
+}
+
+.sm-exec-kpi-foot small {
+  color: var(--sm-text-muted, #94A3B8);
+  font-size: 0.65rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Trend badge */
+.sm-exec-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  direction: ltr;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sm-exec-trend.is-positive {
+  color: #34D399;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.sm-exec-trend.is-negative {
+  color: #F87171;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+/* Dragging active states for KPI cards */
+.sm-exec-kpi.is-dragging {
+  opacity: 0.45;
+  transform: scale(0.96) rotate(-1deg);
+  border-color: var(--dash-gold);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+}
+
+.sm-exec-kpi.is-drag-over {
+  border-color: #38BDF8 !important;
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.45) !important;
+  transform: translateY(-6px);
+}
+
+/* ─── Dashboard Sections Container ─── */
+.sm-dash-sections-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ─── Modern Draggable Dashboard Section ─── */
+.sm-dash-section {
+  position: relative;
+  border-radius: 22px;
+  background: var(--dash-card-bg);
+  border: 1px solid var(--dash-card-border);
+  box-shadow: var(--dash-card-shadow);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  overflow: hidden;
+  transition: transform 0.25s var(--dash-ease), opacity 0.2s ease, border-color 0.2s ease, box-shadow 0.25s ease;
+}
+
+.sm-dash-section.is-hidden {
+  opacity: 0.38;
+  filter: grayscale(0.65);
+}
+
+/* Section Header Bar */
+.sm-dash-section-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--dash-card-border);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
+  user-select: none;
+}
+
+.sm-dash-section-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sm-dash-section-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--sm-text-muted, #94A3B8);
+  font-size: 0.95rem;
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+.sm-dash-section-drag-handle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--dash-gold);
+  transform: scale(1.1);
+}
+
+.sm-dash-section-drag-handle:active {
+  cursor: grabbing;
+}
+
+.sm-dash-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 0.92rem;
+  color: #FFFFFF;
+}
+
+.sm-dash-section-title-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  background: rgba(201, 169, 110, 0.14);
+  color: var(--dash-gold);
+  border: 1px solid rgba(201, 169, 110, 0.22);
+}
+
+.sm-dash-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sm-dash-section-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--sm-text-muted, #94A3B8);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.sm-dash-section-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.sm-dash-section-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.sm-dash-section-body {
+  padding: 16px 18px 20px;
+  transition: max-height 0.3s ease, opacity 0.25s ease;
+}
+
+.sm-dash-section.is-collapsed .sm-dash-section-body {
+  display: none;
+}
+
+/* Dragging active states for Sections */
+.sm-dash-section.is-dragging {
+  opacity: 0.55;
+  transform: scale(0.985);
+  border-color: var(--dash-gold);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 0 2px var(--dash-gold);
+}
+
+.sm-dash-section.is-drag-over {
+  border-color: #38BDF8 !important;
+  box-shadow: 0 0 28px rgba(56, 189, 248, 0.4) !important;
+}
+
+/* ─── Drop Target Insertion Line ─── */
+.sm-drop-indicator {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--dash-gold), #38BDF8);
+  box-shadow: 0 0 16px #38BDF8;
+  margin: -8px 0;
+  position: relative;
+  z-index: 10;
+  animation: pulseDrop 1.2s infinite ease-in-out;
+}
+
+@keyframes pulseDrop {
+  0%, 100% { opacity: 0.6; transform: scaleY(1); }
+  50% { opacity: 1; transform: scaleY(1.4); }
+}
+
+/* ─── Touch Floating Drag Ghost for Mobile/Tablets ─── */
+.sm-touch-drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 10000;
+  opacity: 0.9;
+  transform: scale(0.95) rotate(-2deg);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65), 0 0 0 2px var(--dash-gold);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #0D111C;
+  border: 1px solid var(--dash-gold);
+}
+
+/* ─── Responsive Adjustments ─── */
+@media (max-width: 1440px) {
+  .sm-exec-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .sm-exec-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sm-quick-actions-bar {
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 580px) {
+  .sm-exec-kpis {
+    grid-template-columns: 1fr;
+  }
+  .sm-dash-section-bar {
+    padding: 10px 14px;
+  }
+  .sm-dash-section-btn span {
+    display: none;
+  }
+}

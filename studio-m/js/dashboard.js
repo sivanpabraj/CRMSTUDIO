@@ -525,13 +525,17 @@ const SMDashboard = {
     return `<span class="sm-exec-trend ${positive ? 'is-positive' : 'is-negative'}"><i class="fas fa-arrow-${value >= 0 ? 'up' : 'down'}"></i>${Math.abs(value).toLocaleString('fa-IR')}٪</span>`
   },
 
-  _kpiCard(label, value, meta, icon, color, route, trend = null, inverse = false) {
-    return `<button type="button" class="sm-exec-kpi" style="--kpi-color:${color}" onclick="SMDashboard.go('${route}')">
-      <span class="sm-exec-kpi-icon"><i class="fas ${icon}"></i></span>
+  _kpiCard(label, value, meta, icon, color, route, trend = null, inverse = false, kpiId = '') {
+    const id = kpiId || label
+    return `<div class="sm-exec-kpi" data-kpi-id="${id}" draggable="true" style="--kpi-color:${color}" onclick="SMDashboard.go('${route}')" role="button" tabindex="0">
+      <div class="sm-exec-kpi-top">
+        <span class="sm-exec-kpi-icon"><i class="fas ${icon}"></i></span>
+        <span class="sm-kpi-drag-handle" title="برای جابجایی بکشید (درگ و دراپ)" onclick="event.stopPropagation()"><i class="fas fa-grip-vertical"></i></span>
+      </div>
       <span class="sm-exec-kpi-label">${SM.esc(label)}</span>
       <strong>${SM.fmt(value)}</strong>
       <span class="sm-exec-kpi-foot">${trend === null ? '' : this._trendBadge(trend, inverse)}<small>${SM.esc(meta)}</small></span>
-    </button>`
+    </div>`
   },
 
   _forecastChart(series) {
@@ -649,30 +653,123 @@ const SMDashboard = {
     return ['kpis', 'finance', 'expenses', 'assistant', 'workflow', 'events', 'transactions']
   },
 
+  defaultKpiOrder() {
+    return ['monthIncome', 'monthExpense', 'net', 'outstanding', 'bankBalance', 'closeEvents']
+  },
+
+  getKpiOrder() {
+    const studio = typeof SM !== 'undefined' && SM.studio ? SM.studio() : {}
+    const cfg = studio?.dashboardLayout || {}
+    const def = this.defaultKpiOrder()
+    let order = Array.isArray(cfg.kpiOrder) && cfg.kpiOrder.length ? cfg.kpiOrder : null
+    if (!order && typeof localStorage !== 'undefined') {
+      try {
+        const local = JSON.parse(localStorage.getItem('sm_kpi_order') || 'null')
+        if (Array.isArray(local) && local.length) order = local
+      } catch { /* */ }
+    }
+    if (!order) order = def
+    return [...new Set([...order, ...def])]
+  },
+
+  async saveKpiOrder(order) {
+    if (typeof localStorage !== 'undefined') {
+      try { localStorage.setItem('sm_kpi_order', JSON.stringify(order)) } catch { /* */ }
+    }
+    const cfg = this.getLayoutConfig()
+    await this.saveLayoutConfig(cfg.order, cfg.hidden, order)
+  },
+
+  isSectionCollapsed(sectionId) {
+    const studio = typeof SM !== 'undefined' && SM.studio ? SM.studio() : {}
+    const cfg = studio?.dashboardLayout || {}
+    let collapsed = Array.isArray(cfg.collapsed) ? cfg.collapsed : null
+    if (!collapsed && typeof localStorage !== 'undefined') {
+      try {
+        const local = JSON.parse(localStorage.getItem('sm_dash_collapsed') || '[]')
+        if (Array.isArray(local)) collapsed = local
+      } catch { /* */ }
+    }
+    return Array.isArray(collapsed) ? collapsed.includes(sectionId) : false
+  },
+
+  async toggleCollapse(sectionId) {
+    const studio = typeof SM !== 'undefined' && SM.studio ? SM.studio() : {}
+    const cfg = studio?.dashboardLayout || {}
+    let collapsed = Array.isArray(cfg.collapsed) ? [...cfg.collapsed] : []
+    if (collapsed.includes(sectionId)) {
+      collapsed = collapsed.filter(id => id !== sectionId)
+    } else {
+      collapsed.push(sectionId)
+    }
+    const layout = this.getLayoutConfig()
+    await this.saveLayoutConfig(layout.order, layout.hidden, null, collapsed)
+    if (typeof document !== 'undefined') {
+      const secEl = document.querySelector(`[data-section-id="${sectionId}"]`)
+      if (secEl) {
+        secEl.classList.toggle('is-collapsed')
+        const btn = secEl.querySelector('.sm-dash-section-collapse-btn')
+        if (btn) {
+          const isNowCollapsed = secEl.classList.contains('is-collapsed')
+          btn.innerHTML = `<i class="fas fa-chevron-${isNowCollapsed ? 'down' : 'up'}"></i>`
+          btn.title = isNowCollapsed ? 'باز کردن' : 'بستن'
+        }
+      }
+    }
+  },
+
   getLayoutConfig() {
-    const studio = typeof SM !== 'undefined' ? SM.studio() : {}
-    const cfg = studio.dashboardLayout || {}
+    const studio = typeof SM !== 'undefined' && SM.studio ? SM.studio() : {}
+    const cfg = studio?.dashboardLayout || {}
     const defaultOrder = this.defaultSectionOrder()
-    const order = Array.isArray(cfg.order) && cfg.order.length ? cfg.order : defaultOrder
-    const hidden = Array.isArray(cfg.hidden) ? cfg.hidden : []
+    let order = Array.isArray(cfg.order) && cfg.order.length ? cfg.order : null
+    if (!order && typeof localStorage !== 'undefined') {
+      try {
+        const local = JSON.parse(localStorage.getItem('sm_dash_order') || 'null')
+        if (Array.isArray(local) && local.length) order = local
+      } catch { /* */ }
+    }
+    if (!order) order = defaultOrder
+
+    let hidden = Array.isArray(cfg.hidden) ? cfg.hidden : null
+    if (!hidden && typeof localStorage !== 'undefined') {
+      try {
+        const localH = JSON.parse(localStorage.getItem('sm_dash_hidden') || 'null')
+        if (Array.isArray(localH)) hidden = localH
+      } catch { /* */ }
+    }
+    if (!hidden) hidden = []
+
     const all = [...new Set([...order, ...defaultOrder])].filter(id => this.SECTIONS[id])
     return { order: all, hidden: hidden.filter(id => this.SECTIONS[id]) }
   },
 
-  async saveLayoutConfig(order, hidden) {
+  async saveLayoutConfig(order, hidden, kpiOrder = null, collapsed = null) {
     const prev = typeof SM !== 'undefined' && SM.studio ? SM.studio() : {}
+    const prevLayout = prev?.dashboardLayout || {}
+    const newKpiOrder = kpiOrder || prevLayout.kpiOrder || this.getKpiOrder()
+    const newCollapsed = collapsed || prevLayout.collapsed || []
+    const layoutData = { order, hidden, kpiOrder: newKpiOrder, collapsed: newCollapsed }
     if (prev) {
-      prev.dashboardLayout = { order, hidden }
+      prev.dashboardLayout = layoutData
+    }
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('sm_dash_order', JSON.stringify(order))
+        localStorage.setItem('sm_dash_hidden', JSON.stringify(hidden))
+        localStorage.setItem('sm_kpi_order', JSON.stringify(newKpiOrder))
+        if (collapsed) localStorage.setItem('sm_dash_collapsed', JSON.stringify(newCollapsed))
+      } catch { /* */ }
     }
     if (typeof SecureDB !== 'undefined' && SecureDB.merge) {
       await SecureDB.merge('studioInfo', {
         ...prev,
-        dashboardLayout: { order, hidden }
+        dashboardLayout: layoutData
       })
     } else if (typeof DB !== 'undefined' && DB.set) {
       await DB.set('studioInfo', {
         ...prev,
-        dashboardLayout: { order, hidden }
+        dashboardLayout: layoutData
       })
     }
     await DB?.flush?.()
@@ -687,7 +784,7 @@ const SMDashboard = {
     const item = cfg.order.splice(idx, 1)[0]
     cfg.order.splice(targetIdx, 0, item)
     await this.saveLayoutConfig(cfg.order, cfg.hidden)
-    SM.toast(`بخش «${this.SECTIONS[sectionId]?.title || ''}» منتقل شد`, 'success')
+    SM.toast?.(`بخش «${this.SECTIONS[sectionId]?.title || ''}» منتقل شد`, 'success')
     SM.navigate('dashboard')
   },
 
@@ -696,32 +793,42 @@ const SMDashboard = {
     let hidden = [...cfg.hidden]
     if (hidden.includes(sectionId)) {
       hidden = hidden.filter(id => id !== sectionId)
-      SM.toast(`بخش «${this.SECTIONS[sectionId]?.title || ''}» نمایان شد`, 'success')
+      SM.toast?.(`بخش «${this.SECTIONS[sectionId]?.title || ''}» نمایان شد`, 'success')
     } else {
       hidden.push(sectionId)
-      SM.toast(`بخش «${this.SECTIONS[sectionId]?.title || ''}» مخفی شد`, 'info')
+      SM.toast?.(`بخش «${this.SECTIONS[sectionId]?.title || ''}» مخفی شد`, 'info')
     }
     await this.saveLayoutConfig(cfg.order, hidden)
     SM.navigate('dashboard')
   },
 
   async resetLayoutConfig() {
-    await this.saveLayoutConfig(this.defaultSectionOrder(), [])
-    SM.toast('چیدمان پیشخوان به حالت پیش‌فرض بازگشت', 'info')
+    await this.saveLayoutConfig(this.defaultSectionOrder(), [], this.defaultKpiOrder(), [])
+    try {
+      localStorage.removeItem('sm_dash_order')
+      localStorage.removeItem('sm_dash_hidden')
+      localStorage.removeItem('sm_kpi_order')
+      localStorage.removeItem('sm_dash_collapsed')
+    } catch { /* */ }
+    SM.toast?.('چیدمان پیشخوان به حالت پیش‌فرض بازگشت', 'info')
     SM.navigate('dashboard')
   },
 
   _renderSectionContent(id, ctx, finance, expenses, forecasts, stages, insights, activeContracts, closeEvents) {
     switch (id) {
-      case 'kpis':
-        return `<div class="sm-exec-kpis">
-          ${this._kpiCard('وصول این ماه', finance.monthIncome, 'نسبت به ماه قبل', 'fa-wallet', '#34D399', 'accounting', finance.incomeTrend)}
-          ${this._kpiCard('هزینه این ماه', finance.monthExpense, 'نسبت به ماه قبل', 'fa-receipt', '#F87171', 'expenses', finance.expenseTrend, true)}
-          ${this._kpiCard('سود خالص ماه', finance.net, 'وصول منهای هزینه', 'fa-chart-line', '#C9A96E', 'reports')}
-          ${this._kpiCard('مانده مشتریان', ctx.outstanding, `${finance.overdue.length.toLocaleString('fa-IR')} قرارداد معوق`, 'fa-hourglass-half', '#F59E0B', 'contracts')}
-          ${this._kpiCard('موجودی حساب‌ها', finance.bankBalance, 'مجموع بانک و صندوق', 'fa-building-columns', '#60A5FA', 'accounting')}
-          ${this._kpiCard('مراسم ۳۰ روز', closeEvents, `${activeContracts.toLocaleString('fa-IR')} قرارداد فعال`, 'fa-calendar-check', '#A78BFA', 'calendar')}
-        </div>`
+      case 'kpis': {
+        const kpiMap = {
+          monthIncome: this._kpiCard('وصول این ماه', finance.monthIncome, 'نسبت به ماه قبل', 'fa-wallet', '#34D399', 'accounting', finance.incomeTrend, false, 'monthIncome'),
+          monthExpense: this._kpiCard('هزینه این ماه', finance.monthExpense, 'نسبت به ماه قبل', 'fa-receipt', '#F87171', 'expenses', finance.expenseTrend, true, 'monthExpense'),
+          net: this._kpiCard('سود خالص ماه', finance.net, 'وصول منهای هزینه', 'fa-chart-line', '#C9A96E', 'reports', null, false, 'net'),
+          outstanding: this._kpiCard('مانده مشتریان', ctx.outstanding, `${finance.overdue.length.toLocaleString('fa-IR')} قرارداد معوق`, 'fa-hourglass-half', '#F59E0B', 'contracts', null, false, 'outstanding'),
+          bankBalance: this._kpiCard('موجودی حساب‌ها', finance.bankBalance, 'مجموع بانک و صندوق', 'fa-building-columns', '#60A5FA', 'accounting', null, false, 'bankBalance'),
+          closeEvents: this._kpiCard('مراسم ۳۰ روز', closeEvents, `${activeContracts.toLocaleString('fa-IR')} قرارداد فعال`, 'fa-calendar-check', '#A78BFA', 'calendar', null, false, 'closeEvents')
+        }
+        const kpiOrder = this.getKpiOrder()
+        const cardsHtml = kpiOrder.map(kId => kpiMap[kId] || '').filter(Boolean).join('')
+        return `<div class="sm-exec-kpis" id="sm-exec-kpis-container">${cardsHtml}</div>`
+      }
       case 'finance':
         return `<div class="sm-exec-grid sm-exec-grid--finance">
           <section class="sm-exec-panel sm-exec-forecast"><div class="sm-exec-panel-head"><div><span class="sm-exec-eyebrow">شش ماه اخیر</span><h3>وصول واقعی و برآورد قراردادی</h3></div><span class="sm-exec-note">برآورد = وصول ثبت‌شده + مانده قرارداد همان ماه</span></div>${this._forecastChart(forecasts)}</section>
@@ -744,12 +851,13 @@ const SMDashboard = {
 
   _quickActionBar() {
     return `
-      <div class="sm-quick-actions-bar" style="display:flex;gap:10px;margin-bottom:18px;overflow-x:auto;padding-bottom:4px;flex-wrap:wrap">
+      <div class="sm-quick-actions-bar">
         <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="window.location.href='../contract.html'"><i class="fas fa-plus-circle"></i> قرارداد جدید</button>
         <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('accounting')"><i class="fas fa-cash-register"></i> ثبت تراکنش مالی</button>
         <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('calendar')"><i class="fas fa-calendar-plus"></i> آفیش و تقویم</button>
         <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('employees')"><i class="fas fa-user-plus"></i> افزودن پرسنل</button>
         <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SM.navigate('settings')"><i class="fas fa-gear"></i> ضوابط و تنظیمات</button>
+        <button type="button" class="sm-btn sm-btn-sm ${this._layoutEdit ? 'sm-btn-warning' : 'sm-btn-ghost'}" onclick="SMDashboard.toggleLayoutEdit()"><i class="fas fa-grip"></i> ${this._layoutEdit ? 'اتمام چیدمان' : 'شخصی‌سازی پیشخوان'}</button>
       </div>`
   },
 
@@ -811,27 +919,33 @@ const SMDashboard = {
     const sectionsHtml = visibleSections.map((id, index) => {
       const meta = this.SECTIONS[id] || { title: id, icon: 'fa-cubes' }
       const isHidden = cfg.hidden.includes(id)
+      const isCollapsed = this.isSectionCollapsed(id)
       const isFirst = index === 0
       const isLast = index === visibleSections.length - 1
       const content = this._renderSectionContent(id, ctx, finance, expenses, forecasts, stages, insights, activeContracts, closeEvents)
 
       return `
-        <div class="sm-dash-section ${isHidden ? 'is-hidden' : ''}" data-section-id="${id}" draggable="${this._layoutEdit ? 'true' : 'false'}">
-          ${this._layoutEdit ? `
-          <div class="sm-dash-section-ctrls">
-            <div class="sm-dash-section-ctrls-info">
-              <span class="sm-dash-section-handle" title="جابجایی با کشیدن"><i class="fas fa-grip-vertical"></i></span>
-              <span class="sm-dash-section-title"><i class="fas ${meta.icon}"></i> ${SM.esc(meta.title)}</span>
+        <div class="sm-dash-section ${isHidden ? 'is-hidden' : ''} ${isCollapsed ? 'is-collapsed' : ''}" data-section-id="${id}" draggable="true">
+          <div class="sm-dash-section-bar">
+            <div class="sm-dash-section-info">
+              <span class="sm-dash-section-drag-handle" title="جابجایی بخش با کشیدن (درگ و دراپ)"><i class="fas fa-grip-vertical"></i></span>
+              <div class="sm-dash-section-title-wrap">
+                <span class="sm-dash-section-title-icon"><i class="fas ${meta.icon}"></i></span>
+                <span>${SM.esc(meta.title)}</span>
+              </div>
               ${isHidden ? '<span class="sm-badge sm-badge-muted">مخفی‌شده</span>' : ''}
             </div>
             <div class="sm-dash-section-actions">
-              <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost sm-dash-ctrl-btn" onclick="SMDashboard.moveSection('${id}', 'up')" ${isFirst ? 'disabled' : ''} title="انتقال به بالا"><i class="fas fa-arrow-up"></i> بالا</button>
-              <button type="button" class="sm-btn sm-btn-xs sm-btn-ghost sm-dash-ctrl-btn" onclick="SMDashboard.moveSection('${id}', 'down')" ${isLast ? 'disabled' : ''} title="انتقال به پایین"><i class="fas fa-arrow-down"></i> پایین</button>
-              <button type="button" class="sm-btn sm-btn-xs ${isHidden ? 'sm-btn-primary' : 'sm-btn-ghost'} sm-dash-ctrl-btn" onclick="SMDashboard.toggleSectionVisibility('${id}')" title="${isHidden ? 'نمایش مجدد' : 'مخفی کردن'}">
-                <i class="fas ${isHidden ? 'fa-eye' : 'fa-eye-slash'}"></i> ${isHidden ? 'نمایش' : 'مخفی'}
+              <button type="button" class="sm-dash-section-btn sm-dash-section-collapse-btn" onclick="SMDashboard.toggleCollapse('${id}')" title="${isCollapsed ? 'باز کردن بخش' : 'بستن بخش'}">
+                <i class="fas fa-chevron-${isCollapsed ? 'down' : 'up'}"></i>
+              </button>
+              <button type="button" class="sm-dash-section-btn" onclick="SMDashboard.moveSection('${id}', 'up')" ${isFirst ? 'disabled' : ''} title="انتقال به بالا"><i class="fas fa-arrow-up"></i> <span>بالا</span></button>
+              <button type="button" class="sm-dash-section-btn" onclick="SMDashboard.moveSection('${id}', 'down')" ${isLast ? 'disabled' : ''} title="انتقال به پایین"><i class="fas fa-arrow-down"></i> <span>پایین</span></button>
+              <button type="button" class="sm-dash-section-btn ${isHidden ? 'sm-btn-primary' : ''}" onclick="SMDashboard.toggleSectionVisibility('${id}')" title="${isHidden ? 'نمایش مجدد' : 'مخفی کردن'}">
+                <i class="fas ${isHidden ? 'fa-eye' : 'fa-eye-slash'}"></i> <span>${isHidden ? 'نمایش' : 'مخفی'}</span>
               </button>
             </div>
-          </div>` : ''}
+          </div>
           <div class="sm-dash-section-body">
             ${content}
           </div>
@@ -844,7 +958,7 @@ const SMDashboard = {
           <div>
             <span class="sm-exec-eyebrow">نمای لحظه‌ای استودیو</span>
             <h2>پیشخوان مدیریت</h2>
-            <p>${SM.esc(Utils.todayJalali())} · همه ارقام به تومان</p>
+            <p>${SM.esc(Utils.todayJalali())} · همه ارقام به تومان · قابلیت جابجایی ابزارها با کشیدن و رها کردن</p>
           </div>
           <div class="sm-exec-toolbar-actions">
             ${SMUI.moduleSearch('dashboard', 'جستجو در مراسم و مشتری...')}
@@ -865,9 +979,60 @@ const SMDashboard = {
         </div>
       </div>`
 
-    if (this._layoutEdit) {
-      this._bindSectionSortable(el.querySelector('#sm-dash-sections-container'))
+    const kpiBox = el.querySelector('#sm-exec-kpis-container')
+    if (kpiBox) {
+      this._bindKpiSortable(kpiBox)
     }
+
+    const secBox = el.querySelector('#sm-dash-sections-container')
+    if (secBox) {
+      this._bindSectionSortable(secBox)
+    }
+  },
+
+  _bindKpiSortable(container) {
+    if (!container) return
+    let dragId = null
+
+    container.querySelectorAll('.sm-exec-kpi').forEach(card => {
+      card.addEventListener('dragstart', e => {
+        dragId = card.dataset.kpiId
+        card.classList.add('is-dragging')
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', dragId)
+      })
+      card.addEventListener('dragend', () => {
+        card.classList.remove('is-dragging')
+        dragId = null
+        container.querySelectorAll('.sm-exec-kpi').forEach(c => c.classList.remove('is-drag-over'))
+      })
+      card.addEventListener('dragover', e => {
+        if (!dragId) return
+        e.preventDefault()
+        const over = card
+        if (over.dataset.kpiId === dragId) return
+        over.classList.add('is-drag-over')
+        const dragging = container.querySelector(`[data-kpi-id="${dragId}"]`)
+        if (!dragging) return
+        const rect = over.getBoundingClientRect()
+        const before = e.clientX < rect.left + rect.width / 2
+        if (before) container.insertBefore(dragging, over)
+        else container.insertBefore(dragging, over.nextSibling)
+      })
+      card.addEventListener('dragleave', () => card.classList.remove('is-drag-over'))
+      card.addEventListener('drop', async e => {
+        e.preventDefault()
+        card.classList.remove('is-drag-over')
+        const newOrder = [...container.querySelectorAll('.sm-exec-kpi')].map(c => c.dataset.kpiId).filter(Boolean)
+        await this.saveKpiOrder(newOrder)
+        SM.toast?.('ترتیب کارت‌های شاخص ذخیره شد', 'success')
+      })
+    })
+
+    this._attachTouchReorder(container, '.sm-exec-kpi', '.sm-kpi-drag-handle', async (newOrder) => {
+      await this.saveKpiOrder(newOrder)
+      SM.toast?.('ترتیب کارت‌های شاخص ذخیره شد', 'success')
+    })
   },
 
   _bindSectionSortable(container) {
@@ -876,7 +1041,6 @@ const SMDashboard = {
 
     container.querySelectorAll('.sm-dash-section').forEach(section => {
       section.addEventListener('dragstart', e => {
-        if (!this._layoutEdit) { e.preventDefault(); return }
         dragId = section.dataset.sectionId
         section.classList.add('is-dragging')
         e.dataTransfer.effectAllowed = 'move'
@@ -888,7 +1052,7 @@ const SMDashboard = {
         container.querySelectorAll('.sm-dash-section').forEach(s => s.classList.remove('is-drag-over'))
       })
       section.addEventListener('dragover', e => {
-        if (!this._layoutEdit || !dragId) return
+        if (!dragId) return
         e.preventDefault()
         const over = section
         if (over.dataset.sectionId === dragId) return
@@ -908,8 +1072,99 @@ const SMDashboard = {
         const cfg = this.getLayoutConfig()
         const merged = [...newOrder, ...cfg.order.filter(id => !newOrder.includes(id))]
         await this.saveLayoutConfig(merged, cfg.hidden)
-        SM.toast('چیدمان جدید با موفقیت ذخیره شد', 'success')
+        SM.toast?.('چیدمان جدید با موفقیت ذخیره شد', 'success')
       })
+    })
+
+    this._attachTouchReorder(container, '.sm-dash-section', '.sm-dash-section-drag-handle', async (newOrder) => {
+      const cfg = this.getLayoutConfig()
+      const merged = [...newOrder, ...cfg.order.filter(id => !newOrder.includes(id))]
+      await this.saveLayoutConfig(merged, cfg.hidden)
+      SM.toast?.('چیدمان جدید با موفقیت ذخیره شد', 'success')
+    })
+  },
+
+  _attachTouchReorder(container, itemSelector, handleSelector, onReorder) {
+    if (!container || typeof window === 'undefined') return
+    let activeItem = null
+    let ghost = null
+    let initialY = 0
+    let initialX = 0
+
+    const onPointerDown = (e) => {
+      const handle = e.target.closest(handleSelector)
+      if (!handle) return
+      const item = handle.closest(itemSelector)
+      if (!item) return
+
+      activeItem = item
+      initialY = e.clientY
+      initialX = e.clientX
+
+      try {
+        ghost = item.cloneNode(true)
+        ghost.className = 'sm-touch-drag-ghost'
+        const rect = item.getBoundingClientRect()
+        ghost.style.width = `${rect.width}px`
+        ghost.style.height = `${rect.height}px`
+        ghost.style.top = `${rect.top}px`
+        ghost.style.left = `${rect.left}px`
+        document.body.appendChild(ghost)
+      } catch { ghost = null }
+
+      item.classList.add('is-dragging')
+      handle.setPointerCapture?.(e.pointerId)
+      e.preventDefault()
+    }
+
+    const onPointerMove = (e) => {
+      if (!activeItem) return
+      e.preventDefault()
+      if (ghost) {
+        const dy = e.clientY - initialY
+        const dx = e.clientX - initialX
+        ghost.style.transform = `translate(${dx}px, ${dy}px) scale(0.97) rotate(-1deg)`
+        ghost.style.display = 'none'
+      }
+
+      const elemBelow = document.elementFromPoint(e.clientX, e.clientY)
+      if (ghost) ghost.style.display = ''
+      if (!elemBelow) return
+
+      const targetItem = elemBelow.closest(itemSelector)
+      if (targetItem && targetItem !== activeItem && targetItem.parentElement === container) {
+        const rect = targetItem.getBoundingClientRect()
+        const isHorizontal = container.classList.contains('sm-exec-kpis')
+        const before = isHorizontal ? (e.clientX < rect.left + rect.width / 2) : (e.clientY < rect.top + rect.height / 2)
+        if (before) container.insertBefore(activeItem, targetItem)
+        else container.insertBefore(activeItem, targetItem.nextSibling)
+      }
+    }
+
+    const onPointerUp = async () => {
+      if (!activeItem) return
+      if (ghost) {
+        ghost.remove()
+        ghost = null
+      }
+      activeItem.classList.remove('is-dragging')
+      activeItem = null
+
+      try {
+        const newOrder = [...container.querySelectorAll(itemSelector)].map(el => el.dataset.kpiId || el.dataset.sectionId).filter(Boolean)
+        if (typeof onReorder === 'function') {
+          await onReorder(newOrder)
+        }
+      } catch (err) {
+        console.warn('Reorder callback error:', err)
+      }
+    }
+
+    container.querySelectorAll(handleSelector).forEach(handle => {
+      handle.addEventListener('pointerdown', onPointerDown)
+      handle.addEventListener('pointermove', onPointerMove)
+      handle.addEventListener('pointerup', onPointerUp)
+      handle.addEventListener('pointercancel', onPointerUp)
     })
   },
 

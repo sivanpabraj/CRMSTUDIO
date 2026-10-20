@@ -113,6 +113,32 @@ describe('Reorderable Dashboard Layout', () => {
     await dashboard.toggleSectionVisibility('assistant')
     expect(dashboard.getLayoutConfig().hidden).not.toContain('assistant')
   })
+
+  it('manages draggable KPI cards order and persistence', async () => {
+    const { dashboard, context } = getDashboard()
+    const defKpis = dashboard.defaultKpiOrder()
+    expect(defKpis).toEqual(['monthIncome', 'monthExpense', 'net', 'outstanding', 'bankBalance', 'closeEvents'])
+
+    const customKpis = ['bankBalance', 'net', 'monthIncome', 'monthExpense', 'outstanding', 'closeEvents']
+    await dashboard.saveKpiOrder(customKpis)
+    expect(context.DB.set).toHaveBeenCalled()
+
+    const currentKpis = dashboard.getKpiOrder()
+    expect(currentKpis[0]).toBe('bankBalance')
+    expect(currentKpis[1]).toBe('net')
+  })
+
+  it('toggles section collapse state', async () => {
+    const { dashboard, context } = getDashboard()
+    expect(dashboard.isSectionCollapsed('workflow')).toBe(false)
+
+    await dashboard.toggleCollapse('workflow')
+    expect(context.DB.set).toHaveBeenCalled()
+    expect(dashboard.isSectionCollapsed('workflow')).toBe(true)
+
+    await dashboard.toggleCollapse('workflow')
+    expect(dashboard.isSectionCollapsed('workflow')).toBe(false)
+  })
 })
 
 describe('Backup Service Email and Folder Export', () => {
