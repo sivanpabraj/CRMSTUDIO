@@ -166,6 +166,21 @@ const SMEquipment = {
           purchaseDate: d['eq-pdate'],
           notes: d['eq-notes']
         }
+        if (d['eq-contract'] && typeof SmartConflictDetector !== 'undefined') {
+          const c = DB.find('contracts', x => x.id === d['eq-contract'])
+          if (c && (c.eventDate || c.date)) {
+            data.assignedDate = c.eventDate || c.date
+            data.assignedCouple = c.couple || 'پروژه استودیو'
+            const check = SmartConflictDetector.checkEquipmentConflict({
+              equipmentId: item ? item.id : '',
+              date: data.assignedDate,
+              excludeContractId: c.id
+            })
+            if (check.hasConflict) {
+              SM.toast(`هشدار: این تجهیز در تاریخ ${data.assignedDate} ممکن است با پروژه دیگری تداخل داشته باشد!`, 'warning')
+            }
+          }
+        }
         if (item) await SecureDB.update('equipment', item.id, data)
         else await SecureDB.insert('equipment', { ...data, createdAt: Utils.todayJalali() })
         SMUI.closeModal()

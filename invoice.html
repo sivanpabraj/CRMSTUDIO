@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#10b981"/>
+  <title>فاکتور و تسویه آنلاین قرارداد — استودیو</title>
+  <link href="https://fonts.googleapis.com/css2?family=Estedad:wght@600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="css/ui-kit.css"/>
+  <link rel="stylesheet" href="css/glass-theme.css"/>
+  <style>
+    :root {
+      --inv-bg: #0b0c10;
+      --inv-surface: rgba(22, 24, 29, 0.75);
+      --inv-border: rgba(255, 255, 255, 0.08);
+      --inv-accent: #10b981;
+      --inv-accent-glow: rgba(16, 185, 129, 0.25);
+      --inv-gold: #f59e0b;
+      --inv-text: #f3f4f6;
+      --inv-text-muted: #9ca3af;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--inv-bg);
+      background-image: 
+        radial-gradient(circle at 80% 10%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 20% 90%, rgba(245, 158, 11, 0.06) 0%, transparent 40%);
+      color: var(--inv-text);
+      font-family: 'Vazirmatn', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .invoice-wrapper {
+      width: 100%;
+      max-width: 580px;
+      background: var(--inv-surface);
+      border: 1px solid var(--inv-border);
+      border-radius: 24px;
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+      overflow: hidden;
+      animation: fadeIn 0.4s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .invoice-header {
+      padding: 24px 28px;
+      border-bottom: 1px solid var(--inv-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .studio-brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .studio-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(5,150,105,0.4));
+      border: 1px solid rgba(16,185,129,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #10b981;
+      font-size: 1.3rem;
+    }
+    .studio-info h1 {
+      font-family: 'Estedad', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #fff;
+    }
+    .studio-info p {
+      font-size: 0.78rem;
+      color: var(--inv-text-muted);
+      margin-top: 2px;
+    }
+    .invoice-badge {
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #10b981;
+    }
+    .invoice-badge.unpaid {
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.3);
+      color: #f59e0b;
+    }
+    .invoice-body {
+      padding: 28px;
+    }
+    .contract-meta-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .meta-item .label {
+      font-size: 0.75rem;
+      color: var(--inv-text-muted);
+      margin-bottom: 4px;
+    }
+    .meta-item .val {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .finance-overview {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .fin-box {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 14px;
+      padding: 14px 10px;
+      text-align: center;
+    }
+    .fin-box .fin-title {
+      font-size: 0.72rem;
+      color: var(--inv-text-muted);
+      margin-bottom: 6px;
+    }
+    .fin-box .fin-val {
+      font-size: 1.05rem;
+      font-weight: 900;
+      font-family: 'Estedad', sans-serif;
+    }
+    .fin-box.total .fin-val { color: #fff; }
+    .fin-box.paid .fin-val { color: #10b981; }
+    .fin-box.due .fin-val { color: #f59e0b; }
+    
+    .installments-section {
+      margin-bottom: 24px;
+    }
+    .section-title {
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: var(--inv-text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .inst-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .inst-row:hover, .inst-row.selected {
+      background: rgba(16, 185, 129, 0.06);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    .inst-row.is-paid {
+      opacity: 0.6;
+      cursor: default;
+    }
+    .inst-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .inst-title {
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+    .inst-date {
+      font-size: 0.72rem;
+      color: var(--inv-text-muted);
+    }
+    .inst-amount-box {
+      text-align: left;
+    }
+    .inst-amount {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #fff;
+    }
+    .inst-status-pill {
+      display: inline-block;
+      font-size: 0.68rem;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-top: 2px;
+    }
+    .inst-status-pill.paid {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+    }
+    .inst-status-pill.pending {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+    }
+
+    .payment-action-card {
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.02));
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 18px;
+      padding: 20px;
+      text-align: center;
+    }
+    .pay-amount-label {
+      font-size: 0.8rem;
+      color: var(--inv-text-muted);
+    }
+    .pay-amount-val {
+      font-family: 'Estedad', sans-serif;
+      font-size: 1.85rem;
+      font-weight: 900;
+      color: #10b981;
+      margin: 8px 0 16px;
+    }
+    .pay-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      border: none;
+      border-radius: 14px;
+      color: #fff;
+      font-size: 1.05rem;
+      font-weight: 800;
+      font-family: 'Estedad', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 10px 24px rgba(16, 185, 129, 0.35);
+      transition: all 0.2s;
+    }
+    .pay-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px rgba(16, 185, 129, 0.45);
+    }
+    .pay-guarantee {
+      margin-top: 14px;
+      font-size: 0.72rem;
+      color: var(--inv-text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .receipt-modal {
+      display: none;
+      padding: 28px;
+      text-align: center;
+    }
+    .receipt-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.15);
+      border: 2px solid #10b981;
+      color: #10b981;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      margin: 0 auto 18px;
+    }
+    .receipt-title {
+      font-family: 'Estedad', sans-serif;
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .receipt-ref {
+      font-family: monospace;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 8px 16px;
+      border-radius: 8px;
+      display: inline-block;
+      margin: 12px 0 20px;
+      color: #10b981;
+      font-size: 1rem;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+  <div class="invoice-wrapper" id="invoice-app">
+    <!-- Invoice Content will be loaded dynamically -->
+    <div style="padding:48px;text-align:center;color:#9ca3af">
+      <i class="fas fa-circle-notch fa-spin fa-2x" style="color:#10b981;margin-bottom:12px"></i>
+      <p>در حال فراخوانی اطلاعات فاکتور استودیو...</p>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/idb-store.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/secure-db.js"></script>
+  <script src="js/payment-gateway.js"></script>
+  <script>
+    (async function() {
+      await DB.init();
+      const params = new URLSearchParams(window.location.search);
+      const contractId = params.get('cid') || '';
+      let targetAmount = Number(params.get('amount') || 0);
+      let selectedInstallmentIdx = params.get('inst') !== null ? Number(params.get('inst')) : null;
+
+      const studio = DB.get('studioInfo') || { name: 'استودیو ماندنی' };
+      const contracts = DB.get('contracts') || [];
+      const contract = contracts.find(c => c.id === contractId) || contracts[0] || {
+        id: 'cnt_sample',
+        contractNum: '1405-102',
+        couple: 'سارا رضایی و علی محمدی',
+        bride: 'سارا رضایی',
+        groom: 'علی محمدی',
+        eventDate: '1405/06/15',
+        total: 35000000,
+        paid: 15000000,
+        installments: [
+          { title: 'بیعانه عقد قرارداد', amount: 15000000, dueDate: '1405/02/10', status: 'paid', refId: 'REF_98124501' },
+          { title: 'قسط دوم — روز آفیش تصویربرداری', amount: 12000000, dueDate: '1405/06/15', status: 'pending' },
+          { title: 'تسویه نهایی — تحویل آلبوم و فیلم', amount: 8000000, dueDate: '1405/07/20', status: 'pending' }
+        ]
+      };
+
+      const total = Number(contract.total || 0);
+      const paid = Number(contract.paid || 0);
+      const remaining = Math.max(0, total - paid);
+
+      if (!targetAmount) {
+        if (selectedInstallmentIdx !== null && contract.installments && contract.installments[selectedInstallmentIdx]) {
+          targetAmount = Number(contract.installments[selectedInstallmentIdx].amount || 0);
+        } else {
+          targetAmount = remaining > 0 ? remaining : total;
+        }
+      }
+
+      const isFullyPaid = remaining <= 0;
+
+      function renderInvoice() {
+        const wrap = document.getElementById('invoice-app');
+        wrap.innerHTML = `
+          <div class="invoice-header">
+            <div class="studio-brand">
+              <div class="studio-avatar"><i class="fas fa-camera-retro"></i></div>
+              <div class="studio-info">
+                <h1>${Utils.esc(studio.name || 'استودیو عکاسی و فیلم')}</h1>
+                <p>صورت‌حساب رسمی خدمات تصویربرداری</p>
+              </div>
+            </div>
+            <div class="invoice-badge ${isFullyPaid ? '' : 'unpaid'}">
+              <i class="fas ${isFullyPaid ? 'fa-check-circle' : 'fa-clock'}"></i>
+              ${isFullyPaid ? 'تسویه شده کامل' : 'در انتظار پرداخت'}
+            </div>
+          </div>
+
+          <div class="invoice-body">
+            <div class="contract-meta-card">
+              <div class="meta-item">
+                <div class="label">طرف قرارداد (عروس و داماد)</div>
+                <div class="val">${Utils.esc(contract.couple || (contract.bride + ' و ' + contract.groom) || 'مشتری گرامی')}</div>
+              </div>
+              <div class="meta-item">
+                <div class="label">شماره پرونده / قرارداد</div>
+                <div class="val">#${Utils.esc(contract.contractNum || contract.id)}</div>
+              </div>
+              <div class="meta-item">
+                <div class="label">تاریخ رویداد / مراسم</div>
+                <div class="val">${Utils.esc(contract.eventDate || contract.date || '—')}</div>
+              </div>
+              <div class="meta-item">
+                <div class="label">وضعیت مالی</div>
+                <div class="val" style="color:${isFullyPaid ? '#10b981' : '#f59e0b'}">
+                  ${isFullyPaid ? 'تسویه کامل' : 'دارای مانده‌حساب'}
+                </div>
+              </div>
+            </div>
+
+            <div class="finance-overview">
+              <div class="fin-box total">
+                <div class="fin-title">مبلغ کل قرارداد</div>
+                <div class="fin-val">${total.toLocaleString('fa-IR')} <span style="font-size:0.65rem">تومان</span></div>
+              </div>
+              <div class="fin-box paid">
+                <div class="fin-title">کل پرداختی‌ها</div>
+                <div class="fin-val">${paid.toLocaleString('fa-IR')} <span style="font-size:0.65rem">تومان</span></div>
+              </div>
+              <div class="fin-box due">
+                <div class="fin-title">مانده بدهی</div>
+                <div class="fin-val">${remaining.toLocaleString('fa-IR')} <span style="font-size:0.65rem">تومان</span></div>
+              </div>
+            </div>
+
+            ${Array.isArray(contract.installments) && contract.installments.length ? `
+              <div class="installments-section">
+                <div class="section-title"><i class="fas fa-list-check"></i> زمان‌بندی اقساط قرارداد</div>
+                ${contract.installments.map((inst, idx) => {
+                  const isPaid = inst.status === 'paid';
+                  const isSelected = selectedInstallmentIdx === idx;
+                  return `
+                    <div class="inst-row ${isPaid ? 'is-paid' : ''} ${isSelected ? 'selected' : ''}" 
+                         onclick="${isPaid ? '' : `selectInstallment(${idx}, ${Number(inst.amount)})`}">
+                      <div class="inst-info">
+                        <i class="fas ${isPaid ? 'fa-circle-check' : 'fa-circle-dot'}" style="color:${isPaid ? '#10b981' : (isSelected ? '#10b981' : '#6b7280')}"></i>
+                        <div>
+                          <div class="inst-title">${Utils.esc(inst.title || `قسط شماره ${idx + 1}`)}</div>
+                          <div class="inst-date">سررسید: ${Utils.esc(inst.dueDate || '—')}</div>
+                        </div>
+                      </div>
+                      <div class="inst-amount-box">
+                        <div class="inst-amount">${Number(inst.amount || 0).toLocaleString('fa-IR')} تومان</div>
+                        <span class="inst-status-pill ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'پرداخت شده' : 'انتخاب جهت تسویه'}</span>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            ` : ''}
+
+            ${!isFullyPaid ? `
+              <div class="payment-action-card">
+                <div class="pay-amount-label">مبلغ انتخابی جهت واریز آنلاین</div>
+                <div class="pay-amount-val">${targetAmount.toLocaleString('fa-IR')} <span style="font-size:0.9rem">تومان</span></div>
+                <button type="button" class="pay-btn" onclick="executePayment()">
+                  <i class="fas fa-shield-halved"></i>
+                  پرداخت امن با کلیه کارت‌های شتاب
+                </button>
+                <div class="pay-guarantee">
+                  <i class="fas fa-lock"></i>
+                  رمزنگاری شده توسط درگاه رسمی شاپرک بانک مرکزی جمهوری اسلامی ایران
+                </div>
+              </div>
+            ` : `
+              <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:18px;padding:24px;text-align:center">
+                <i class="fas fa-circle-check" style="color:#10b981;font-size:2.5rem;margin-bottom:12px"></i>
+                <h3 style="font-size:1.15rem;font-weight:800;color:#fff;margin-bottom:6px">کلیه اقساط این قرارداد تسویه شده است</h3>
+                <p style="font-size:0.82rem;color:#9ca3af">از خوش‌حسابی و اعتماد شما به استودیو سپاسگزاریم.</p>
+              </div>
+            `}
+          </div>
+        `;
+      }
+
+      window.selectInstallment = function(idx, amt) {
+        selectedInstallmentIdx = idx;
+        targetAmount = amt;
+        renderInvoice();
+      };
+
+      window.executePayment = function() {
+        PaymentGateway.requestPayment({
+          contractId: contract.id,
+          contractNum: contract.contractNum,
+          amount: targetAmount,
+          customerName: contract.couple || contract.bride || 'مشتری',
+          installmentIndex: selectedInstallmentIdx,
+          description: `تسویه آنلاین فاکتور #${contract.contractNum || contract.id}`
+        });
+      };
+
+      renderInvoice();
+    })();
+  </script>
+</body>
+</html>

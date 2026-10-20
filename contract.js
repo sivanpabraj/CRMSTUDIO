@@ -711,6 +711,18 @@ function openInvoice() {
 
   document.getElementById('inv-terms-body').innerHTML = formatTermsHtml(gv('contract-terms'))
 
+  if (typeof SmartConflictDetector !== 'undefined') {
+    const conflictScan = SmartConflictDetector.checkContractConflicts({
+      id: contractNum,
+      eventDate,
+      staff: getAssignedStaff()
+    })
+    const cBox = document.getElementById('contract-conflict-box')
+    if (cBox) {
+      cBox.innerHTML = conflictScan.hasConflicts ? SmartConflictDetector.renderConflictHtml(conflictScan) : ''
+    }
+  }
+
   renderPdfFormatGrid()
   setPdfFormat(pdfFormatId)
   document.getElementById('inv-backdrop').classList.add('open')

@@ -154,6 +154,60 @@ const BackupService = {
     return { ok: true, email, fileName }
   },
 
+  async sendToBot(botType = 'bale', opts = {}) {
+    const s = this.settings()
+    const token = opts.token || (botType === 'telegram' ? s.telegramBotToken : s.baleBotToken) || ''
+    const chatId = opts.chatId || (botType === 'telegram' ? s.telegramChatId : s.baleChatId) || ''
+    const json = typeof DB !== 'undefined' ? DB.exportJSON() : '{}'
+    const today = typeof Utils !== 'undefined' ? Utils.todayJalali() : new Date().toLocaleDateString('fa-IR')
+    const caption = `📦 نسخه پشتیبان خودکار پایگاه داده [${s.name || 'استودیو'}] — تاریخ: ${today}`
+
+    // ابتدا تلاش برای ارسال از طریق اندپوینت سرور
+    try {
+      const res = await fetch('/api/backup/dispatch-bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botType,
+          token,
+          chatId,
+          data: JSON.parse(json),
+          caption
+        })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.ok) {
+        return { ok: true, message: 'فایل پشتیبان با موفقیت به ربات ارسال شد ✓', via: 'server' }
+      }
+    } catch {
+      // در صورت آفلاین بودن سرور یا خطا، فال‌بک به اتصال کلاینت
+    }
+
+    // ارسال مستقیم از مرورگر با FormData
+    if (token && chatId && typeof FormData !== 'undefined') {
+      try {
+        const formData = new FormData()
+        formData.append('chat_id', chatId)
+        formData.append('document', new Blob([json], { type: 'application/json' }), `crmstudio_backup_${today}.json`)
+        formData.append('caption', caption)
+
+        const url = botType === 'telegram'
+          ? `https://api.telegram.org/bot${token}/sendDocument`
+          : `https://tapi.bale.ai/bot${token}/sendDocument`
+
+        const res = await fetch(url, { method: 'POST', body: formData })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && data.ok) {
+          return { ok: true, message: 'فایل پشتیبان با موفقیت به ربات ارسال شد ✓', via: 'direct' }
+        }
+      } catch (err) {
+        return { ok: false, error: 'خطا در ارتباط با سرور پیام‌رسان: ' + err.message }
+      }
+    }
+
+    return { ok: false, error: 'توکن ربات یا شناسه چت (Chat ID) در تنظیمات استودیو تنظیم نشده است.' }
+  },
+
   scheduleLabel(s) {
     s = s || this.settings()
     if (!s.autoBackup) return 'غیرفعال'

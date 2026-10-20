@@ -6,6 +6,12 @@
 (function (window) {
   'use strict'
 
+  function getDB() {
+    if (typeof DB !== 'undefined') return DB
+    if (typeof window !== 'undefined' && window.DB) return window.DB
+    return null
+  }
+
   const PaymentGateway = {
     /**
      * شروع فرآیند پرداخت آنلاین بانکی
@@ -114,21 +120,53 @@
         createdAt: new Date().toISOString()
       }
 
+      const db = getDB()
       // درج تراکنش در transactions
       if (typeof window.SecureDB !== 'undefined' && window.SecureDB.insert) {
         await window.SecureDB.insert('transactions', newTx)
-      } else if (typeof window.DB !== 'undefined' && window.DB.insert) {
-        window.DB.insert('transactions', newTx)
+      } else if (db && db.insert) {
+        db.insert('transactions', newTx)
       }
 
-      // به‌روزرسانی مانده قرارداد
-      if (typeof window.DB !== 'undefined' && window.DB.find && window.DB.update) {
-        const c = window.DB.find('contracts', x => x.id === data.contractId)
+      // به‌روزرسانی موجودی حساب بانکی پیش‌فرض استودیو
+      if (db && db.get && db.update) {
+        const banks = db.get('banks') || []
+        const defaultBank = banks.find(b => b.isDefault || b.default) || banks[0]
+        if (defaultBank) {
+          const currentBal = Number(defaultBank.balance || defaultBank.initialBalance || 0)
+          const newBal = currentBal + (Number(data.amount) || 0)
+          db.update('banks', defaultBank.id, { balance: newBal })
+          newTx.bankId = defaultBank.id
+          newTx.bankName = defaultBank.name || defaultBank.bank || 'بانک'
+        }
+      }
+
+      // به‌روزرسانی مانده قرارداد و وضعیت اقساط
+      if (db && db.find && db.update) {
+        const c = db.find('contracts', x => x.id === data.contractId)
         if (c) {
           const currentPaid = Number(c.paid || 0) + Number(data.amount)
-          window.DB.update('contracts', c.id, { paid: currentPaid })
+          const updates = { paid: currentPaid }
+
+          // اگر قسط خاصی مشخص شده باشد یا براساس مبلغ تطبیق داده شود
+          if (Array.isArray(c.installments) && c.installments.length > 0) {
+            let remainingPay = Number(data.amount) || 0
+            const updatedInsts = c.installments.map((inst, idx) => {
+              if (data.installmentIndex !== undefined && idx === Number(data.installmentIndex)) {
+                return { ...inst, status: 'paid', paidAt: nowJalali, refId }
+              }
+              if (inst.status !== 'paid' && remainingPay >= Number(inst.amount || 0) && Number(inst.amount || 0) > 0) {
+                remainingPay -= Number(inst.amount || 0)
+                return { ...inst, status: 'paid', paidAt: nowJalali, refId }
+              }
+              return inst
+            })
+            updates.installments = updatedInsts
+          }
+
+          db.update('contracts', c.id, updates)
         }
-        await window.DB.flush?.()
+        await db.flush?.()
       }
 
       // ارسال سیگنال همگام‌سازی بلادرنگ به سرور
@@ -147,6 +185,23 @@
       if (typeof window.CustomerPortal !== 'undefined' && window.CustomerPortal.renderDashboard) {
         window.CustomerPortal.renderDashboard()
       }
+      return { ok: true, refId, txId }
+    },
+
+    /**
+     * ایجاد لینک اختصاصی فاکتور جهت ارسال پیامکی یا واتساپ به مشتری
+     */
+    createInvoiceUrl(contractId, amount = null, installmentIndex = null) {
+      const base = (typeof window !== 'undefined' && window.location ? window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '') : '') + '/invoice.html'
+      const USP = typeof URLSearchParams !== 'undefined' ? URLSearchParams : (typeof globalThis !== 'undefined' ? globalThis.URLSearchParams : null)
+      if (USP) {
+        const params = new USP()
+        if (contractId) params.set('cid', contractId)
+        if (amount) params.set('amount', amount)
+        if (installmentIndex !== null && installmentIndex !== undefined) params.set('inst', installmentIndex)
+        return `${base}?${params.toString()}`
+      }
+      return `${base}?cid=${encodeURIComponent(contractId || '')}&amount=${encodeURIComponent(amount || '')}`
     }
   }
 

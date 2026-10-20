@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#10b981"/>
+  <title>CRMSTUDIO — نرم‌افزار جامع مدیریت و اتوماسیون استودیوهای فیلم و عکس</title>
+  <link href="https://fonts.googleapis.com/css2?family=Estedad:wght@600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="css/ui-kit.css"/>
+  <link rel="stylesheet" href="css/glass-theme.css"/>
+  <style>
+    :root {
+      --lnd-bg: #07080a;
+      --lnd-surface: rgba(18, 20, 26, 0.75);
+      --lnd-surface-card: rgba(26, 29, 38, 0.6);
+      --lnd-border: rgba(255, 255, 255, 0.08);
+      --lnd-accent: #10b981;
+      --lnd-accent-glow: rgba(16, 185, 129, 0.28);
+      --lnd-gold: #f59e0b;
+      --lnd-cyan: #06b6d4;
+      --lnd-purple: #8b5cf6;
+      --lnd-text: #f8fafc;
+      --lnd-text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--lnd-bg);
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.1) 0%, transparent 45%),
+        radial-gradient(circle at 90% 40%, rgba(6, 182, 212, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 50% 90%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
+      color: var(--lnd-text);
+      font-family: 'Vazirmatn', sans-serif;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* Navbar */
+    .lnd-nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      padding: 16px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(7, 8, 10, 0.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--lnd-border);
+    }
+    .lnd-logo-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: #fff;
+    }
+    .lnd-logo-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 1.2rem;
+      box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+    }
+    .lnd-logo-text {
+      font-family: 'Estedad', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+    }
+    .lnd-nav-links {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+    }
+    .lnd-nav-links a {
+      color: var(--lnd-text-muted);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .lnd-nav-links a:hover { color: #fff; }
+    .lnd-nav-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .lnd-btn-ghost {
+      padding: 9px 18px;
+      border-radius: 10px;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--lnd-border);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 700;
+      transition: all 0.2s;
+    }
+    .lnd-btn-ghost:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .lnd-btn-primary {
+      padding: 9px 20px;
+      border-radius: 10px;
+      color: #fff;
+      background: linear-gradient(135deg, #10b981, #059669);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 800;
+      box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+      transition: all 0.2s;
+    }
+    .lnd-btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.45);
+    }
+
+    /* Hero */
+    .lnd-hero {
+      padding: 150px 24px 80px;
+      max-width: 1100px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .lnd-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #10b981;
+      font-size: 0.82rem;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+    .lnd-hero h1 {
+      font-family: 'Estedad', sans-serif;
+      font-size: clamp(2rem, 5vw, 3.4rem);
+      font-weight: 900;
+      line-height: 1.25;
+      margin-bottom: 20px;
+      background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.75) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .lnd-hero p {
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: var(--lnd-text-muted);
+      max-width: 760px;
+      margin: 0 auto 36px;
+      line-height: 1.8;
+    }
+    .lnd-hero-btns {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+    .lnd-hero-btn-main {
+      padding: 16px 36px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      font-family: 'Estedad', sans-serif;
+      font-size: 1.05rem;
+      font-weight: 800;
+      text-decoration: none;
+      box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s;
+    }
+    .lnd-hero-btn-main:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 40px rgba(16, 185, 129, 0.55);
+    }
+    .lnd-hero-btn-sec {
+      padding: 16px 32px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--lnd-border);
+      color: #fff;
+      font-family: 'Estedad', sans-serif;
+      font-size: 1.05rem;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s;
+    }
+    .lnd-hero-btn-sec:hover {
+      background: rgba(255, 255, 255, 0.09);
+    }
+
+    /* Badges Bar */
+    .lnd-trust-bar {
+      display: flex;
+      justify-content: center;
+      gap: 36px;
+      flex-wrap: wrap;
+      padding: 24px;
+      background: var(--lnd-surface);
+      border: 1px solid var(--lnd-border);
+      border-radius: 20px;
+      max-width: 880px;
+      margin: 0 auto;
+    }
+    .lnd-trust-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.88rem;
+      color: #cbd5e1;
+      font-weight: 600;
+    }
+    .lnd-trust-item i {
+      color: #10b981;
+      font-size: 1.1rem;
+    }
+
+    /* Features Grid */
+    .lnd-features {
+      padding: 100px 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .lnd-sec-head {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+    .lnd-sec-head h2 {
+      font-family: 'Estedad', sans-serif;
+      font-size: clamp(1.6rem, 3.5vw, 2.3rem);
+      font-weight: 900;
+      margin-bottom: 14px;
+    }
+    .lnd-sec-head p {
+      color: var(--lnd-text-muted);
+      font-size: 1rem;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .lnd-grid-6 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 24px;
+    }
+    .lnd-feat-card {
+      background: var(--lnd-surface-card);
+      border: 1px solid var(--lnd-border);
+      border-radius: 22px;
+      padding: 30px;
+      backdrop-filter: blur(16px);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .lnd-feat-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(16, 185, 129, 0.4);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    }
+    .lnd-feat-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      margin-bottom: 20px;
+    }
+    .lnd-feat-card h3 {
+      font-family: 'Estedad', sans-serif;
+      font-size: 1.18rem;
+      font-weight: 800;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+    .lnd-feat-card p {
+      color: var(--lnd-text-muted);
+      font-size: 0.88rem;
+      line-height: 1.8;
+    }
+
+    /* Trial Registration Box */
+    .lnd-trial-section {
+      padding: 90px 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .lnd-trial-card {
+      background: linear-gradient(180deg, rgba(22, 25, 33, 0.9), rgba(15, 17, 23, 0.95));
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 28px;
+      padding: 44px;
+      box-shadow: 0 24px 70px rgba(0,0,0,0.6);
+      position: relative;
+    }
+    .lnd-trial-head {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .lnd-trial-head h2 {
+      font-family: 'Estedad', sans-serif;
+      font-size: 1.85rem;
+      font-weight: 900;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .lnd-trial-head p {
+      font-size: 0.92rem;
+      color: var(--lnd-text-muted);
+    }
+    .lnd-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 680px) {
+      .lnd-form-grid { grid-template-columns: 1fr; }
+      .lnd-trial-card { padding: 24px; }
+    }
+    .lnd-field label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      margin-bottom: 6px;
+    }
+    .lnd-input {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--lnd-border);
+      color: #fff;
+      font-family: 'Vazirmatn', sans-serif;
+      font-size: 0.95rem;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .lnd-input:focus {
+      border-color: #10b981;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+    }
+    .lnd-submit-btn {
+      width: 100%;
+      padding: 18px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      border: none;
+      color: #fff;
+      font-family: 'Estedad', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s;
+    }
+    .lnd-submit-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 35px rgba(16, 185, 129, 0.55);
+    }
+
+    /* Footer */
+    .lnd-footer {
+      border-top: 1px solid var(--lnd-border);
+      padding: 40px 24px;
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--lnd-text-muted);
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="lnd-nav">
+    <a href="landing.html" class="lnd-logo-wrap">
+      <div class="lnd-logo-icon"><i class="fas fa-camera-retro"></i></div>
+      <span class="lnd-logo-text">CRMSTUDIO</span>
+    </a>
+    <div class="lnd-nav-links">
+      <a href="#features">امکانات ویژه</a>
+      <a href="#conflict">آفیش و تجهیزات</a>
+      <a href="#payment">درگاه آنلاین</a>
+      <a href="#trial">تست رایگان</a>
+    </div>
+    <div class="lnd-nav-actions">
+      <a href="index.html" class="lnd-btn-ghost"><i class="fas fa-arrow-right-to-bracket"></i> ورود به پنل</a>
+      <a href="#trial" class="lnd-btn-primary">شروع ۱۴ روز رایگان</a>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="lnd-hero">
+    <div class="lnd-pill">
+      <i class="fas fa-sparkles"></i>
+      نسخه جدید ۶.۳.۰ ویژه استودیوهای عکاسی و فیلم‌برداری ایران
+    </div>
+    <h1>مدیریت هوشمند، دقیق و لوکس<br>استودیوی فیلم و عکس شما</h1>
+    <p>
+      از تنظیم قراردادهای دیجیتال با امضای امن عروس و داماد، تا تقسیم آفیش پرسنل، کنترل تداخل تجهیزات حساس (Sony FX3 / لنزها)، تسویه اقساط با درگاه بانکی شاپرک و پشتیبان‌گیری خودکار به بله و تلگرام.
+    </p>
+    <div class="lnd-hero-btns">
+      <a href="#trial" class="lnd-hero-btn-main">
+        <i class="fas fa-rocket"></i>
+        شروع دوره رایگان ۱۴ روزه استودیو
+      </a>
+      <a href="index.html" class="lnd-hero-btn-sec">
+        <i class="fas fa-display"></i>
+        مشاهده دموی زنده
+      </a>
+    </div>
+
+    <div class="lnd-trust-bar">
+      <div class="lnd-trust-item"><i class="fas fa-check-double"></i> ۱۴ روز تست رایگان بدون نیاز به کارت</div>
+      <div class="lnd-trust-item"><i class="fas fa-shield-halved"></i> چندمستاجره امن و ایزوله (Multi-Tenant)</div>
+      <div class="lnd-trust-item"><i class="fas fa-cloud-arrow-up"></i> پشتیبان‌گیری روزانه ابری به بات اختصاصی</div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="lnd-features" id="features">
+    <div class="lnd-sec-head">
+      <h2>هر آنچه برای ارتقای استودیو نیاز دارید</h2>
+      <p>سیستمی جامع طراحی شده براساس تجربه واقعی برترین استودیوهای عکاسی و فیلم‌برداری عروسی</p>
+    </div>
+
+    <div class="lnd-grid-6">
+      <div class="lnd-feat-card">
+        <div class="lnd-feat-icon" style="background:rgba(16,185,129,0.15);color:#10b981"><i class="fas fa-file-contract"></i></div>
+        <h3>قراردادهای دیجیتال رسمی</h3>
+        <p>صدور آنی قراردادها، محاسبه اتوماتیک آیتم‌ها، امضای دیجیتال عروس و داماد، استعلام پیامکی و تولید خروجی استاندارد PDF در سایز A4.</p>
+      </div>
+
+      <div class="lnd-feat-card" id="conflict">
+        <div class="lnd-feat-icon" style="background:rgba(239,68,68,0.15);color:#ef4444"><i class="fas fa-shield-virus"></i></div>
+        <h3>جلوگیری هوشمند از تداخل آفیش</h3>
+        <p>موتور هوش مصنوعی تداخل‌ها را قبل از وقوع کشف می‌کند؛ اگر فیلمبردار یا تجهیزاتی مانند Sony FX3 و رونین در همان تاریخ رزرو باشند، فورا هشدار می‌دهد.</p>
+      </div>
+
+      <div class="lnd-feat-card" id="payment">
+        <div class="lnd-feat-icon" style="background:rgba(245,158,11,0.15);color:#f59e0b"><i class="fas fa-credit-card"></i></div>
+        <h3>درگاه پرداخت شاپرک و اقساط</h3>
+        <p>امکان ارسال لینک پیامکی فاکتور آنلاین به مشتری، پرداخت با کلیه کارت‌های عضو شتاب، و تسویه خودکار حسابداری و افزایش موجودی بانک استودیو.</p>
+      </div>
+
+      <div class="lnd-feat-card">
+        <div class="lnd-feat-icon" style="background:rgba(6,182,212,0.15);color:#06b6d4"><i class="fas fa-hand-holding-dollar"></i></div>
+        <h3>حسابداری و کنترل بانک‌ها</h3>
+        <p>مدیریت کامل جریان درآمدها، هزینه‌های جاری، دستمزد پرسنل، سود خالص ماهانه و داشبورد تعاملی با قابلیت جابه‌جایی آزاد ابزارها (Drag & Drop).</p>
+      </div>
+
+      <div class="lnd-feat-card">
+        <div class="lnd-feat-icon" style="background:rgba(139,92,246,0.15);color:#8b5cf6"><i class="fas fa-images"></i></div>
+        <h3>پورتال اختصاصی مشتریان</h3>
+        <p>صفحه ورود و پیگیری وضعیت تدوین برای عروس و دامادها، مشاهده تاریخچه پرداختی‌ها و دسترسی آسان به فایل‌ها و گالری.</p>
+      </div>
+
+      <div class="lnd-feat-card">
+        <div class="lnd-feat-icon" style="background:rgba(236,72,153,0.15);color:#ec4899"><i class="fas fa-cloud-arrow-up"></i></div>
+        <h3>پشتیبان‌گیری ابری به بله و تلگرام</h3>
+        <p>خیالتان از امنیت اطلاعات ۱۰۰٪ راحت باشد؛ دیتابیس استودیو روزانه به صورت رمزنگاری‌شده فشرده شده و مستقیماً به ربات شخصی شما ارسال می‌گردد.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14-Day Trial Form Section -->
+  <section class="lnd-trial-section" id="trial">
+    <div class="lnd-trial-card">
+      <div class="lnd-trial-head">
+        <h2>شروع دوره آزمایشی ۱۴ روزه رایگان</h2>
+        <p>در کمتر از ۱ دقیقه استودیوی خود را بسازید و تمام امکانات حرفه‌ای را بدون هیچ تعهدی تست کنید.</p>
+      </div>
+
+      <form id="trial-form" onsubmit="handleTrialSubmit(event)">
+        <div class="lnd-form-grid">
+          <div class="lnd-field">
+            <label>نام استودیو عکاسی و فیلم</label>
+            <input type="text" class="lnd-input" id="tr-studio" placeholder="مثال: استودیو آریا" required>
+          </div>
+          <div class="lnd-field">
+            <label>نام و نام خانوادگی مدیر</label>
+            <input type="text" class="lnd-input" id="tr-name" placeholder="مثال: ساسان رستمی" required>
+          </div>
+          <div class="lnd-field">
+            <label>شماره موبایل (جهت ورود به پنل)</label>
+            <input type="tel" dir="ltr" class="lnd-input" id="tr-phone" placeholder="0912..." required>
+          </div>
+          <div class="lnd-field">
+            <label>استان و شهر</label>
+            <input type="text" class="lnd-input" id="tr-city" placeholder="مثال: تهران / سنندج / اصفهان" required>
+          </div>
+          <div class="lnd-field" style="grid-column: 1 / -1;">
+            <label>رمز عبور دلخواه برای مدیریت</label>
+            <input type="password" dir="ltr" class="lnd-input" id="tr-password" placeholder="حداقل ۶ کاراکتر" required minlength="6">
+          </div>
+        </div>
+
+        <button type="submit" class="lnd-submit-btn" id="tr-submit-btn">
+          <i class="fas fa-wand-magic-sparkles"></i>
+          ساخت استودیو و ورود به پنل آزمایشی
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="lnd-footer">
+    <p>© ۱۴۰۵ تمامی حقوق برای پلتفرم نرم‌افزاری CRMSTUDIO محفوظ است · توسعه‌یافته برای برترین استودیوهای ایران</p>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/idb-store.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/secure-db.js"></script>
+  <script>
+    async function handleTrialSubmit(e) {
+      e.preventDefault();
+      const btn = document.getElementById('tr-submit-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال راه‌اندازی استودیو و بارگذاری دیتای اولیه...';
+
+      const studioName = document.getElementById('tr-studio').value.trim();
+      const managerName = document.getElementById('tr-name').value.trim();
+      const phone = document.getElementById('tr-phone').value.trim();
+      const city = document.getElementById('tr-city').value.trim();
+      const password = document.getElementById('tr-password').value;
+
+      try {
+        await DB.init();
+
+        // محاسبه تاریخ انقضای ۱۴ روز بعد
+        const now = new Date();
+        const trialExpiry = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
+
+        // ایجاد تنظیمات استودیو جدید
+        const studioInfo = {
+          name: studioName,
+          manager: managerName,
+          phone,
+          city,
+          plan: 'trial_14_days',
+          trialActive: true,
+          trialExpiresAt: trialExpiry,
+          createdAt: new Date().toISOString()
+        };
+        await DB.set('studioInfo', studioInfo);
+
+        // ثبت کاربر مدیر در دیتابیس
+        const users = DB.get('users') || [];
+        const existingIdx = users.findIndex(u => u.phone === phone || u.username === phone);
+        const newUser = {
+          id: 'usr_' + Date.now(),
+          name: managerName,
+          phone,
+          username: phone,
+          password: password,
+          role: 'studio_manager',
+          roles: ['studio_manager', 'admin'],
+          studioName,
+          createdAt: new Date().toISOString()
+        };
+
+        if (existingIdx >= 0) {
+          users[existingIdx] = { ...users[existingIdx], ...newUser };
+        } else {
+          users.push(newUser);
+        }
+        await DB.set('users', users);
+
+        // بارگذاری دیتای نمونه اولیه (بانک، تجهیز، قرارداد) جهت حس خوب کاربری
+        if (!DB.get('banks') || DB.get('banks').length === 0) {
+          await DB.set('banks', [
+            { id: 'bnk_1', name: 'بانک ملت (اصلی)', initialBalance: 25000000, balance: 25000000, isDefault: true }
+          ]);
+        }
+        if (!DB.get('equipment') || DB.get('equipment').length === 0) {
+          await DB.set('equipment', [
+            { id: 'eq_1', name: 'Sony FX3 Cinema Line', brand: 'Sony', category: 'camera', status: 'available' },
+            { id: 'eq_2', name: 'DJI RS3 Pro Gimbal', brand: 'DJI', category: 'grip', status: 'available' }
+          ]);
+        }
+
+        // ذخیره سشن و هدایت به پنل
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('sm_logged_user', JSON.stringify(newUser));
+          localStorage.setItem('sm_current_studio', JSON.stringify(studioInfo));
+        }
+
+        // اطلاع‌رسانی به سرور اگر آنلاین باشد
+        fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studioName,
+            managerName,
+            phone,
+            password,
+            city,
+            isTrial: true
+          })
+        }).catch(() => {});
+
+        setTimeout(() => {
+          window.location.href = 'studio-m/index.html';
+        }, 800);
+
+      } catch (err) {
+        alert('خطا در راه‌اندازی استودیو: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> ساخت استودیو و ورود به پنل آزمایشی';
+      }
+    }
+  </script>
+</body>
+</html>

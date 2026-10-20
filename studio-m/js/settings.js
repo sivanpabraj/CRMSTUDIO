@@ -582,6 +582,17 @@ const SMSettings = {
               <button type="button" class="sm-btn sm-btn-ghost" onclick="SMSettings.backupToEmail()"><i class="fab fa-google"></i> ارسال به جیمیل</button>
             </div>
           </div>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--sm-border)">
+            <label class="sm-label"><i class="fas fa-robot"></i> پشتیبان‌گیری ابری به ربات بله / تلگرام</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+              <input type="text" class="sm-input" id="set-backup-bale-token" dir="ltr" value="${SM.esc(info.baleBotToken || '')}" placeholder="توکن ربات بله یا تلگرام"/>
+              <input type="text" class="sm-input" id="set-backup-bale-chat" dir="ltr" value="${SM.esc(info.baleChatId || '')}" placeholder="Chat ID / شناسه عددی چت"/>
+            </div>
+            <div style="margin-top:8px;display:flex;gap:8px">
+              <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="SMSettings.backupToBot('bale')"><i class="fas fa-paper-plane"></i> ارسال فوری فایل به بله</button>
+              <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="SMSettings.backupToBot('telegram')"><i class="fab fa-telegram"></i> ارسال به تلگرام</button>
+            </div>
+          </div>
           <div class="sm-backup-status" style="margin-top:14px">
             <span>زمان‌بندی: ${SMUI.badge(sched, info.autoBackup ? 'success' : 'muted')}</span>
             <span>آخرین پشتیبان: <strong>${SM.esc(lastDisplay)}</strong>${info.backupLastLabel ? ` (${SM.esc(info.backupLastLabel)})` : ''}</span>
@@ -1303,11 +1314,27 @@ const SMSettings = {
       backupDaily: !!document.getElementById('set-backup-daily')?.checked,
       backupAutoDownload: !!document.getElementById('set-backup-download')?.checked,
       backupPathNote: document.getElementById('set-backup-path')?.value?.trim() || '',
-      backupEmail: document.getElementById('set-backup-email')?.value?.trim() || ''
+      backupEmail: document.getElementById('set-backup-email')?.value?.trim() || '',
+      baleBotToken: document.getElementById('set-backup-bale-token')?.value?.trim() || '',
+      baleChatId: document.getElementById('set-backup-bale-chat')?.value?.trim() || ''
     })
     if (typeof BackupService !== 'undefined') BackupService.restart()
     SM.toast('تنظیمات پشتیبان ذخیره شد', 'success')
     SM.navigate('settings')
+  },
+
+  async backupToBot(botType = 'bale') {
+    const token = document.getElementById('set-backup-bale-token')?.value?.trim() || SM.studio()?.baleBotToken || ''
+    const chatId = document.getElementById('set-backup-bale-chat')?.value?.trim() || SM.studio()?.baleChatId || ''
+    if (typeof BackupService !== 'undefined' && BackupService.sendToBot) {
+      SM.toast('در حال ارسال فایل پشتیبان به ربات...', 'info')
+      const res = await BackupService.sendToBot(botType, { token, chatId })
+      if (res.ok) {
+        SM.toast(res.message || 'فایل دیتابیس با موفقیت به ربات ارسال شد ✓', 'success')
+      } else {
+        SM.toast(res.error || 'خطا در ارسال فایل به ربات', 'error')
+      }
+    }
   },
 
   async backupToFolder() {

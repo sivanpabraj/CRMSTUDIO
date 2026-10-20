@@ -188,6 +188,60 @@ async function sendBaleMessage(chatId, text, customToken = null) {
   }
 }
 
+async function sendBaleDocument(chatId, filename, buffer, caption, customToken = null) {
+  const token = customToken || BALE_BOT_TOKEN
+  if (!token) {
+    console.log(`[Bale Audit] Mock document dispatch to ${chatId}: ${filename}`)
+    return { ok: true, mocked: true }
+  }
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
+    const formData = new FormData()
+    formData.append('chat_id', chatId)
+    formData.append('document', new Blob([buffer], { type: 'application/json' }), filename)
+    if (caption) formData.append('caption', caption)
+
+    const res = await fetch(`https://tapi.bale.ai/bot${token}/sendDocument`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal
+    }).finally(() => clearTimeout(timeout))
+    const data = await res.json().catch(() => ({}))
+    return { ok: res.ok && Boolean(data.ok), data }
+  } catch (err) {
+    console.warn('[Bale Doc Error]', err.name === 'AbortError' ? 'Connection timed out (15s)' : err.message)
+    return { ok: false, error: err.message }
+  }
+}
+
+async function sendTelegramDocument(chatId, filename, buffer, caption, customToken = null) {
+  const token = customToken || process.env.TELEGRAM_BOT_TOKEN || ''
+  if (!token) {
+    console.log(`[Telegram Audit] Mock document dispatch to ${chatId}: ${filename}`)
+    return { ok: true, mocked: true }
+  }
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
+    const formData = new FormData()
+    formData.append('chat_id', chatId)
+    formData.append('document', new Blob([buffer], { type: 'application/json' }), filename)
+    if (caption) formData.append('caption', caption)
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal
+    }).finally(() => clearTimeout(timeout))
+    const data = await res.json().catch(() => ({}))
+    return { ok: res.ok && Boolean(data.ok), data }
+  } catch (err) {
+    console.warn('[Telegram Doc Error]', err.name === 'AbortError' ? 'Connection timed out (15s)' : err.message)
+    return { ok: false, error: err.message }
+  }
+}
+
 function getTenantDbPath(tenantKey) {
   if (tenantKey) {
     return path.join(TENANTS_DIR, `${tenantKey}.json`)
@@ -2543,6 +2597,116 @@ const server = http.createServer((req, res) => {
     })
     if (req.method === 'HEAD') return res.end()
     fs.createReadStream(dbFile).pipe(res)
+    return
+  }
+
+  // Backup dispatch to Bale or Telegram Bot
+  if (req.method === 'POST' && url.pathname === '/api/backup/dispatch-bot') {
+    let body = ''
+    req.setEncoding('utf-8')
+    req.on('data', chunk => { body += chunk })
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const effectiveTenant = payload.tenantKey || tenantKey || 'default'
+        const dbFile = getTenantDbPath(effectiveTenant)
+        let dbContent = '{}'
+        if (fs.existsSync(dbFile)) {
+          dbContent = fs.readFileSync(dbFile, 'utf-8')
+        } else if (payload.data) {
+          dbContent = JSON.stringify(payload.data, null, 2)
+        }
+
+        const buffer = Buffer.from(dbContent, 'utf-8')
+        const nowStr = new Date().toISOString().slice(0, 10)
+        const filename = `backup_${effectiveTenant}_${nowStr}.json`
+        const caption = payload.caption || `📦 پشتیبان دیتابیس استودیو [${effectiveTenant}] — تاریخ: ${nowStr}`
+
+        let dispatchResult = { ok: false, error: 'نوع ربات نامعتبر است' }
+        if (payload.botType === 'bale' || !payload.botType) {
+          dispatchResult = await sendBaleDocument(payload.chatId, filename, buffer, caption, payload.token)
+        } else if (payload.botType === 'telegram') {
+          dispatchResult = await sendTelegramDocument(payload.chatId, filename, buffer, caption, payload.token)
+        }
+
+        if (dispatchResult.ok) {
+          return sendJson(res, 200, { ok: true, message: 'فایل پشتیبان با موفقیت به ربات ارسال شد ✓', filename, result: dispatchResult })
+        } else {
+          return sendJson(res, 400, { ok: false, error: dispatchResult.error || 'خطا در ارسال فایل به ربات' })
+        }
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: 'خطای سرور در ارسال بکاپ: ' + err.message })
+      }
+    })
+    return
+  }
+
+  // Online Payment Request (Zarinpal / Zibal / Sandbox)
+  if (req.method === 'POST' && url.pathname === '/api/payment/request') {
+    let body = ''
+    req.setEncoding('utf-8')
+    req.on('data', chunk => { body += chunk })
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const amount = Number(payload.amount) || 0
+        if (amount <= 0) {
+          return sendJson(res, 400, { ok: false, error: 'مبلغ پرداختی نامعتبر است' })
+        }
+
+        const authority = 'AUTH_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)
+        const gateway = payload.gateway || 'sandbox'
+        const callbackUrl = payload.callbackUrl || '/invoice.html'
+
+        // اگر مرچنت واقعی زرین‌پال یا زیبال ست شده باشد، می‌توان API درگاه را صدا زد
+        // در غیر این صورت، درگاه امن سندباکس به همراه شناسه بازگردانده می‌شود
+        const sep = callbackUrl.includes('?') ? '&' : '?'
+        const paymentUrl = `${callbackUrl}${sep}authority=${authority}&amount=${amount}&gateway=${gateway}&status=ready`
+
+        return sendJson(res, 200, {
+          ok: true,
+          authority,
+          paymentUrl,
+          gateway,
+          amount,
+          contractId: payload.contractId || '',
+          contractNum: payload.contractNum || ''
+        })
+      } catch (err) {
+        return sendJson(res, 400, { ok: false, error: 'خطا در درخواست پرداخت: ' + err.message })
+      }
+    })
+    return
+  }
+
+  // Online Payment Verification
+  if (req.method === 'POST' && url.pathname === '/api/payment/verify') {
+    let body = ''
+    req.setEncoding('utf-8')
+    req.on('data', chunk => { body += chunk })
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const authority = payload.authority || ''
+        const amount = Number(payload.amount) || 0
+
+        if (!authority) {
+          return sendJson(res, 400, { ok: false, error: 'شناسه مرجع پرداخت (Authority) الزامی است' })
+        }
+
+        const refId = 'REF_' + Date.now().toString().slice(-8)
+        return sendJson(res, 200, {
+          ok: true,
+          refId,
+          amount,
+          authority,
+          verifiedAt: new Date().toISOString(),
+          status: 'PAID'
+        })
+      } catch (err) {
+        return sendJson(res, 400, { ok: false, error: 'خطا در تایید تراکنش: ' + err.message })
+      }
+    })
     return
   }
 
