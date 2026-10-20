@@ -23,7 +23,10 @@
         amount = 0,
         description = 'پرداخت قسط/بیعانه قرارداد استودیو',
         customerPhone = '',
-        customerName = ''
+        customerName = '',
+        gateway = 'zarinpal',
+        merchantId = '',
+        installmentIndex = null
       } = opts
 
       if (!amount || Number(amount) <= 0) {
@@ -90,7 +93,10 @@
           amount,
           customerName,
           customerPhone,
-          description
+          description,
+          gateway,
+          merchantId,
+          installmentIndex
         })
       }
     },
@@ -113,7 +119,7 @@
         date: nowJalali,
         purpose: `پرداخت آنلاین بانکی شاپرک (پیگیری: ${refId})`,
         paymentMethod: 'online_gateway',
-        gateway: 'zarinpal',
+        gateway: data.gateway || 'zarinpal',
         referenceId: refId,
         customerName: data.customerName || '',
         status: 'verified',
@@ -128,10 +134,13 @@
         db.insert('transactions', newTx)
       }
 
-      // به‌روزرسانی موجودی حساب بانکی پیش‌فرض استودیو
+      // به‌روزرسانی موجودی حساب بانکی متصل یا پیش‌فرض استودیو
       if (db && db.get && db.update) {
         const banks = db.get('banks') || []
-        const defaultBank = banks.find(b => b.isDefault || b.default) || banks[0]
+        const matchedBank = (data.gateway && data.gateway !== 'none')
+          ? banks.find(b => b.gateway === data.gateway)
+          : null
+        const defaultBank = matchedBank || banks.find(b => b.isDefault || b.default) || banks[0]
         if (defaultBank) {
           const currentBal = Number(defaultBank.balance || defaultBank.initialBalance || 0)
           const newBal = currentBal + (Number(data.amount) || 0)

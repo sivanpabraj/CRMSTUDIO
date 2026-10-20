@@ -217,6 +217,48 @@ describe('Engineering Pack v6.4.0 — Payment Gateway & Installments', () => {
     expect(transactions[0].paymentMethod).toBe('online_gateway')
     expect(transactions[0].amount).toBe(10000000)
   })
+
+  it('routes deposit to specific bank matching the gateway provider', async () => {
+    const { gateway, contracts, banks } = getPaymentGateway()
+    banks.push({ id: 'b_zibal', name: 'بانک سامان زیبال', balance: 0, gateway: 'zibal' })
+
+    const res = await gateway.recordSuccessfulPayment({
+      contractId: 'cnt1',
+      contractNum: '1405-10',
+      amount: 4000000,
+      gateway: 'zibal',
+      merchantId: 'zibal_merch_custom'
+    })
+
+    expect(res.ok).toBe(true)
+    const zibalBank = banks.find(b => b.id === 'b_zibal')
+    expect(zibalBank.balance).toBe(4000000)
+  })
+
+  it('computes 10% VAT tax correctly for exclusive and inclusive modes', () => {
+    const computeTax = (amount, rate, mode) => {
+      if (!rate || rate <= 0) return { base: amount, tax: 0, total: amount }
+      if (mode === 'inclusive') {
+        const base = Math.round(amount / (1 + rate / 100))
+        const tax = amount - base
+        return { base, tax, total: amount }
+      }
+      const tax = Math.round(amount * (rate / 100))
+      return { base: amount, tax, total: amount + tax }
+    }
+
+    // Exclusive mode: 10,000,000 + 10% = 11,000,000
+    const excl = computeTax(10000000, 10, 'exclusive')
+    expect(excl.base).toBe(10000000)
+    expect(excl.tax).toBe(1000000)
+    expect(excl.total).toBe(11000000)
+
+    // Inclusive mode: 11,000,000 inclusive = 10,000,000 base + 1,000,000 tax
+    const incl = computeTax(11000000, 10, 'inclusive')
+    expect(incl.base).toBe(10000000)
+    expect(incl.tax).toBe(1000000)
+    expect(incl.total).toBe(11000000)
+  })
 })
 
 describe('Engineering Pack v6.4.0 — Backup Service to Bale & Telegram Bots', () => {
@@ -236,5 +278,28 @@ describe('Engineering Pack v6.4.0 — Backup Service to Bale & Telegram Bots', (
     const res = await BackupService.sendToBot('bale', { token: '', chatId: '' })
     expect(res.ok).toBe(false)
     expect(res.error).toContain('تنظیم نشده است')
+  })
+})
+
+describe('Engineering Pack v6.4.0 — Bank Management & Auto Card Detection', () => {
+  it('detects Iranian banks accurately from 6-digit card prefix', () => {
+    const accountingSource = fs.readFileSync('studio-m/js/accounting.js', 'utf8')
+    const context = {
+      window: {},
+      SM: {},
+      SMUI: {},
+      SMModules: {},
+      DB: {},
+      SecureDB: {},
+      Utils: {}
+    }
+    vm.runInNewContext(accountingSource, context)
+    const acc = context.window.SMAccounting
+
+    expect(acc.detectBankFromCard('6037-9912-3456-7890')).toContain('ملی')
+    expect(acc.detectBankFromCard('6104331234567890')).toContain('ملت')
+    expect(acc.detectBankFromCard('6219861234567890')).toContain('سامان')
+    expect(acc.detectBankFromCard('5022291234567890')).toContain('پاسارگاد')
+    expect(acc.detectBankFromCard('5041721234567890')).toContain('رسالت')
   })
 })

@@ -13,6 +13,7 @@ const SMSettings = {
     { id: 'widgets', icon: 'fa-gauge-high', title: 'پیشخوان مدیریتی', keywords: 'داشبورد مالی عملیات نمودار سلامت مالی' },
     { id: 'site', icon: 'fa-globe', title: 'سایت و پورتال', keywords: 'وب سایت html embed لینک ورود' },
     { id: 'messengers', icon: 'fa-paper-plane', title: 'پیام‌رسان‌ها (بله و واتساپ)', keywords: 'بله bale واتساپ whatsapp otp ربات bot ایمیل' },
+    { id: 'gateway', icon: 'fa-credit-card', title: 'درگاه پرداخت و مالیات', keywords: 'درگاه پرداخت شاپرک زرین‌پال زیبال نکست‌پی پی پوز مالیات ارزش افزوده vat شبا کارت مرچنت مالیات فاکتور' },
     { id: 'sms', icon: 'fa-sms', title: 'درگاه پیامک', keywords: 'sms api کاوهنگار پیامک ملی پیامک' },
     { id: 'backup', icon: 'fa-cloud', title: 'پشتیبان و دیتا', keywords: 'backup بازیابی restore دانلود پوشه فایل' },
     { id: 'cloud', icon: 'fa-cloud-arrow-up', title: 'ابر Supabase', keywords: 'supabase sync cloud ابر همگام sync' },
@@ -91,6 +92,7 @@ const SMSettings = {
     if (this._tab === 'widgets') return this._widgetsTab()
     if (this._tab === 'site') return this._siteTab(info)
     if (this._tab === 'messengers') return this._messengersTab(info)
+    if (this._tab === 'gateway') return this._gatewayTab(info)
     if (this._tab === 'sms') return this._smsTab(info)
     if (this._tab === 'backup') return this._backupTab(info)
     if (this._tab === 'cloud') return this._cloudTab(info)
@@ -583,14 +585,27 @@ const SMSettings = {
             </div>
           </div>
           <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--sm-border)">
-            <label class="sm-label"><i class="fas fa-robot"></i> پشتیبان‌گیری ابری به ربات بله / تلگرام</label>
+            <label class="sm-label"><i class="fas fa-robot"></i> پشتیبان‌گیری ابری به کانال یا ربات بله / تلگرام</label>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
               <input type="text" class="sm-input" id="set-backup-bale-token" dir="ltr" value="${SM.esc(info.baleBotToken || '')}" placeholder="توکن ربات بله یا تلگرام"/>
-              <input type="text" class="sm-input" id="set-backup-bale-chat" dir="ltr" value="${SM.esc(info.baleChatId || '')}" placeholder="Chat ID / شناسه عددی چت"/>
+              <input type="text" class="sm-input" id="set-backup-bale-chat" dir="ltr" value="${SM.esc(info.baleChatId || '')}" placeholder="Chat ID / شناسه عددی چت یا کانال"/>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+              <input type="text" class="sm-input" id="set-backup-bale-channel" dir="ltr" value="${SM.esc(info.baleChannelLink || '')}" placeholder="لینک کانال بله: https://ble.ir/..."/>
+              <input type="text" class="sm-input" id="set-backup-tg-channel" dir="ltr" value="${SM.esc(info.telegramChannelLink || '')}" placeholder="لینک کانال تلگرام: https://t.me/..."/>
             </div>
             <div style="margin-top:8px;display:flex;gap:8px">
               <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="SMSettings.backupToBot('bale')"><i class="fas fa-paper-plane"></i> ارسال فوری فایل به بله</button>
               <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="SMSettings.backupToBot('telegram')"><i class="fab fa-telegram"></i> ارسال به تلگرام</button>
+            </div>
+
+            <!-- آموزش گام‌به‌گام اتصال به کانال پشتیبان -->
+            <div style="margin-top:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:12px;font-size:0.76rem;line-height:1.75;color:rgba(255,255,255,0.8)">
+              <div style="font-weight:800;color:var(--sm-success);margin-bottom:4px"><i class="fas fa-circle-info"></i> راهنمای اتصال پشتیبان به کانال خصوصی:</div>
+              ۱. در بله یا تلگرام یک <strong>کانال خصوصی (Private)</strong> اختصاصی به نام استودیوی خود بسازید.<br>
+              ۲. ربات خود را به عنوان <strong>مدیر (Admin)</strong> کانال با دسترسی ارسال فایل اضافه نمایید.<br>
+              ۳. شناسه عددی کانال (Chat ID که معمولاً با منفی شروع می‌شود، مانند <code>-100...</code>) را در کادر Chat ID قرار دهید.<br>
+              ۴. لینک کانال را جهت یادداشت در کادر بالا ذخیره کنید و دکمه تست ارسال را بزنید.
             </div>
           </div>
           <div class="sm-backup-status" style="margin-top:14px">
@@ -611,6 +626,107 @@ const SMSettings = {
           </div>
           <input type="file" id="sm-restore-input" accept=".json,application/json" hidden onchange="SMSettings.restore(this)"/>
           <div id="sm-backup-list" class="sm-backup-list"></div>
+        </div>
+      </div>
+    </div>`
+  },
+
+  _gatewayTab(info) {
+    const isTaxEnabled = info.taxEnabled !== false
+    const taxRate = info.taxRate !== undefined ? info.taxRate : 10
+    const taxMode = info.taxMode || 'exclusive'
+    const provider = info.gatewayProvider || 'zarinpal'
+    const merchantId = info.gatewayMerchantId || ''
+    const isGatewayEnabled = info.gatewayEnabled !== false
+    const ecoCode = info.taxEconomyCode || ''
+
+    return `<div class="sm-settings-grid">
+      <div class="sm-card">
+        <div class="sm-card-head">
+          <div class="sm-card-title"><i class="fas fa-credit-card"></i> اتصال درگاه پرداخت آنلاین شاپرک</div>
+          <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveGatewaySettings()"><i class="fas fa-save"></i> ذخیره تنظیمات</button>
+        </div>
+        <div class="sm-card-body">
+          <label class="sm-check-row sm-check-row--block">
+            <input type="checkbox" id="set-gateway-enabled" ${isGatewayEnabled ? 'checked' : ''}/>
+            <strong>پرداخت آنلاین برای مشتریان فعال باشد</strong>
+          </label>
+
+          <div style="margin-top:14px">
+            <label class="sm-label">ارائه‌دهنده درگاه پرداخت این استودیو</label>
+            <select class="sm-select" id="set-gateway-provider" onchange="SMSettings.onGatewayProviderChange(this.value)">
+              <option value="zarinpal" ${provider === 'zarinpal' ? 'selected' : ''}>زرین‌پال (ZarinPal REST v4)</option>
+              <option value="zibal" ${provider === 'zibal' ? 'selected' : ''}>زیبال (Zibal Payment Gateway)</option>
+              <option value="nextpay" ${provider === 'nextpay' ? 'selected' : ''}>نکست‌پی (NextPay)</option>
+              <option value="payir" ${provider === 'payir' ? 'selected' : ''}>Pay.ir (شبکه پرداخت پی)</option>
+              <option value="idpay" ${provider === 'idpay' ? 'selected' : ''}>آیدی‌پی (IDPay)</option>
+              <option value="sandbox" ${provider === 'sandbox' ? 'selected' : ''}>درگاه شبیه‌ساز امن (تستی بدون نیاز به مرچنت)</option>
+            </select>
+          </div>
+
+          <div style="margin-top:12px">
+            <label class="sm-label" id="lbl-merchant-id">مرچنت‌کد / کلید API اختصاصی استودیو (Merchant ID)</label>
+            <input type="text" class="sm-input" id="set-gateway-merchant" dir="ltr" value="${SM.esc(merchantId)}" placeholder="مثال: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+          </div>
+
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="SMSettings.testGatewayConnection()"><i class="fas fa-plug-circle-check"></i> تست اعتبارسنجی درگاه</button>
+            <a href="../invoice.html" target="_blank" class="sm-btn sm-btn-ghost sm-btn-sm"><i class="fas fa-arrow-up-right-from-square"></i> مشاهده نمونه صفحه فاکتور</a>
+          </div>
+
+          <!-- باکس آموزش راهنما -->
+          <div class="sm-guide-box" style="margin-top:16px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-radius:12px;padding:14px;">
+            <div style="font-weight:800;color:var(--sm-success);font-size:0.85rem;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+              <i class="fas fa-circle-question"></i> راهنمای دریافت و تنظیم درگاه پرداخت استودیو:
+            </div>
+            <ol style="font-size:0.78rem;color:rgba(255,255,255,0.75);line-height:1.8;padding-right:18px">
+              <li>در وب‌سایت درگاه انتخابی (مانند <strong>zarinpal.com</strong> یا <strong>zibal.ir</strong>) به نام استودیو یا شخص خود ثبت‌نام کنید.</li>
+              <li>در پنل درگاه، روی <strong>درگاه جدید</strong> کلیک کرده و شماره شبا و نام استودیو را وارد کنید.</li>
+              <li>کد مرچنت ۳۶ کاراکتری را کپی کرده و در کادر بالا قرار دهید.</li>
+              <li>آدرس بازگشت (Callback URL) در پنل درگاه به صورت خودکار به صفحه فاکتور دامنه شما متصل می‌شود.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="sm-card">
+        <div class="sm-card-head">
+          <div class="sm-card-title"><i class="fas fa-receipt"></i> محاسبه مالیات بر ارزش افزوده (VAT)</div>
+        </div>
+        <div class="sm-card-body">
+          <label class="sm-check-row sm-check-row--block">
+            <input type="checkbox" id="set-tax-enabled" ${isTaxEnabled ? 'checked' : ''}/>
+            <strong>محاسبه و نمایش مالیات بر ارزش افزوده روی فاکتورها</strong>
+          </label>
+
+          <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <label class="sm-label">درصد مالیات بر ارزش افزوده (%)</label>
+              <input type="number" class="sm-input" id="set-tax-rate" dir="ltr" min="0" max="100" value="${taxRate}"/>
+            </div>
+            <div>
+              <label class="sm-label">روش اعمال در فاکتور</label>
+              <select class="sm-select" id="set-tax-mode">
+                <option value="exclusive" ${taxMode === 'exclusive' ? 'selected' : ''}>اضافه بر مبلغ توافق‌شده (افزایش فاکتور)</option>
+                <option value="inclusive" ${taxMode === 'inclusive' ? 'selected' : ''}>مشمول در مبلغ قرارداد (بدون افزایش فاکتور)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-top:12px">
+            <label class="sm-label">شماره اقتصادی / کد یکتای مالیاتی مؤدیان (اختیاری)</label>
+            <input type="text" class="sm-input" id="set-tax-eco" dir="ltr" value="${SM.esc(ecoCode)}" placeholder="کد اقتصادی جهت درج در پیش‌فاکتور رسمی"/>
+          </div>
+
+          <!-- باکس راهنمای مالیاتی -->
+          <div class="sm-guide-box" style="margin-top:16px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:12px;padding:14px;">
+            <div style="font-weight:800;color:var(--sm-warning);font-size:0.85rem;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+              <i class="fas fa-scale-balanced"></i> راهنمای مالیات خدمات تصویربرداری و عکاسی:
+            </div>
+            <p style="font-size:0.78rem;color:rgba(255,255,255,0.75);line-height:1.8">
+              بر اساس قوانین مالیاتی، استودیوها می‌توانند نرخ ۱۰٪ مالیات بر ارزش افزوده را به صورت تفکیک‌شده در فاکتورهای رسمی درج نمایند. سیستم به صورت خودکار مانده بدهی و اقساط را با احتساب مالیات محاسبه می‌کند تا اظهارنامه فصلی بدون مغایرت صادر شود.
+            </p>
+          </div>
         </div>
       </div>
     </div>`
@@ -1316,11 +1432,76 @@ const SMSettings = {
       backupPathNote: document.getElementById('set-backup-path')?.value?.trim() || '',
       backupEmail: document.getElementById('set-backup-email')?.value?.trim() || '',
       baleBotToken: document.getElementById('set-backup-bale-token')?.value?.trim() || '',
-      baleChatId: document.getElementById('set-backup-bale-chat')?.value?.trim() || ''
+      baleChatId: document.getElementById('set-backup-bale-chat')?.value?.trim() || '',
+      baleChannelLink: document.getElementById('set-backup-bale-channel')?.value?.trim() || '',
+      telegramChannelLink: document.getElementById('set-backup-tg-channel')?.value?.trim() || ''
     })
     if (typeof BackupService !== 'undefined') BackupService.restart()
     SM.toast('تنظیمات پشتیبان ذخیره شد', 'success')
     SM.navigate('settings')
+  },
+
+  async saveGatewaySettings() {
+    await SecureDB.merge('studioInfo', {
+      gatewayEnabled: !!document.getElementById('set-gateway-enabled')?.checked,
+      gatewayProvider: document.getElementById('set-gateway-provider')?.value || 'zarinpal',
+      gatewayMerchantId: document.getElementById('set-gateway-merchant')?.value?.trim() || '',
+      taxEnabled: !!document.getElementById('set-tax-enabled')?.checked,
+      taxRate: Number(document.getElementById('set-tax-rate')?.value) || 0,
+      taxMode: document.getElementById('set-tax-mode')?.value || 'exclusive',
+      taxEconomyCode: document.getElementById('set-tax-eco')?.value?.trim() || ''
+    })
+    SM.toast('تنظیمات درگاه بانکی و مالیات ذخیره شد ✓', 'success')
+    SM.navigate('settings')
+  },
+
+  onGatewayProviderChange(val) {
+    const lbl = document.getElementById('lbl-merchant-id')
+    const inp = document.getElementById('set-gateway-merchant')
+    if (!lbl || !inp) return
+    if (val === 'zarinpal') {
+      lbl.innerText = 'کد مرچنت ۳۶ رقمی زرین‌پال (Merchant ID)'
+      inp.placeholder = 'مثال: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+    } else if (val === 'zibal') {
+      lbl.innerText = 'مرچنت کد زیبال (Zibal Merchant Key)'
+      inp.placeholder = 'مثال: zibal... یا کد مرچنت'
+    } else if (val === 'sandbox') {
+      lbl.innerText = 'شناسه شبیه‌ساز تستی (اختیاری)'
+      inp.placeholder = 'تستی — نیازی به کلید واقعی نیست'
+    } else {
+      lbl.innerText = `کلید اختصاصی API درگاه ${val}`
+      inp.placeholder = 'API Key'
+    }
+  },
+
+  async testGatewayConnection() {
+    const provider = document.getElementById('set-gateway-provider')?.value || 'zarinpal'
+    const merchant = document.getElementById('set-gateway-merchant')?.value?.trim() || ''
+    if (provider !== 'sandbox' && !merchant) {
+      return SM.toast('لطفاً کد مرچنت یا کلید API درگاه را وارد نمایید', 'error')
+    }
+    SM.toast(`در حال تست اتصال به سرور درگاه شاپرک (${provider})...`, 'info')
+    try {
+      const res = await fetch('/api/payment/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: 10000,
+          gateway: provider,
+          merchantId: merchant,
+          description: 'تست اعتبارسنجی درگاه استودیو',
+          callbackUrl: '/invoice.html'
+        })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.ok) {
+        SM.toast(`اتصال به درگاه شاپرک (${provider}) با موفقیت برقرار شد ✓`, 'success')
+      } else {
+        SM.toast(data.error || 'خطا در ارتباط با درگاه پرداخت', 'error')
+      }
+    } catch (err) {
+      SM.toast('خطا در تست درگاه: ' + err.message, 'error')
+    }
   },
 
   async backupToBot(botType = 'bale') {

@@ -17,6 +17,7 @@
       --inv-accent: #10b981;
       --inv-accent-glow: rgba(16, 185, 129, 0.25);
       --inv-gold: #f59e0b;
+      --inv-cyan: #06b6d4;
       --inv-text: #f3f4f6;
       --inv-text-muted: #9ca3af;
     }
@@ -37,7 +38,7 @@
     }
     .invoice-wrapper {
       width: 100%;
-      max-width: 580px;
+      max-width: 600px;
       background: var(--inv-surface);
       border: 1px solid var(--inv-border);
       border-radius: 24px;
@@ -220,12 +221,66 @@
       color: #f59e0b;
     }
 
+    /* Pay Tabs */
+    .pay-methods-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      background: rgba(0,0,0,0.3);
+      padding: 4px;
+      border-radius: 12px;
+    }
+    .pay-method-tab {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      background: none;
+      color: var(--inv-text-muted);
+      font-family: 'Vazirmatn', sans-serif;
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .pay-method-tab.active {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
     .payment-action-card {
       background: linear-gradient(180deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.02));
       border: 1px solid rgba(16, 185, 129, 0.25);
       border-radius: 18px;
       padding: 20px;
       text-align: center;
+    }
+    .tax-breakdown-box {
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 0.8rem;
+    }
+    .tax-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      color: var(--inv-text-muted);
+    }
+    .tax-row.final {
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 8px;
+      margin-top: 4px;
+      font-weight: 800;
+      color: #fff;
+      font-size: 0.9rem;
     }
     .pay-amount-label {
       font-size: 0.8rem;
@@ -269,6 +324,61 @@
       justify-content: center;
       gap: 6px;
     }
+
+    /* Card to card box */
+    .c2c-card-box {
+      background: linear-gradient(135deg, #18202f, #111622);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
+      padding: 22px;
+      text-align: right;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .c2c-bank-name {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .c2c-pan-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0,0,0,0.3);
+      padding: 10px 14px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+    }
+    .c2c-pan-code {
+      font-family: 'Estedad', monospace;
+      font-size: 1.25rem;
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: #10b981;
+    }
+    .c2c-copy-btn {
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #10b981;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .c2c-copy-btn:hover {
+      background: rgba(16, 185, 129, 0.35);
+    }
+  </style>
     .receipt-modal {
       display: none;
       padding: 28px;
@@ -329,6 +439,7 @@
       const contractId = params.get('cid') || '';
       let targetAmount = Number(params.get('amount') || 0);
       let selectedInstallmentIdx = params.get('inst') !== null ? Number(params.get('inst')) : null;
+      let payMethod = 'online';
 
       const studio = DB.get('studioInfo') || { name: 'استودیو ماندنی' };
       const contracts = DB.get('contracts') || [];
@@ -348,6 +459,14 @@
         ]
       };
 
+      const banks = DB.get('banks') || [];
+      const defaultC2CBank = banks.find(b => b.isDefaultCardToCard) || banks.find(b => b.card) || banks[0] || {
+        bank: 'بانک ملت',
+        card: '6104337890123456',
+        iban: 'IR820120000000000000000001',
+        holder: 'مدیریت استودیو'
+      };
+
       const total = Number(contract.total || 0);
       const paid = Number(contract.paid || 0);
       const remaining = Math.max(0, total - paid);
@@ -357,6 +476,26 @@
           targetAmount = Number(contract.installments[selectedInstallmentIdx].amount || 0);
         } else {
           targetAmount = remaining > 0 ? remaining : total;
+        }
+      }
+
+      const isTaxEnabled = studio.taxEnabled !== false;
+      const taxRate = studio.taxRate !== undefined ? Number(studio.taxRate) : 10;
+      const taxMode = studio.taxMode || 'exclusive';
+
+      let baseAmount = targetAmount;
+      let taxAmount = 0;
+      let finalPayable = targetAmount;
+
+      if (isTaxEnabled && taxRate > 0) {
+        if (taxMode === 'exclusive') {
+          baseAmount = targetAmount;
+          taxAmount = Math.round(baseAmount * (taxRate / 100));
+          finalPayable = baseAmount + taxAmount;
+        } else {
+          finalPayable = targetAmount;
+          baseAmount = Math.round(finalPayable / (1 + (taxRate / 100)));
+          taxAmount = finalPayable - baseAmount;
         }
       }
 
@@ -443,18 +582,83 @@
             ` : ''}
 
             ${!isFullyPaid ? `
-              <div class="payment-action-card">
-                <div class="pay-amount-label">مبلغ انتخابی جهت واریز آنلاین</div>
-                <div class="pay-amount-val">${targetAmount.toLocaleString('fa-IR')} <span style="font-size:0.9rem">تومان</span></div>
-                <button type="button" class="pay-btn" onclick="executePayment()">
-                  <i class="fas fa-shield-halved"></i>
-                  پرداخت امن با کلیه کارت‌های شتاب
+              <div class="pay-methods-tabs">
+                <button type="button" class="pay-method-tab ${payMethod === 'online' ? 'active' : ''}" onclick="setPayMethod('online')">
+                  <i class="fas fa-credit-card"></i> درگاه پرداخت آنلاین شاپرک
                 </button>
-                <div class="pay-guarantee">
-                  <i class="fas fa-lock"></i>
-                  رمزنگاری شده توسط درگاه رسمی شاپرک بانک مرکزی جمهوری اسلامی ایران
-                </div>
+                <button type="button" class="pay-method-tab ${payMethod === 'c2c' ? 'active' : ''}" onclick="setPayMethod('c2c')">
+                  <i class="fas fa-money-bill-transfer"></i> کارت به کارت / شبا
+                </button>
               </div>
+
+              ${payMethod === 'online' ? `
+                <div class="payment-action-card">
+                  ${isTaxEnabled && taxRate > 0 ? `
+                    <div class="tax-breakdown-box">
+                      <div class="tax-row">
+                        <span>مبلغ پایه خدمات:</span>
+                        <span>${baseAmount.toLocaleString('fa-IR')} تومان</span>
+                      </div>
+                      <div class="tax-row">
+                        <span>مالیات بر ارزش افزوده (${taxRate}٪):</span>
+                        <span style="color:#f59e0b">+ ${taxAmount.toLocaleString('fa-IR')} تومان</span>
+                      </div>
+                      <div class="tax-row final">
+                        <span>مبلغ نهایی قابل پرداخت:</span>
+                        <span style="color:#10b981">${finalPayable.toLocaleString('fa-IR')} تومان</span>
+                      </div>
+                    </div>
+                  ` : ''}
+
+                  <div class="pay-amount-label">مبلغ انتخابی جهت واریز آنلاین</div>
+                  <div class="pay-amount-val">${finalPayable.toLocaleString('fa-IR')} <span style="font-size:0.9rem">تومان</span></div>
+                  <button type="button" class="pay-btn" onclick="executePayment()">
+                    <i class="fas fa-shield-halved"></i>
+                    پرداخت امن با کلیه کارت‌های شتاب
+                  </button>
+                  <div class="pay-guarantee">
+                    <i class="fas fa-lock"></i>
+                    رمزنگاری شده توسط درگاه رسمی شاپرک استودیو (${studio.gatewayProvider === 'zibal' ? 'زیبال' : (studio.gatewayProvider === 'nextpay' ? 'نکست‌پی' : (studio.gatewayProvider === 'sandbox' ? 'سندباکس تستی' : 'زرین‌پال'))})
+                  </div>
+                </div>
+              ` : `
+                <div class="c2c-card-box">
+                  <div class="c2c-bank-name">
+                    <i class="fas fa-building-columns" style="color:#10b981"></i>
+                    حساب رسمی استودیو — ${Utils.esc(defaultC2CBank?.bank || defaultC2CBank?.name || 'بانک استودیو')}
+                  </div>
+                  
+                  <div style="font-size:0.8rem;color:var(--inv-text-muted);margin-bottom:6px">شماره کارت ۱۶ رقمی جهت واریز:</div>
+                  <div class="c2c-pan-row">
+                    <div class="c2c-pan-code" dir="ltr">${Utils.esc(defaultC2CBank?.card || '۶۰۳۷-۹۹۷۵-xxxx-xxxx')}</div>
+                    <button type="button" class="c2c-copy-btn" onclick="copyCard('${(defaultC2CBank?.card || '').replace(/\\s/g, '')}')">
+                      <i class="fas fa-copy"></i> کپی شماره کارت
+                    </button>
+                  </div>
+
+                  ${defaultC2CBank?.iban ? `
+                    <div style="font-size:0.8rem;color:var(--inv-text-muted);margin-bottom:6px">شماره شبا (IBAN):</div>
+                    <div class="c2c-pan-row" style="margin-bottom:12px">
+                      <div style="font-family:monospace;font-size:0.92rem;color:#cbd5e1" dir="ltr">${Utils.esc(defaultC2CBank.iban)}</div>
+                      <button type="button" class="c2c-copy-btn" onclick="copyCard('${defaultC2CBank.iban.replace(/\\s/g, '')}')">
+                        <i class="fas fa-copy"></i> کپی شبا
+                      </button>
+                    </div>
+                  ` : ''}
+
+                  <div style="font-size:0.82rem;color:#cbd5e1;margin-bottom:16px">
+                    به نام: <strong>${Utils.esc(defaultC2CBank?.holder || studio.manager || studio.name || 'مدیریت استودیو')}</strong>
+                  </div>
+
+                  <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-radius:12px;padding:14px;text-align:center">
+                    <div style="font-size:0.82rem;margin-bottom:10px">پس از انتقال وجه به مبلغ <strong>${finalPayable.toLocaleString('fa-IR')} تومان</strong>، شماره پیگیری را وارد فرمایید:</div>
+                    <div style="display:flex;gap:8px">
+                      <input type="text" id="c2c-ref-input" dir="ltr" class="sm-input" placeholder="کد رهگیری / شماره ارجاع واریز" style="padding:10px 14px;border-radius:10px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);color:#fff;width:100%"/>
+                      <button type="button" class="sm-btn sm-btn-primary" style="padding:10px 18px;border-radius:10px;white-space:nowrap" onclick="submitC2CTrace()">ثبت فیش</button>
+                    </div>
+                  </div>
+                </div>
+              `}
             ` : `
               <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:18px;padding:24px;text-align:center">
                 <i class="fas fa-circle-check" style="color:#10b981;font-size:2.5rem;margin-bottom:12px"></i>
@@ -466,6 +670,39 @@
         `;
       }
 
+      window.setPayMethod = function(m) {
+        payMethod = m;
+        renderInvoice();
+      };
+
+      window.copyCard = function(text) {
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+          alert('کپی شد: ' + text);
+        }).catch(() => {});
+      };
+
+      window.submitC2CTrace = async function() {
+        const inp = document.getElementById('c2c-ref-input');
+        const ref = inp ? inp.value.trim() : '';
+        if (!ref) {
+          alert('لطفاً شماره پیگیری یا ارجاع واریز را وارد نمایید.');
+          return;
+        }
+
+        await PaymentGateway.recordSuccessfulPayment({
+          contractId: contract.id,
+          contractNum: contract.contractNum,
+          amount: finalPayable,
+          customerName: contract.couple || contract.bride || 'مشتری',
+          installmentIndex: selectedInstallmentIdx,
+          description: `واریز کارت به کارت (رهگیری: ${ref}) فاکتور #${contract.contractNum || contract.id}`
+        });
+
+        alert('فیش واریزی با موفقیت ثبت شد و فاکتور شما تسویه گردید ✓');
+        location.reload();
+      };
+
       window.selectInstallment = function(idx, amt) {
         selectedInstallmentIdx = idx;
         targetAmount = amt;
@@ -476,9 +713,11 @@
         PaymentGateway.requestPayment({
           contractId: contract.id,
           contractNum: contract.contractNum,
-          amount: targetAmount,
+          amount: finalPayable,
           customerName: contract.couple || contract.bride || 'مشتری',
           installmentIndex: selectedInstallmentIdx,
+          gateway: studio.gatewayProvider || 'zarinpal',
+          merchantId: studio.gatewayMerchantId || '',
           description: `تسویه آنلاین فاکتور #${contract.contractNum || contract.id}`
         });
       };

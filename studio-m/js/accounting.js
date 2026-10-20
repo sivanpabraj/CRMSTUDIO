@@ -320,22 +320,62 @@ const SMAccounting = {
     return `<div class="sm-acc-bank-grid">${banks.map((b, i) => this._bankCard(b, i)).join('')}</div>`
   },
 
+  detectBankFromCard(card) {
+    const s = String(card || '').replace(/[\s-]/g, '').slice(0, 6)
+    const map = {
+      '603799': 'بانک ملی ایران',
+      '610433': 'بانک ملت',
+      '621986': 'بانک سامان / بلوبانک',
+      '502229': 'بانک پاسارگاد',
+      '627412': 'بانک اقتصاد نوین',
+      '627381': 'بانک سپه',
+      '504172': 'بانک قرض‌الحسنه رسالت',
+      '603770': 'بانک کشاورزی',
+      '628023': 'بانک مسکن',
+      '589463': 'بانک رفاه کارگران',
+      '622106': 'بانک پارسیان',
+      '502908': 'بانک توسعه تعاون',
+      '504706': 'بانک شهر',
+      '606373': 'بانک قرض‌الحسنه مهر ایران',
+      '639346': 'بانک سینا',
+      '627488': 'بانک کارآفرین',
+      '627760': 'پست بانک ایران',
+      '505416': 'بانک گردشگری',
+      '505785': 'بانک ایران‌زمین',
+      '639607': 'بانک سرمایه',
+      '636214': 'بانک آینده'
+    }
+    return map[s] || ''
+  },
+
   _bankCard(b, i) {
     const color = this.BANK_COLORS[i % this.BANK_COLORS.length]
+    const c2cBadge = b.isDefaultCardToCard ? `<span class="sm-badge sm-badge-success" style="font-size:0.68rem"><i class="fas fa-credit-card"></i> کارت‌به‌کارت رسمی</span>` : ''
+    const gwBadge = (b.gateway && b.gateway !== 'none') ? `<span class="sm-badge sm-badge-info" style="font-size:0.68rem"><i class="fas fa-bolt"></i> درگاه: ${b.gateway}</span>` : ''
+
     return `<div class="sm-acc-bank" style="--bank-color:${color}">
       <div class="sm-acc-bank-top">
         <div class="sm-acc-bank-icon"><i class="fas fa-building-columns"></i></div>
         <div class="sm-acc-bank-title">
           <strong>${SM.esc(b.name || b.bank || 'حساب بانکی')}</strong>
           <span>${SM.esc(b.bank || '')}${b.holder ? ` · ${SM.esc(b.holder)}` : ''}</span>
+          <div style="display:flex;gap:4px;margin-top:4px">${c2cBadge}${gwBadge}</div>
         </div>
         <button type="button" class="sm-btn sm-btn-sm sm-btn-ghost" onclick="SMAccounting.editBank('${b.id}')" title="ویرایش"><i class="fas fa-pen"></i></button>
       </div>
       <div class="sm-acc-bank-balance">${SM.fmt(b.balance || 0)} <small>تومان</small></div>
       <div class="sm-acc-bank-fields">
-        <div class="sm-acc-bank-field"><span>شماره کارت</span><code dir="ltr">${SM.esc(b.card ? this._maskCard(b.card) : '—')}</code></div>
+        <div class="sm-acc-bank-field">
+          <span>شماره کارت</span>
+          <code dir="ltr">${SM.esc(b.card ? this._maskCard(b.card) : '—')}</code>
+          ${b.card ? `<button type="button" class="sm-btn sm-btn-xs sm-btn-ghost" onclick="navigator.clipboard.writeText('${b.card.replace(/\\s/g, '')}');SM.toast('شماره کارت کپی شد ✓', 'info')"><i class="fas fa-copy"></i></button>` : ''}
+        </div>
         <div class="sm-acc-bank-field"><span>شماره حساب</span><code dir="ltr">${SM.esc(b.account || '—')}</code></div>
-        <div class="sm-acc-bank-field sm-acc-bank-field--full"><span>شماره شبا</span><code dir="ltr">${SM.esc(this._fmtSheba(b.iban))}</code></div>
+        <div class="sm-acc-bank-field sm-acc-bank-field--full">
+          <span>شماره شبا</span>
+          <code dir="ltr">${SM.esc(this._fmtSheba(b.iban))}</code>
+          ${b.iban ? `<button type="button" class="sm-btn sm-btn-xs sm-btn-ghost" onclick="navigator.clipboard.writeText('${b.iban.replace(/\\s/g, '')}');SM.toast('شماره شبا کپی شد ✓', 'info')"><i class="fas fa-copy"></i></button>` : ''}
+        </div>
       </div>
     </div>`
   },
@@ -530,29 +570,96 @@ const SMAccounting = {
   editBank(id) { this._bankForm(DB.find('banks', b => b.id === id)) },
 
   _bankForm(item) {
-    SMUI.modal(item ? 'ویرایش حساب بانکی' : 'افزودن حساب بانکی', `
-      ${SMUI.formField('عنوان حساب', 'ab-title', { value: item?.name || '', placeholder: 'مثلاً: حساب اصلی استودیو' })}
-      ${SMUI.formField('نام بانک', 'ab-bank', { value: item?.bank || '', placeholder: 'ملت، ملی، پاسارگاد...' })}
-      ${SMUI.formField('نام صاحب حساب', 'ab-holder', { value: item?.holder || '' })}
-      ${SMUI.formField('شماره کارت', 'ab-card', { value: item?.card || '', dir: 'ltr', placeholder: '6037…' })}
+    const isC2C = !!(item?.isDefaultCardToCard)
+    const gw = item?.gateway || 'none'
+    const merch = item?.merchantId || ''
+
+    SMUI.modal(item ? 'ویرایش حساب بانکی استودیو' : 'افزودن حساب بانکی جدید', `
+      ${SMUI.formField('عنوان حساب', 'ab-title', { value: item?.name || '', placeholder: 'مثلاً: حساب جاری ملت استودیو' })}
+      ${SMUI.formField('نام بانک', 'ab-bank', { value: item?.bank || '', placeholder: 'ملت، ملی، پاسارگاد، سامان...' })}
+      ${SMUI.formField('نام صاحب حساب', 'ab-holder', { value: item?.holder || '', placeholder: 'نام و نام‌خانوادگی صاحب حساب' })}
+      ${SMUI.formField('شماره کارت ۱۶ رقمی', 'ab-card', { value: item?.card || '', dir: 'ltr', placeholder: '6037-xxxx-xxxx-xxxx' })}
+      <div id="ab-card-detected" style="font-size:0.75rem;color:var(--sm-success);margin:-8px 0 10px;padding:0 4px"></div>
       ${SMUI.formField('شماره حساب', 'ab-account', { value: item?.account || '', dir: 'ltr' })}
-      ${SMUI.formField('شماره شبا', 'ab-iban', { value: item?.iban || '', dir: 'ltr', placeholder: 'IR…' })}
-      ${SMUI.formField('موجودی فعلی (تومان)', 'ab-balance', { type: 'number', value: item?.balance ?? '', dir: 'ltr' })}`, {
+      ${SMUI.formField('شماره شبا (IBAN)', 'ab-iban', { value: item?.iban || '', dir: 'ltr', placeholder: 'IRxxxxxxxxxxxxxxxxxxxxxxxx' })}
+      ${SMUI.formField('موجودی فعلی (تومان)', 'ab-balance', { type: 'number', value: item?.balance ?? '', dir: 'ltr' })}
+
+      <div style="background:rgba(255,255,255,0.03);border:1px solid var(--sm-border);border-radius:12px;padding:12px;margin-top:12px">
+        <label class="sm-check-row" style="margin-bottom:10px">
+          <input type="checkbox" id="ab-c2c" ${isC2C ? 'checked' : ''}/>
+          <strong>کارت پیش‌فرض واریز مشتریان (کارت به کارت در فاکتور)</strong>
+        </label>
+        
+        <div style="margin-top:10px">
+          <label class="sm-label">اتصال به درگاه پرداخت آنلاین شاپرک</label>
+          <select class="sm-select" id="ab-gateway">
+            <option value="none" ${gw === 'none' ? 'selected' : ''}>— بدون درگاه اختصاصی (پیش‌فرض استودیو) —</option>
+            <option value="zarinpal" ${gw === 'zarinpal' ? 'selected' : ''}>زرین‌پال (ZarinPal)</option>
+            <option value="zibal" ${gw === 'zibal' ? 'selected' : ''}>زیبال (Zibal)</option>
+            <option value="nextpay" ${gw === 'nextpay' ? 'selected' : ''}>نکست‌پی (NextPay)</option>
+            <option value="payir" ${gw === 'payir' ? 'selected' : ''}>Pay.ir</option>
+            <option value="idpay" ${gw === 'idpay' ? 'selected' : ''}>آیدی‌پی (IDPay)</option>
+            <option value="sandbox" ${gw === 'sandbox' ? 'selected' : ''}>درگاه تستی سندباکس</option>
+          </select>
+        </div>
+        <div style="margin-top:8px">
+          <label class="sm-label">کد مرچنت اختصاصی این حساب (اختیاری)</label>
+          <input type="text" class="sm-input" id="ab-merchant" dir="ltr" value="${SM.esc(merch)}" placeholder="در صورت خالی بودن، مرچنت کلی استودیو استفاده می‌شود"/>
+        </div>
+      </div>`, {
       onSave: async () => {
-        const d = SMUI.readForm(['ab-title', 'ab-bank', 'ab-holder', 'ab-card', 'ab-account', 'ab-iban', 'ab-balance'])
+        const d = SMUI.readForm(['ab-title', 'ab-bank', 'ab-holder', 'ab-card', 'ab-account', 'ab-iban', 'ab-balance', 'ab-gateway', 'ab-merchant'])
+        const isDefaultC2C = !!document.getElementById('ab-c2c')?.checked
+
         if (!d['ab-title'] && !d['ab-bank']) return SM.toast('نام بانک یا عنوان حساب الزامی است', 'error')
-        const data = {
-          name: d['ab-title'], bank: d['ab-bank'], holder: d['ab-holder'],
-          card: d['ab-card'], account: d['ab-account'], iban: d['ab-iban'],
-          balance: +d['ab-balance'] || 0
+
+        if (isDefaultC2C) {
+          const allBanks = DB.get('banks') || []
+          for (const b of allBanks) {
+            if (b.isDefaultCardToCard && (!item || b.id !== item.id)) {
+              await SecureDB.update('banks', b.id, { isDefaultCardToCard: false })
+            }
+          }
         }
+
+        const data = {
+          name: d['ab-title'],
+          bank: d['ab-bank'],
+          holder: d['ab-holder'],
+          card: (d['ab-card'] || '').replace(/\s/g, ''),
+          account: d['ab-account'],
+          iban: (d['ab-iban'] || '').replace(/\s/g, '').toUpperCase(),
+          balance: +d['ab-balance'] || 0,
+          isDefaultCardToCard: isDefaultC2C,
+          gateway: d['ab-gateway'] || 'none',
+          merchantId: d['ab-merchant'] || ''
+        }
+
         if (item) await SecureDB.update('banks', item.id, data)
         else await SecureDB.insert('banks', data)
+        SM.toast('حساب بانکی استودیو ذخیره شد ✓', 'success')
         SMH.refresh('accounting')
       },
       onDelete: item ? () => SMH.remove('banks', item.id, 'accounting') : null,
-      width: 480
+      width: 500
     })
+
+    setTimeout(() => {
+      const cardInp = document.getElementById('ab-card')
+      const bankInp = document.getElementById('ab-bank')
+      const detEl = document.getElementById('ab-card-detected')
+      if (cardInp) {
+        cardInp.addEventListener('input', () => {
+          const detected = SMAccounting.detectBankFromCard(cardInp.value)
+          if (detected) {
+            if (detEl) detEl.innerHTML = `<i class="fas fa-check-circle"></i> بانک شناسایی‌شده: <strong>${detected}</strong>`
+            if (bankInp && !bankInp.value) bankInp.value = detected
+          } else if (detEl) {
+            detEl.innerHTML = ''
+          }
+        })
+      }
+    }, 50)
   },
 
   /* ── Transactions ── */
