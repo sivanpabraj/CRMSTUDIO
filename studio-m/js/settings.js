@@ -539,6 +539,50 @@ const SMSettings = {
           ارسال خودکار یادآوری صبحگاهی تقویم به شماره مدیر
         </label>
 
+        <!-- اتوماسیون هوشمند پیامکی چرخه‌عمر -->
+        <div style="margin-top:24px;padding:18px;background:rgba(212,175,55,0.04);border:1px solid rgba(212,175,55,0.3);border-radius:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+            <div style="font-weight:800;font-size:.95rem;color:#f59e0b;display:flex;align-items:center;gap:8px">
+              <i class="fas fa-robot"></i> اتوماسیون هوشمند پیامکی چرخه‌عمر (Lifecycle SMS)
+            </div>
+            <span style="font-size:.78rem;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);padding:3px 10px;border-radius:999px;font-weight:700">
+              <i class="fas fa-bolt"></i> بدون دخالت دستی
+            </span>
+          </div>
+          <p style="font-size:.82rem;color:var(--sm-text-muted);margin-bottom:14px;line-height:1.6">
+            سیستم به طور خودکار سررسید اقساط، تاریخ مراسم و آفیش عوامل را رصد کرده و بدون نیاز به پیگیری دستی، پیامک‌های هوشمند ارسال می‌کند:
+          </p>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px">
+            <label class="sm-check-row" style="background:var(--sm-bg,rgba(0,0,0,0.2));padding:10px 14px;border-radius:10px;border:1px solid var(--sm-border)">
+              <input type="checkbox" id="set-sms-auto-installment" checked/>
+              <span><strong>💳 یادآوری اقساط و تسویه:</strong> ۳ روز قبل از مراسم همراه با لینک پرداخت شاپرک</span>
+            </label>
+            <label class="sm-check-row" style="background:var(--sm-bg,rgba(0,0,0,0.2));padding:10px 14px;border-radius:10px;border:1px solid var(--sm-border)">
+              <input type="checkbox" id="set-sms-auto-shoot-couple" checked/>
+              <span><strong>💒 یادآوری مراسم به زوجین:</strong> ۲۴ ساعت قبل با ساعت حضور و لوکیشن باغ/تالار</span>
+            </label>
+            <label class="sm-check-row" style="background:var(--sm-bg,rgba(0,0,0,0.2));padding:10px 14px;border-radius:10px;border:1px solid var(--sm-border)">
+              <input type="checkbox" id="set-sms-auto-shoot-crew" checked/>
+              <span><strong>🎬 یادآوری آفیش به عوامل:</strong> اطلاع‌رسانی به عکاس، فیلمبردار و هلی‌شات</span>
+            </label>
+            <label class="sm-check-row" style="background:var(--sm-bg,rgba(0,0,0,0.2));padding:10px 14px;border-radius:10px;border:1px solid var(--sm-border)">
+              <input type="checkbox" id="set-sms-auto-anniv" checked/>
+              <span><strong>🌹 تبریک سالگرد ازدواج:</strong> ارسال پیامک تبریک پس از ۱ سال با کد تخفیف ۲۰٪</span>
+            </label>
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button type="button" id="btn-run-lifecycle-sms" class="sm-btn sm-btn-primary sm-btn-sm" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:800" onclick="SMSettings.runLifecycleSmsScan()">
+              <i class="fas fa-play"></i> اجرای فوری اسکن و ارسال پیامک‌های امروز
+            </button>
+            <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="SMSettings.showLifecycleLogsModal()">
+              <i class="fas fa-history"></i> مشاهده تاریخچه ارسال‌ها
+            </button>
+          </div>
+          <div id="lifecycle-sms-result" style="margin-top:12px;font-size:.85rem;display:none;padding:12px 16px;border-radius:10px"></div>
+        </div>
+
         <div style="margin-top:24px;padding:16px;background:var(--sm-bg-hover, rgba(255,255,255,0.03));border:1px solid var(--sm-border);border-radius:12px">
           <div style="font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:8px">
             <i class="fas fa-paper-plane" style="color:var(--sm-primary)"></i> تست زنده ارسال پیامک
@@ -1421,6 +1465,113 @@ const SMSettings = {
         btn.innerHTML = '<i class="fas fa-paper-plane"></i> ارسال پیامک آزمایشی'
       }
     }
+  },
+
+  /* ── اجرای اسکن و ارسال پیامک‌های هوشمند چرخه‌عمر ── */
+  async runLifecycleSmsScan() {
+    const btn = document.getElementById('btn-run-lifecycle-sms')
+    const resEl = document.getElementById('lifecycle-sms-result')
+
+    if (btn) {
+      btn.disabled = true
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال بررسی قراردادها و ارسال...'
+    }
+    if (resEl) {
+      resEl.style.display = 'block'
+      resEl.style.background = 'rgba(255,255,255,0.05)'
+      resEl.style.border = '1px solid var(--sm-border)'
+      resEl.style.color = 'var(--sm-text)'
+      resEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال اسکن پرونده‌ها، اقساط، آفیش فردا و سالگردهای امروز...'
+    }
+
+    try {
+      if (typeof SmartLifecycleSMS === 'undefined') {
+        throw new Error('ماژول اتوماسیون پیامک در دسترس نیست')
+      }
+
+      // ذخیره وضعیت چک‌باکس‌ها
+      SmartLifecycleSMS.saveConfig({
+        enabled: true,
+        enableInstallmentReminder: document.getElementById('set-sms-auto-installment')?.checked !== false,
+        enableShootCoupleReminder: document.getElementById('set-sms-auto-shoot-couple')?.checked !== false,
+        enableShootCrewReminder: document.getElementById('set-sms-auto-shoot-crew')?.checked !== false,
+        enableAnniversaryCongrats: document.getElementById('set-sms-auto-anniv')?.checked !== false
+      })
+
+      const res = await SmartLifecycleSMS.scanAndExecute({ force: true })
+      if (res && res.ok) {
+        const msg = `اسکن پایان یافت: ${res.totalSent} پیامک ارسال شد (${res.installmentsSent} قسط، ${res.shootCoupleSent} زوجین، ${res.shootCrewSent} عوامل، ${res.anniversarySent} سالگرد) · ${res.skipped} مورد از قبل ارسال شده بود.`
+        SM.toast(msg, 'success')
+        if (resEl) {
+          resEl.style.display = 'block'
+          resEl.style.background = 'rgba(16, 185, 129, 0.15)'
+          resEl.style.border = '1px solid #10b981'
+          resEl.style.color = '#10b981'
+          resEl.innerHTML = `<i class="fas fa-check-circle"></i> <strong>عملیات با موفقیت انجام شد:</strong> ${SM.esc(msg)}`
+        }
+      } else {
+        throw new Error(res?.error || 'خطا در اجرای اتوماسیون')
+      }
+    } catch (err) {
+      const msg = String(err?.message || err)
+      SM.toast(msg, 'error')
+      if (resEl) {
+        resEl.style.display = 'block'
+        resEl.style.background = 'rgba(239, 68, 68, 0.15)'
+        resEl.style.border = '1px solid #ef4444'
+        resEl.style.color = '#ef4444'
+        resEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <strong>خطا:</strong> ${SM.esc(msg)}`
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false
+        btn.innerHTML = '<i class="fas fa-play"></i> اجرای فوری اسکن و ارسال پیامک‌های امروز'
+      }
+    }
+  },
+
+  showLifecycleLogsModal() {
+    const logs = typeof SmartLifecycleSMS !== 'undefined' ? SmartLifecycleSMS.getLogs() : []
+    const typeLabels = {
+      installment: 'یادآوری قسط',
+      shoot_couple: 'یادآوری مراسم به زوجین',
+      shoot_crew: 'یادآوری آفیش عوامل',
+      anniversary: 'تبریک سالگرد ازدواج'
+    }
+
+    const html = `
+      <div style="max-height:65vh;overflow-y:auto">
+        ${logs.length ? `
+          <table class="sm-table" style="width:100%;font-size:.82rem">
+            <thead>
+              <tr>
+                <th>نوع</th>
+                <th>گیرنده</th>
+                <th>شماره تماس</th>
+                <th>تاریخ ارسال</th>
+                <th>متن خلاصه</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${logs.map(l => `
+                <tr>
+                  <td><span class="sm-badge sm-badge-primary">${SM.esc(typeLabels[l.type] || l.type)}</span></td>
+                  <td><strong>${SM.esc(l.recipient || '—')}</strong></td>
+                  <td dir="ltr">${SM.esc(l.phone || '—')}</td>
+                  <td>${SM.esc(l.dateFa || l.timestamp?.slice(0, 10) || '—')}</td>
+                  <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${SM.esc(l.text || '')}">${SM.esc(l.text || '—')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<div style="text-align:center;padding:32px;color:var(--sm-text-muted)">هنوز پیامکی از طریق اتوماسیون ارسال نشده است.</div>'}
+      </div>`
+
+    SMUI.dialog({
+      title: '📋 تاریخچه پیامک‌های هوشمند ارسال‌شده',
+      body: html,
+      buttons: [{ label: 'بستن', type: 'ghost', action: () => SMUI.closeDialog() }]
+    })
   },
 
   async saveBackupSettings() {

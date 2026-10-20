@@ -440,3 +440,241 @@ describe('Engineering Pack v6.4.0 — Multi-Template Invoice & Receipt Generator
     expect(thermalHtml).toContain('فرهاد مجیدی')
   })
 })
+
+describe('Engineering Pack v6.4.0 — Smart Lifecycle SMS Automation', () => {
+  const lifecycleSource = fs.readFileSync('js/smart-lifecycle-sms.js', 'utf8')
+
+  function getLifecycleModule(dbStore = {}) {
+    const sentLogs = []
+    const context = {
+      window: {},
+      DB: {
+        get: (k) => dbStore[k] || null,
+        set: (k, v) => { dbStore[k] = v }
+      },
+      Utils: {
+        todayJalali: () => '1405/01/20',
+        daysUntil: (target) => {
+          if (target === '1405/01/22') return 2
+          if (target === '1405/01/21') return 1
+          if (target === '1405/01/20') return 0
+          return 10
+        },
+        fmtNum: (n) => Number(n).toLocaleString('fa-IR')
+      },
+      PaymentGateway: {
+        generateInvoiceUrl: (id) => `https://studiomandani.ir/invoice.html?id=${id}`
+      },
+      SmsProvider: {
+        sendStudio: vi.fn().mockImplementation((phone, text) => {
+          sentLogs.push({ phone, text })
+          return Promise.resolve({ ok: true })
+        })
+      }
+    }
+    vm.runInNewContext(lifecycleSource, context)
+    return { mod: context.window.SmartLifecycleSMS, sentLogs, context }
+  }
+
+  it('builds installment, shoot reminder, and anniversary messages accurately', () => {
+    const { mod } = getLifecycleModule()
+    const studio = { name: 'استودیو ماندنی', phone: '09187766554' }
+    const contract = {
+      id: 'c-100',
+      contractNum: '1405-100',
+      couple: 'سحر و شاهین',
+      eventDate: '1405/01/22',
+      venue: 'عمارت فرشته'
+    }
+
+    const instMsg = mod.buildInstallmentMessage(contract, 5000000, studio)
+    expect(instMsg).toContain('سحر و شاهین')
+    expect(instMsg).toContain('استودیو ماندنی')
+    expect(instMsg).toContain('۵٬۰۰۰٬۰۰۰ تومان')
+    expect(instMsg).toContain('https://studiomandani.ir/invoice.html?id=c-100')
+
+    const coupleMsg = mod.buildShootCoupleMessage(contract, studio)
+    expect(coupleMsg).toContain('سحر و شاهین')
+    expect(coupleMsg).toContain('عمارت فرشته')
+    expect(coupleMsg).toContain('1405/01/22')
+
+    const crewMsg = mod.buildShootCrewMessage({ name: 'آرمان عکاس' }, contract, 'عکاس اصلی عمارت', studio)
+    expect(crewMsg).toContain('آرمان عکاس')
+    expect(crewMsg).toContain('عکاس اصلی عمارت')
+    expect(crewMsg).toContain('سحر و شاهین')
+
+    const annivMsg = mod.buildAnniversaryMessage(contract, studio, 20)
+    expect(annivMsg).toContain('سالگرد پیوندتان مبارک باد')
+    expect(annivMsg).toContain('۲۰٪ تخفیف')
+    expect(annivMsg).toContain('ANNIV-1405100')
+  })
+
+  it('scans contracts and executes automated dispatches idempotently', async () => {
+    const dbStore = {
+      studioInfo: { name: 'استودیو ماندنی', phone: '09187766554' },
+      contracts: [
+        {
+          id: 'c-inst-1',
+          contractNum: '101',
+          couple: 'مریم و رضا',
+          eventDate: '1405/01/22', // 2 days left -> installment triggers
+          total: 20000000,
+          paid: 10000000,
+          phoneBride: '09181112233'
+        },
+        {
+          id: 'c-shoot-1',
+          contractNum: '102',
+          couple: 'بهار و کوروش',
+          eventDate: '1405/01/21', // 1 day left (tomorrow) -> shoot reminder triggers
+          venue: 'باغ مریوان',
+          total: 15000000,
+          paid: 15000000,
+          phoneBride: '09182223344'
+        },
+        {
+          id: 'c-anniv-1',
+          contractNum: '103',
+          couple: 'شیوا و امید',
+          eventDate: '1404/01/20', // exactly 1 year ago today
+          total: 10000000,
+          paid: 10000000,
+          phoneBride: '09183334455'
+        }
+      ],
+      persProjects: [
+        {
+          id: 'pp-1',
+          contractId: 'c-shoot-1',
+          personnelId: 'p-1',
+          eventDate: '1405/01/21',
+          role: 'فیلمبردار تالار',
+          phone: '09189998877',
+          status: 'accepted'
+        }
+      ],
+      personnel: [
+        { id: 'p-1', name: 'سامان نوری', phone: '09189998877' }
+      ]
+    }
+
+    const { mod, sentLogs } = getLifecycleModule(dbStore)
+    const result1 = await mod.scanAndExecute({ force: true })
+
+    expect(result1.ok).toBe(true)
+    expect(result1.installmentsSent).toBe(1)
+    expect(result1.shootCoupleSent).toBe(1)
+    expect(result1.shootCrewSent).toBe(1)
+    expect(result1.anniversarySent).toBe(1)
+    expect(result1.totalSent).toBe(4)
+    expect(sentLogs.length).toBe(4)
+
+    // Second run on same day -> must skip all due to idempotency
+    const result2 = await mod.scanAndExecute({ force: true })
+    expect(result2.totalSent).toBe(0)
+    expect(result2.skipped).toBe(4)
+  })
+})
+
+describe('Engineering Pack v6.4.0 — Customer Pro 8-Stage Interactive Timeline', () => {
+  const customerProSource = fs.readFileSync('js/customer-pro.js', 'utf8')
+
+  function getCustomerPro() {
+    const context = {
+      window: {},
+      setTimeout: () => {},
+      document: {
+        body: { setAttribute: () => {} },
+        getElementById: () => null,
+        querySelector: () => null,
+        querySelectorAll: () => []
+      },
+      localStorage: {
+        getItem: () => null,
+        setItem: () => {}
+      },
+      Utils: {
+        escapeHtml: (s) => String(s || ''),
+        fmtNum: (n) => Number(n).toLocaleString('fa-IR'),
+        todayJalali: () => '1405/01/20'
+      }
+    }
+    vm.runInNewContext(customerProSource, context)
+    return context.window.CustomerPro
+  }
+
+  it('defines all 8 professional stages and computes stage index correctly', () => {
+    const cp = getCustomerPro()
+    expect(cp.STAGES.length).toBe(8)
+    expect(cp.STAGES[0].id).toBe('contract')
+    expect(cp.STAGES[3].id).toBe('selection')
+    expect(cp.STAGES[5].id).toBe('color_grade')
+    expect(cp.STAGES[7].id).toBe('ready_pickup')
+
+    // Newly signed contract
+    expect(cp.getTimelineStageIndex({ status: 'confirmed' })).toBe(1)
+    // Photo selection stage
+    expect(cp.getTimelineStageIndex({ photoSelected: true })).toBe(3)
+    // Editing / grading stage
+    expect(cp.getTimelineStageIndex({ filmEdited: true })).toBe(5)
+    // Delivered
+    expect(cp.getTimelineStageIndex({ status: 'delivered' })).toBe(7)
+  })
+})
+
+describe('Engineering Pack v6.4.0 — Crew Pocket Hub PWA', () => {
+  const crewSource = fs.readFileSync('js/crew-pwa.js', 'utf8')
+
+  function getCrewHub(dbStore = {}) {
+    const storage = {}
+    const context = {
+      window: {
+        addEventListener: vi.fn(),
+        scrollTo: vi.fn()
+      },
+      document: {
+        getElementById: () => null,
+        querySelectorAll: () => [],
+        addEventListener: vi.fn()
+      },
+      localStorage: {
+        getItem: (k) => storage[k] || null,
+        setItem: (k, v) => { storage[k] = String(v) }
+      },
+      DB: {
+        get: (k) => dbStore[k] || []
+      },
+      Auth: {
+        getUser: () => ({ name: 'سیروان پابرجا', role: 'مدیر تصویربرداری' })
+      },
+      Utils: {
+        todayJalali: () => '1405/01/20',
+        fmtNum: (n) => Number(n).toLocaleString('fa-IR')
+      }
+    }
+    vm.runInNewContext(crewSource, context)
+    return { hub: context.window.CrewHub, context, storage }
+  }
+
+  it('initializes crew hub with user and manages tabs and gear checklist', () => {
+    const { hub, storage } = getCrewHub()
+    hub.loadUser()
+    expect(hub.state.currentUser.name).toBe('سیروان پابرجا')
+
+    hub.loadData()
+    expect(hub.state.equipmentList.length).toBeGreaterThan(0)
+    expect(hub.state.todayShoot).toBeDefined()
+
+    // Switch tab
+    hub.switchTab('gear')
+    expect(hub.state.activeTab).toBe('gear')
+
+    // Toggle gear item
+    hub.toggleGearItem('eq-1')
+    expect(storage['crew_checked_gear']).toContain('eq-1')
+
+    hub.toggleGearItem('eq-1')
+    const parsed = JSON.parse(storage['crew_checked_gear'] || '[]')
+    expect(parsed.includes('eq-1')).toBe(false)
+  })
+})

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+  <meta name="theme-color" content="#07080b"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Crew Hub"/>
+  <title>کارتابل عوامل صحنه — Crew Pocket Hub</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Estedad:wght@600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="css/crew-pwa.css"/>
+</head>
+<body>
+
+  <!-- هدر شیشه‌ای ثابت بالای صفحه -->
+  <header class="crew-header">
+    <div class="crew-header-user">
+      <div class="crew-avatar">
+        <i class="fas fa-camera"></i>
+      </div>
+      <div class="crew-user-meta">
+        <div class="crew-user-name" id="crew-user-name">عوامل اجرایی استودیو</div>
+        <div class="crew-user-role" id="crew-user-role">عکاس و تصویربردار صحنه</div>
+      </div>
+    </div>
+    <div class="crew-header-actions">
+      <button type="button" id="crew-install-btn" class="crew-install-btn" style="display:none" onclick="CrewHub.promptInstall()">
+        <i class="fas fa-download"></i> نصب اپلیکیشن
+      </button>
+      <div class="crew-pwa-badge">
+        <i class="fas fa-bolt"></i> آفلاین فعال
+      </div>
+      <a href="studio-m/" title="خروج به پنل مدیریت" style="color:var(--crew-text-muted);font-size:1.1rem;padding:6px;text-decoration:none">
+        <i class="fas fa-arrow-left"></i>
+      </a>
+    </div>
+  </header>
+
+  <!-- محتوای صفحات تب -->
+  <main class="crew-container">
+    <section id="tab-shoots" class="crew-tab-content is-active"></section>
+    <section id="tab-gear" class="crew-tab-content"></section>
+    <section id="tab-schedule" class="crew-tab-content"></section>
+    <section id="tab-earnings" class="crew-tab-content"></section>
+  </main>
+
+  <!-- نوار ناوبری ثابت پایین صفحه -->
+  <nav class="crew-bottom-nav">
+    <button type="button" class="crew-nav-item is-active" data-tab="shoots">
+      <i class="fas fa-clapperboard"></i>
+      <span>آفیش من</span>
+    </button>
+    <button type="button" class="crew-nav-item" data-tab="gear">
+      <i class="fas fa-suitcase"></i>
+      <span>تجهیزات</span>
+    </button>
+    <button type="button" class="crew-nav-item" data-tab="schedule">
+      <i class="fas fa-calendar-check"></i>
+      <span>تقویم کاری</span>
+    </button>
+    <button type="button" class="crew-nav-item" data-tab="earnings">
+      <i class="fas fa-wallet"></i>
+      <span>کارکرد من</span>
+    </button>
+  </nav>
+
+  <script src="js/config.js" defer></script>
+  <script src="js/idb-store.js" defer></script>
+  <script src="js/utils.js" defer></script>
+  <script src="js/roles.js" defer></script>
+  <script src="js/access.js" defer></script>
+  <script src="js/db.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/crew-pwa.js" defer></script>
+  <script src="js/sw-register.js"></script>
+</body>
+</html>

@@ -383,6 +383,7 @@ const SM = {
               <div class="sm-header-sub" id="sm-header-sub" hidden></div>
             </div>
             <div class="sm-header-actions">
+              <button type="button" class="sm-btn-icon" onclick="window.location.href='../crew.html'" title="کارتابل موبایل عوامل صحنه (Crew PWA)"><i class="fas fa-mobile-screen-button"></i></button>
               ${(typeof SaasContext !== 'undefined' && SaasContext.getMemberships?.()?.length > 1) ? `
               <button type="button" class="sm-btn-icon" onclick="window.SaasStudioPicker?.open(null, () => location.reload())" title="تغییر استودیو"><i class="fas fa-store"></i></button>` : ''}
               <button type="button" class="sm-btn-icon" onclick="SM.toggleTheme()" title="${this.t('theme')}"><i class="fas fa-${this.state.theme === 'light' ? 'moon' : 'sun'}"></i></button>

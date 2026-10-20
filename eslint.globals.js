@@ -55,6 +55,8 @@ export const browserGlobals = {
   PaymentGateway: "readonly",
   InvoiceGenerator: "readonly",
   SmartConflictDetector: "readonly",
+  SmartLifecycleSMS: "readonly",
+  CrewHub: "readonly",
   AuthBridge: "readonly",
   FinanceSync: "readonly",
   PackageCatalog: "readonly",

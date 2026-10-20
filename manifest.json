@@ -58,6 +58,12 @@
       "short_name": "مشتری",
       "url": "./customer.html",
       "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "کارتابل عوامل صحنه",
+      "short_name": "عوامل",
+      "url": "./crew.html",
+      "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
     }
   ],
   "related_applications": []

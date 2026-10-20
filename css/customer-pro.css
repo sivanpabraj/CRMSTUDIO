@@ -314,3 +314,208 @@ body[data-customer-theme="light"] .portal-header .role {
 .customer-ai-send-btn:hover {
   opacity: 0.9;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   تایم‌لاین زنده ۸ مرحله‌ای تولید و تدوین پرتال مشتری (Cinema-Grade Timeline)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.customer-timeline-container {
+  background: var(--cpro-card);
+  border: 1px solid var(--cpro-border);
+  border-radius: 20px;
+  padding: 22px;
+  margin-bottom: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.customer-timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.customer-timeline-title {
+  font-size: 15px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cpro-gold);
+}
+
+.customer-timeline-badge {
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--cpro-gold-bg);
+  color: var(--cpro-gold);
+  border: 1px solid rgba(201, 169, 110, 0.35);
+  padding: 4px 12px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* نوار کلی پیشرفت با گرادینت */
+.customer-timeline-prog-wrap {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 22px;
+}
+
+.customer-timeline-prog-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #d4af37, #f59e0b);
+  border-radius: 999px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.6);
+}
+
+/* شبکه کارت‌های مراحل */
+.customer-timeline-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.customer-timeline-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.customer-timeline-step.is-done {
+  border-color: rgba(16, 185, 129, 0.2);
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.customer-timeline-step.is-active {
+  border-color: rgba(212, 175, 55, 0.5);
+  background: rgba(212, 175, 55, 0.08);
+  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.15);
+}
+
+.customer-timeline-step.is-pending {
+  opacity: 0.55;
+}
+
+.customer-step-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.customer-timeline-step.is-done .customer-step-icon-wrap {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.customer-timeline-step.is-active .customer-step-icon-wrap {
+  background: linear-gradient(135deg, #d4af37, #996515);
+  color: #000;
+  box-shadow: 0 0 14px rgba(212, 175, 55, 0.5);
+  animation: pulseActive 2s infinite;
+}
+
+.customer-timeline-step.is-pending .customer-step-icon-wrap {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--cpro-text-muted);
+}
+
+@keyframes pulseActive {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.5); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(212, 175, 55, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
+}
+
+.customer-step-content {
+  flex: 1;
+}
+
+.customer-step-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.customer-step-name {
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.customer-step-state-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.customer-timeline-step.is-done .customer-step-state-badge {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.customer-timeline-step.is-active .customer-step-state-badge {
+  color: #d4af37;
+  background: rgba(212, 175, 55, 0.2);
+}
+
+.customer-timeline-step.is-pending .customer-step-state-badge {
+  color: var(--cpro-text-muted);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.customer-step-desc {
+  font-size: 11.5px;
+  color: var(--cpro-text-muted);
+  line-height: 1.5;
+}
+
+/* باکس تیزر و مدیا */
+.customer-teaser-box {
+  margin-top: 18px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), rgba(0, 0, 0, 0.4));
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: 14px;
+}
+
+.customer-teaser-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.customer-teaser-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+

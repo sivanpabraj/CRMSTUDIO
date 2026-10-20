@@ -62,6 +62,7 @@
         origRender.call(CustomerPortal)
         this.enhanceHeader()
         this.injectCardsAndAI()
+        this.injectInteractiveTimeline()
       }
     },
 
@@ -223,6 +224,142 @@
     },
 
     // ─── ۴. موتور هوش مصنوعی مقید به همان قرارداد و گاردریل ─────────────
+    STAGES: [
+      { id: 'contract', title: 'عقد و ثبت رسمی قرارداد', icon: 'fa-file-signature', desc: 'تایید شرایط، ثبت بیعانه و رزرو قطعی تاریخ مراسم' },
+      { id: 'shooting', title: 'تصویربرداری و عکاسی', icon: 'fa-video', desc: 'حضور تیم تخصصی در عمارت، باغ و تالار مراسم' },
+      { id: 'ingest', title: 'تخلیه رم‌ها و آرشیو امن', icon: 'fa-hard-drive', desc: 'بکاپ‌گیری دونسخه‌ای، تفکیک شات‌ها و چیدمان راف‌کات' },
+      { id: 'selection', title: 'انتخاب عکس‌های ژورنال', icon: 'fa-images', desc: 'انتخاب فریم‌های منتخب توسط زوجین در عکس‌خانه آنلاین' },
+      { id: 'album_design', title: 'طراحی آلبوم و صفحه‌آرایی', icon: 'fa-palette', desc: 'چیدمان گرافیکی صفحات، روتوش پوست و طراحی ژورنال' },
+      { id: 'color_grade', title: 'اصلاح رنگ و تدوین فیلم', icon: 'fa-film', desc: 'کالرگریدینگ حرفه‌ای در DaVinci Resolve و مسترینگ صدا' },
+      { id: 'lab_print', title: 'چاپ لابراتوار و صحافی', icon: 'fa-print', desc: 'چاپ شیمیایی عکس‌ها، جلدسازی چرم و صحافی حرارتی' },
+      { id: 'ready_pickup', title: 'کنترل کیفی و آماده تحویل', icon: 'fa-box-open', desc: 'بسته‌بندی اختصاصی استودیو و تحویل کامل سفارش' }
+    ],
+
+    getTimelineStageIndex(c) {
+      if (!c) return 0
+      if (c.status === 'delivered' || c.isDelivered) return 7
+      if (c.readyForDelivery || c.status === 'ready') return 7
+      if (c.labPrinted || c.status === 'printing') return 6
+      if (c.filmEdited || c.status === 'grading' || c.status === 'editing') return 5
+      if (c.albumDesigned || c.status === 'designing') return 4
+      if (c.photoSelected || c.status === 'selection') return 3
+
+      const today = typeof Utils !== 'undefined' && Utils.todayJalali ? Utils.todayJalali() : ''
+      const evDate = c.eventDate || c.date || ''
+      if (evDate && today && evDate < today) {
+        return 2 // مراسم انجام شده، در مرحله تخلیه رم و تدوین
+      }
+      if (c.status === 'confirmed' || c.status === 'active') {
+        return 1 // در نوبت عکاسی / روز مراسم
+      }
+      return 0 // ثبت قرارداد
+    },
+
+    injectInteractiveTimeline() {
+      const c = this.getContractData()
+      if (!c) return
+
+      const activeIdx = this.getTimelineStageIndex(c)
+      const pct = Math.min(100, Math.round(((activeIdx + 1) / this.STAGES.length) * 100))
+      const currentStage = this.STAGES[activeIdx] || this.STAGES[0]
+
+      const timelineHtml = `
+        <div class="customer-timeline-container" id="customer-pro-timeline">
+          <div class="customer-timeline-header">
+            <div class="customer-timeline-title">
+              <i class="fas fa-route"></i> تایم‌لاین زنده تولید و تدوین سفارش
+            </div>
+            <div class="customer-timeline-badge">
+              <i class="fas fa-circle-notch fa-spin"></i> ${Utils?.fmtNum ? Utils.fmtNum(pct) : pct}٪ تکمیل شده
+            </div>
+          </div>
+
+          <div class="customer-timeline-prog-wrap">
+            <div class="customer-timeline-prog-bar" style="width: ${pct}%"></div>
+          </div>
+
+          <div style="margin-bottom:18px;padding:12px 14px;background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.25);border-radius:12px;display:flex;align-items:center;gap:12px">
+            <div style="font-size:22px;color:#d4af37"><i class="fas ${currentStage.icon}"></i></div>
+            <div>
+              <div style="font-size:12px;font-weight:800;color:#fff">مرحله فعال فعلی: ${Utils.escapeHtml(currentStage.title)}</div>
+              <div style="font-size:11px;color:var(--cpro-text-muted);margin-top:2px">${Utils.escapeHtml(currentStage.desc)}</div>
+            </div>
+          </div>
+
+          <div class="customer-timeline-steps">
+            ${this.STAGES.map((s, idx) => {
+              const isDone = idx < activeIdx || (idx === 7 && (c.status === 'delivered' || c.isDelivered))
+              const isActive = idx === activeIdx && !isDone
+              const stateClass = isDone ? 'is-done' : (isActive ? 'is-active' : 'is-pending')
+              const stateBadge = isDone ? 'تکمیل شد ✓' : (isActive ? 'در حال انجام ⚡' : 'در انتظار 🔒')
+
+              return `
+                <div class="customer-timeline-step ${stateClass}">
+                  <div class="customer-step-icon-wrap">
+                    <i class="fas ${isDone ? 'fa-check' : s.icon}"></i>
+                  </div>
+                  <div class="customer-step-content">
+                    <div class="customer-step-head">
+                      <span class="customer-step-name">${idx + 1}. ${Utils.escapeHtml(s.title)}</span>
+                      <span class="customer-step-state-badge">${stateBadge}</span>
+                    </div>
+                    <div class="customer-step-desc">${Utils.escapeHtml(s.desc)}</div>
+                  </div>
+                </div>
+              `
+            }).join('')}
+          </div>
+
+          ${(c.teaserUrl || c.teaserLink) ? `
+            <div class="customer-teaser-box">
+              <div class="customer-teaser-title">
+                <i class="fas fa-film" style="color:#d4af37"></i> تیزر و پیش‌نمایش اختصاصی مراسم شما آماده است!
+              </div>
+              <p style="font-size:11.5px;color:rgba(255,255,255,0.7);margin:0">
+                تدوین تیزر اینستاگرامی شما با کیفیت 4K به اتمام رسیده و می‌توانید آن را مشاهده یا دریافت نمایید.
+              </p>
+              <div class="customer-teaser-actions">
+                <a href="${Utils.escapeHtml(c.teaserUrl || c.teaserLink)}" target="_blank" rel="noopener noreferrer" class="customer-ai-send-btn" style="text-decoration:none;padding:8px 16px">
+                  <i class="fas fa-play"></i> مشاهده و دانلود تیزر
+                </a>
+              </div>
+            </div>
+          ` : ''}
+
+          <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--cpro-border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+            <div style="font-size:11.5px;color:var(--cpro-text-muted)">
+              <i class="fas fa-user-headset"></i> پشتیبانی و سرپرست تدوین استودیو
+            </div>
+            <div style="display:flex;gap:8px">
+              <a href="https://wa.me/989187766554?text=${encodeURIComponent('سلام، در مورد مراحل تدوین قرارداد ' + (c.contractNum || c.id) + ' سوال داشتم')}" target="_blank" rel="noopener noreferrer" class="sm-btn sm-btn-sm sm-btn-ghost" style="color:#25d366;border-color:rgba(37,211,102,0.3);text-decoration:none;padding:5px 12px;border-radius:8px;font-size:11px;display:flex;align-items:center;gap:6px">
+                <i class="fab fa-whatsapp"></i> واتساپ استودیو
+              </a>
+              <a href="tel:09187766554" class="sm-btn sm-btn-sm sm-btn-ghost" style="color:#38bdf8;border-color:rgba(56,189,248,0.3);text-decoration:none;padding:5px 12px;border-radius:8px;font-size:11px;display:flex;align-items:center;gap:6px">
+                <i class="fas fa-phone"></i> تماس تلفنی
+              </a>
+            </div>
+          </div>
+        </div>
+      `
+
+      const oldTimeline = document.getElementById('customer-pro-timeline')
+      if (oldTimeline) oldTimeline.remove()
+
+      const oldPipelineCard = document.querySelector('.customer-card .pipeline')?.closest('.customer-card')
+      if (oldPipelineCard) {
+        const wrap = document.createElement('div')
+        wrap.innerHTML = timelineHtml
+        oldPipelineCard.replaceWith(wrap.firstElementChild)
+      } else {
+        const rootSec = document.getElementById('customer-pro-root-section')
+        if (rootSec) {
+          const wrap = document.createElement('div')
+          wrap.innerHTML = timelineHtml
+          rootSec.after(wrap.firstElementChild)
+        }
+      }
+    },
+
     askQuick(q) {
       const inp = document.getElementById('customer-pro-ai-input')
       if (inp) inp.value = q

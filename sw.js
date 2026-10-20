@@ -16,6 +16,7 @@ const SHELL_URLS = [
   './contract.html',
   './customer.html',
   './customer-login.html',
+  './crew.html',
   './studio-m/index.html',
   './manifest.json',
   './icons/icon.svg',
