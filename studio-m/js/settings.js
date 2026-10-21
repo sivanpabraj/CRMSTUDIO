@@ -81,6 +81,15 @@ const SMSettings = {
         onclick: `SMSettings.setTab('${t.id}')`
       })), this._tab)}
       <div id="sm-settings-panel" style="margin-top:16px">${this._renderTab(info)}</div>`
+    // Add SMTP status dot badge to the messengers tab button
+    const messengersTab = el.querySelector('[data-sm-tab="messengers"]')
+    if (messengersTab) {
+      const smtpOk = !!(info && info.emailSmtpUser)
+      const dot = document.createElement('span')
+      dot.style.cssText = `display:inline-block;width:7px;height:7px;border-radius:50%;background:${smtpOk ? '#4ade80' : '#f87171'};margin-right:4px;vertical-align:middle`
+      dot.title = smtpOk ? 'SMTP پیکربندی شده' : 'SMTP پیکربندی نشده'
+      messengersTab.appendChild(dot)
+    }
     if (this._tab === 'backup') setTimeout(() => this._loadBackupList(), 0)
   },
 
@@ -429,8 +438,11 @@ const SMSettings = {
     const baleToken = info.baleBotToken || ''
     const baleUser = info.baleBotUsername || 'mandani_studio_bot'
     const waPhone = info.whatsappPhone || info.phone || ''
+    const emailSmtpHost = info.emailSmtpHost || ''
+    const emailSmtpPort = info.emailSmtpPort || '465'
     const emailUser = info.emailSmtpUser || ''
     const emailPass = info.emailSmtpPass || ''
+    const emailConfigured = !!(emailUser && emailPass)
 
     return `<div class="sm-card"><div class="sm-card-head"><div class="sm-card-title"><i class="fas fa-paper-plane" style="color:#60a5fa"></i> پیام‌رسان‌ها (بله، واتساپ و ایمیل اختصاصی این استودیو)</div>
         <button type="button" class="sm-btn sm-btn-sm sm-btn-primary" onclick="SMSettings.saveMessengers()"><i class="fas fa-save"></i> ذخیره تنظیمات</button>
@@ -468,16 +480,65 @@ const SMSettings = {
           ${SMUI.formField('شماره واتساپ استودیو', 'set-whatsapp-phone', { value: waPhone, dir: 'ltr', placeholder: '0918xxxxxxx' })}
         </div>
 
-        <!-- Email Section -->
-        <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:16px">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:800;color:#f59e0b;margin-bottom:8px">
-            <i class="fas fa-envelope"></i> ۳. ایمیل رسمی استودیو (SMTP)
+        <!-- Email Section — Full SMTP -->
+        <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:16px" id="smtp-section">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+            <div style="display:flex;align-items:center;gap:8px;font-weight:800;color:#f59e0b">
+              <i class="fas fa-envelope"></i> ۳. ایمیل رسمی استودیو (SMTP)
+            </div>
+            <span id="smtp-status-badge" style="font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;background:${emailConfigured ? 'rgba(74,222,128,0.15)' : 'rgba(239,68,68,0.15)'};color:${emailConfigured ? '#4ade80' : '#f87171'};border:1px solid ${emailConfigured ? 'rgba(74,222,128,0.4)' : 'rgba(239,68,68,0.4)'}">
+              <i class="fas fa-${emailConfigured ? 'check-circle' : 'times-circle'}"></i> ${emailConfigured ? 'پیکربندی شده' : 'پیکربندی نشده'}
+            </span>
           </div>
-          <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0 0 12px;line-height:1.6">
-            جهت ارسال خودکار نسخه‌های لوکس HTML قرارداد و فاکتورها به ایمیل مراجعین:
+
+          ${!emailConfigured ? `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#fca5a5;line-height:1.7">
+            <i class="fas fa-exclamation-triangle"></i> <strong>توجه:</strong> بدون تنظیم SMTP، قابلیت «فراموشی رمز عبور با ایمیل» و «ارسال فاکتور به ایمیل» غیرفعال خواهد بود. کد OTP تولید می‌شود اما به هیچ آدرسی ارسال نمی‌گردد.
+          </div>` : ''}
+
+          <p style="font-size:.82rem;color:var(--sm-text-muted);margin:0 0 14px;line-height:1.7">
+            جهت ارسال کد بازیابی رمز، فاکتور و قرارداد به ایمیل مراجعین. <strong>برای جیمیل:</strong> ابتدا <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:#f59e0b">گذرواژه برنامه (App Password)</a> بسازید.
           </p>
-          ${SMUI.formField('آدرس ایمیل فرستنده (جیمیل استودیو)', 'set-email-user', { value: emailUser, dir: 'ltr', placeholder: 'studio@gmail.com' })}
-          ${SMUI.formField('گذرواژه برنامه جیمیل (App Password)', 'set-email-pass', { type: 'password', value: emailPass, dir: 'ltr', placeholder: 'گذرواژه ۱۶ رقمی برنامه' })}
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label style="font-size:12px;color:var(--sm-text-muted);display:block;margin-bottom:4px">سرور SMTP (Host)</label>
+              <input id="set-smtp-host" type="text" dir="ltr" value="${emailSmtpHost}" placeholder="smtp.gmail.com" style="width:100%;box-sizing:border-box" class="sm-input" />
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--sm-text-muted);display:block;margin-bottom:4px">پورت (Port)</label>
+              <select id="set-smtp-port" dir="ltr" class="sm-input" style="width:100%;box-sizing:border-box">
+                <option value="465" ${emailSmtpPort === '465' ? 'selected' : ''}>465 (SSL — جیمیل)</option>
+                <option value="587" ${emailSmtpPort === '587' ? 'selected' : ''}>587 (TLS — Outlook/Yahoo)</option>
+                <option value="25" ${emailSmtpPort === '25' ? 'selected' : ''}>25 (Plain)</option>
+              </select>
+            </div>
+          </div>
+
+          ${SMUI.formField('آدرس ایمیل فرستنده', 'set-email-user', { value: emailUser, dir: 'ltr', placeholder: 'studio@gmail.com', type: 'email' })}
+          ${SMUI.formField('گذرواژه برنامه (App Password)', 'set-email-pass', { type: 'password', value: emailPass, dir: 'ltr', placeholder: '۱۶ کاراکتر (مثال: abcd efgh ijkl mnop)' })}
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+            <button type="button" class="sm-btn sm-btn-sm" onclick="SMSettings.testSmtpConnection()" style="background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.4)">
+              <i class="fas fa-plug"></i> تست اتصال SMTP
+            </button>
+            <button type="button" class="sm-btn sm-btn-sm" onclick="SMSettings.testSmtpSend()" style="background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.4)">
+              <i class="fas fa-paper-plane"></i> ارسال ایمیل آزمایشی
+            </button>
+          </div>
+          <div id="smtp-test-result" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.6"></div>
+
+          <!-- Gmail App Password Guide -->
+          <details style="margin-top:14px">
+            <summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:#f59e0b;user-select:none"><i class="fas fa-question-circle"></i> راهنمای مرحله‌به‌مرحله ساخت App Password جیمیل</summary>
+            <ol style="font-size:11.5px;color:var(--sm-text-muted);line-height:2;padding-right:20px;margin-top:10px">
+              <li>وارد حساب Google خود شوید: <a href="https://myaccount.google.com" target="_blank" style="color:#60a5fa">myaccount.google.com</a></li>
+              <li>به بخش <strong>Security → 2-Step Verification</strong> بروید و فعال کنید (اجباری).</li>
+              <li>در همان صفحه Security به پایین اسکرول کنید → <strong>App passwords</strong> را انتخاب کنید.</li>
+              <li>در منوی کشویی «Other (Custom name)» را انتخاب و نام «Studio ERP» وارد کنید.</li>
+              <li>کلیک Generate → یک رشته ۱۶ کاراکتری نمایش داده می‌شود.</li>
+              <li>این رشته را در فیلد «گذرواژه برنامه» بالا وارد کنید (بدون فاصله).</li>
+            </ol>
+          </details>
         </div>
       </div></div>`
   },
@@ -488,13 +549,19 @@ const SMSettings = {
     const waPhone = document.getElementById('set-whatsapp-phone')?.value?.trim() || ''
     const emailUser = document.getElementById('set-email-user')?.value?.trim() || ''
     const emailPass = document.getElementById('set-email-pass')?.value?.trim() || ''
+    const emailSmtpHost = document.getElementById('set-smtp-host')?.value?.trim() || 'smtp.gmail.com'
+    const emailSmtpPort = document.getElementById('set-smtp-port')?.value || '465'
+    const emailSmtpSecure = emailSmtpPort === '465'
 
     await SecureDB.merge('studioInfo', {
       baleBotToken: baleToken,
       baleBotUsername: baleUser,
       whatsappPhone: waPhone,
       emailSmtpUser: emailUser,
-      emailSmtpPass: emailPass
+      emailSmtpPass: emailPass,
+      emailSmtpHost,
+      emailSmtpPort,
+      emailSmtpSecure
     })
 
     if (typeof ServerSync !== 'undefined' && ServerSync.pushNow) {
@@ -503,6 +570,131 @@ const SMSettings = {
 
     SM.toast('تنظیمات پیام‌رسان‌های استودیو با موفقیت ذخیره شد ✓', 'success')
     SM.navigate('settings')
+  },
+
+  async testSmtpConnection() {
+    const resultEl = document.getElementById('smtp-test-result')
+    const host = document.getElementById('set-smtp-host')?.value?.trim() || 'smtp.gmail.com'
+    const port = document.getElementById('set-smtp-port')?.value || '465'
+    const user = document.getElementById('set-email-user')?.value?.trim() || ''
+    const pass = document.getElementById('set-email-pass')?.value?.trim() || ''
+    if (!user || !pass) {
+      if (resultEl) {
+        resultEl.style.display = 'block'
+        resultEl.style.background = 'rgba(239,68,68,0.1)'
+        resultEl.style.border = '1px solid rgba(239,68,68,0.3)'
+        resultEl.style.color = '#fca5a5'
+        resultEl.innerHTML = '<i class="fas fa-times-circle"></i> لطفاً ابتدا آدرس ایمیل و گذرواژه برنامه را وارد کنید.'
+      }
+      return
+    }
+    if (resultEl) {
+      resultEl.style.display = 'block'
+      resultEl.style.background = 'rgba(96,165,250,0.08)'
+      resultEl.style.border = '1px solid rgba(96,165,250,0.2)'
+      resultEl.style.color = '#93c5fd'
+      resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال بررسی اتصال به سرور ایمیل...'
+    }
+    try {
+      const res = await fetch('/api/email/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ smtpHost: host, smtpPort: port, smtpUser: user, smtpPass: pass, smtpSecure: port === '465' })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (resultEl) {
+        if (data.ok) {
+          resultEl.style.background = 'rgba(74,222,128,0.1)'
+          resultEl.style.border = '1px solid rgba(74,222,128,0.3)'
+          resultEl.style.color = '#86efac'
+          resultEl.innerHTML = `<i class="fas fa-check-circle"></i> ${data.message || 'اتصال به سرور ایمیل با موفقیت برقرار شد ✓'}`
+          // Update badge
+          const badge = document.getElementById('smtp-status-badge')
+          if (badge) {
+            badge.style.background = 'rgba(74,222,128,0.15)'
+            badge.style.color = '#4ade80'
+            badge.style.border = '1px solid rgba(74,222,128,0.4)'
+            badge.innerHTML = '<i class="fas fa-check-circle"></i> متصل و فعال'
+          }
+        } else {
+          resultEl.style.background = 'rgba(239,68,68,0.1)'
+          resultEl.style.border = '1px solid rgba(239,68,68,0.3)'
+          resultEl.style.color = '#fca5a5'
+          resultEl.innerHTML = `<i class="fas fa-times-circle"></i> ${data.error || 'خطا در اتصال به سرور ایمیل'}`
+        }
+      }
+    } catch (e) {
+      if (resultEl) {
+        resultEl.style.background = 'rgba(239,68,68,0.1)'
+        resultEl.style.border = '1px solid rgba(239,68,68,0.3)'
+        resultEl.style.color = '#fca5a5'
+        resultEl.innerHTML = `<i class="fas fa-times-circle"></i> خطا در برقراری ارتباط با سرور: ${e.message}`
+      }
+    }
+  },
+
+  async testSmtpSend() {
+    const resultEl = document.getElementById('smtp-test-result')
+    const user = document.getElementById('set-email-user')?.value?.trim() || ''
+    const pass = document.getElementById('set-email-pass')?.value?.trim() || ''
+    const host = document.getElementById('set-smtp-host')?.value?.trim() || 'smtp.gmail.com'
+    const port = document.getElementById('set-smtp-port')?.value || '465'
+    if (!user || !pass) {
+      if (resultEl) {
+        resultEl.style.display = 'block'
+        resultEl.style.background = 'rgba(239,68,68,0.1)'
+        resultEl.style.border = '1px solid rgba(239,68,68,0.3)'
+        resultEl.style.color = '#fca5a5'
+        resultEl.innerHTML = '<i class="fas fa-times-circle"></i> ابتدا آدرس ایمیل و گذرواژه را وارد نمایید.'
+      }
+      return
+    }
+    if (resultEl) {
+      resultEl.style.display = 'block'
+      resultEl.style.background = 'rgba(96,165,250,0.08)'
+      resultEl.style.border = '1px solid rgba(96,165,250,0.2)'
+      resultEl.style.color = '#93c5fd'
+      resultEl.innerHTML = `<i class="fas fa-spinner fa-spin"></i> در حال ارسال ایمیل آزمایشی به <strong dir="ltr">${user}</strong>...`
+    }
+    try {
+      const studioName = (typeof DB !== 'undefined' && DB.get ? DB.get('studioInfo')?.name : null) || 'استودیو'
+      const res = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: user,
+          subject: `✅ تست SMTP — ${studioName}`,
+          html: `<div dir="rtl" style="font-family:Tahoma,sans-serif;padding:20px;background:#0d1117;color:#e6edf3;border-radius:12px"><h2 style="color:#f59e0b">تست اتصال ایمیل استودیو</h2><p>اگر این ایمیل را دریافت کردید، تنظیمات SMTP شما <strong style="color:#4ade80">به درستی پیکربندی شده</strong> است.</p><p style="color:#8b949e;font-size:12px">سیستم مدیریت استودیو CRMSTUDIO</p></div>`,
+          smtpHost: host,
+          smtpPort: port,
+          smtpUser: user,
+          smtpPass: pass,
+          smtpSecure: port === '465',
+          fromName: studioName
+        })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (resultEl) {
+        if (data.ok) {
+          resultEl.style.background = 'rgba(74,222,128,0.1)'
+          resultEl.style.border = '1px solid rgba(74,222,128,0.3)'
+          resultEl.style.color = '#86efac'
+          resultEl.innerHTML = `<i class="fas fa-check-circle"></i> ایمیل آزمایشی با موفقیت به <strong dir="ltr">${user}</strong> ارسال شد! لطفاً صندوق ورودی (و پوشه Spam) را بررسی کنید.`
+        } else {
+          resultEl.style.background = 'rgba(239,68,68,0.1)'
+          resultEl.style.border = '1px solid rgba(239,68,68,0.3)'
+          resultEl.style.color = '#fca5a5'
+          resultEl.innerHTML = `<i class="fas fa-times-circle"></i> ${data.error || 'خطا در ارسال ایمیل'}`
+        }
+      }
+    } catch (e) {
+      if (resultEl) {
+        resultEl.style.background = 'rgba(239,68,68,0.1)'
+        resultEl.style.border = '1px solid rgba(239,68,68,0.3)'
+        resultEl.style.color = '#fca5a5'
+        resultEl.innerHTML = `<i class="fas fa-times-circle"></i> خطا در ارتباط با سرور: ${e.message}`
+      }
+    }
   },
 
   _smsTab(info) {

@@ -2041,9 +2041,13 @@ const server = http.createServer((req, res) => {
 
         console.log(`[Forgot Password] OTP code sent to ${maskEmail(rawEmail)} (${emailResult?.queued ? 'queued' : 'dispatched'})`)
 
+        const smtpConfigured = !!(emailResult && !emailResult.queued && emailResult.messageId)
         return sendJson(res, 200, {
           ok: true,
-          message: 'کد تأیید ۶ رقمی به ایمیل شما ارسال شد. لطفاً صندوق ورودی و پوشه هرزنامه (Spam) را بررسی کنید.',
+          smtpConfigured,
+          message: smtpConfigured
+            ? 'کد تأیید ۶ رقمی به ایمیل شما ارسال شد. لطفاً صندوق ورودی و پوشه هرزنامه (Spam) را بررسی کنید.'
+            : 'کد بازیابی تولید شد. ⚠️ سرور ایمیل پیکربندی نشده — لطفاً با مدیر سیستم تماس بگیرید یا از روش پیامک استفاده کنید.',
           maskedEmail: maskEmail(rawEmail)
         })
       } catch (err) {

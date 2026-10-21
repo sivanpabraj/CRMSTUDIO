@@ -1202,7 +1202,16 @@ const Portal = {
       if (s2) s2.style.display = 'block'
       if (maskedEl) maskedEl.textContent = data.maskedEmail || email
 
-      Utils.toast(data.message || 'کد تأیید به ایمیل ارسال شد', 'success', 5000)
+      if (data.smtpConfigured === false) {
+        Utils.toast('⚠️ کد تولید شد اما ارسال ایمیل پیکربندی نشده — با مدیر سیستم تماس بگیرید', 'warning', 8000)
+        const errEl = document.getElementById('forgot-email-err2')
+        if (errEl) {
+          errEl.style.display = 'block'
+          errEl.innerHTML = '⚠️ <strong>سرور ایمیل پیکربندی نشده است.</strong> مدیر استودیو باید از پنل مدیریت → تنظیمات → پیام‌رسان‌ها → SMTP را تنظیم کند. در حال حاضر می‌توانید از تب «پیامک مدیر» استفاده کنید.'
+        }
+      } else {
+        Utils.toast(data.message || 'کد تأیید به ایمیل ارسال شد', 'success', 5000)
+      }
       if (typeof AudioNotifier !== 'undefined') AudioNotifier.playPing()
 
       document.getElementById('forgot-email-otp')?.focus()
@@ -1380,7 +1389,7 @@ const Portal = {
         ${this.state._otpChannel === 'bale' && this.state._baleBotUrl ? `
           <div style="text-align:center;margin-bottom:12px">
             <a href="${this.state._baleBotUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#60a5fa;text-decoration:none;padding:6px 14px;background:rgba(27,116,228,0.15);border:1px solid rgba(27,116,228,0.3);border-radius:8px">
-              <i class="fas fa-external-link-alt"></i> باز کردن ربات بله استودیو ماندنی
+              <i class="fas fa-external-link-alt"></i> باز کردن ربات بله ${(typeof DB !== 'undefined' && DB.get ? DB.get('studioInfo')?.name : null) || 'استودیو'}
             </a>
           </div>
         ` : ''}
