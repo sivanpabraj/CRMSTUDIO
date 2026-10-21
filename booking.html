@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>رزرو آنلاین نوبت عکاسی و تصویربرداری | سیستم رزرواسیون استودیو</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    :root {
+      --bk-bg: #0b0c10;
+      --bk-card: #13141c;
+      --bk-card-border: rgba(255, 255, 255, 0.08);
+      --bk-gold: #d4af37;
+      --bk-gold-glow: rgba(212, 175, 55, 0.25);
+      --bk-accent: #0071E3;
+      --bk-emerald: #10b981;
+      --bk-text: #f8fafc;
+      --bk-text-muted: #94a3b8;
+    }
+    body {
+      background: var(--bk-bg);
+      color: var(--bk-text);
+      font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+    }
+    .booking-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 16px 80px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .bk-header {
+      text-align: center;
+      padding: 28px 20px 20px;
+      background: linear-gradient(180deg, rgba(212, 175, 55, 0.08) 0%, transparent 100%);
+      border-bottom: 1px solid var(--bk-card-border);
+      margin-bottom: 28px;
+    }
+    .bk-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      background: var(--bk-gold-glow);
+      color: var(--bk-gold);
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid rgba(212, 175, 55, 0.4);
+      margin-bottom: 12px;
+    }
+    .step-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--bk-card-border);
+      color: var(--bk-text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    .step-pill.active {
+      background: rgba(0, 113, 227, 0.15);
+      border-color: var(--bk-accent);
+      color: #fff;
+    }
+    .step-pill.done {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: var(--bk-emerald);
+      color: #34d399;
+    }
+    .branch-card {
+      background: var(--bk-card);
+      border: 1px solid var(--bk-card-border);
+      border-radius: 18px;
+      padding: 18px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-align: right;
+    }
+    .branch-card:hover, .branch-card.selected {
+      border-color: var(--bk-gold);
+      box-shadow: 0 8px 24px var(--bk-gold-glow);
+      transform: translateY(-2px);
+      background: #191b26;
+    }
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      text-align: center;
+    }
+    .cal-header-day {
+      padding: 8px 4px;
+      font-size: 12px;
+      color: var(--bk-text-muted);
+      font-weight: 700;
+    }
+    .cal-day-cell {
+      padding: 12px 6px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+      color: #e2e8f0;
+      transition: all 0.15s ease;
+      min-height: 48px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .cal-day-cell:hover:not(.disabled) {
+      border-color: var(--bk-accent);
+      background: rgba(0, 113, 227, 0.15);
+    }
+    .cal-day-cell.selected {
+      border-color: var(--bk-gold);
+      background: var(--bk-gold);
+      color: #000 !important;
+      font-weight: 900;
+      box-shadow: 0 4px 16px var(--bk-gold-glow);
+    }
+    .cal-day-cell.busy {
+      opacity: 0.45;
+      background: rgba(239, 68, 68, 0.08);
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+    .cal-day-cell.disabled {
+      opacity: 0.25;
+      cursor: not-allowed;
+    }
+    .slot-card {
+      background: var(--bk-card);
+      border: 1px solid var(--bk-card-border);
+      border-radius: 14px;
+      padding: 14px 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s ease;
+    }
+    .slot-card:hover, .slot-card.selected {
+      border-color: var(--bk-emerald);
+      background: rgba(16, 185, 129, 0.1);
+    }
+    .slot-card.golden.selected {
+      border-color: var(--bk-gold);
+      background: var(--bk-gold-glow);
+    }
+    .pkg-card {
+      background: var(--bk-card);
+      border: 1px solid var(--bk-card-border);
+      border-radius: 16px;
+      padding: 18px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .pkg-card:hover, .pkg-card.selected {
+      border-color: var(--bk-accent);
+      background: rgba(0, 113, 227, 0.08);
+    }
+    .addon-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--bk-card-border);
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .addon-item.selected {
+      border-color: var(--bk-emerald);
+      background: rgba(16, 185, 129, 0.08);
+    }
+    .action-btn {
+      padding: 14px 28px;
+      border-radius: 14px;
+      border: none;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+    .action-btn-primary {
+      background: linear-gradient(135deg, #d4af37, #b8972e);
+      color: #000;
+      box-shadow: 0 8px 24px var(--bk-gold-glow);
+    }
+    .action-btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(212, 175, 55, 0.4);
+    }
+    .action-btn-ghost {
+      background: rgba(255, 255, 255, 0.06);
+      color: #cbd5e1;
+      border: 1px solid var(--bk-card-border);
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="bk-header">
+    <div class="bk-badge">
+      <i class="fas fa-calendar-check"></i> سامانه رزرواسیون آنلاین نوبت استودیو
+    </div>
+    <h1 id="studio-title-heading" style="margin: 0 0 8px; font-size: 1.85rem; font-weight: 900; color: #fff;">
+      استودیو فیلم و عکس ماندنی
+    </h1>
+    <p style="margin: 0; color: var(--bk-text-muted); font-size: 13.5px;">
+      انتخاب آنلاین پکیج و تاریخ عکاسی، محاسبه هوشمند ساعت طلایی نور و تایید قطعی نوبت
+    </p>
+  </header>
+
+  <!-- Main Booking Wizard -->
+  <main class="booking-container">
+    <!-- Step Tracker -->
+    <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 16px; margin-bottom: 24px;" id="steps-tracker">
+      <div class="step-pill active" id="pill-step-1" onclick="BookingApp.goToStep(1)">
+        <span>۱.</span> شاخه و سبک
+      </div>
+      <div class="step-pill" id="pill-step-2" onclick="BookingApp.goToStep(2)">
+        <span>۲.</span> تاریخ و ساعت
+      </div>
+      <div class="step-pill" id="pill-step-3" onclick="BookingApp.goToStep(3)">
+        <span>۳.</span> پکیج و خدمات
+      </div>
+      <div class="step-pill" id="pill-step-4" onclick="BookingApp.goToStep(4)">
+        <span>۴.</span> اطلاعات و بیعانه
+      </div>
+    </div>
+
+    <!-- Step 1: Branch Selection -->
+    <section id="step-content-1">
+      <h2 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 14px;">لطفاً شاخه عکاسی مورد نظر را انتخاب نمایید:</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;" id="branches-list">
+        <!-- Injected dynamically -->
+      </div>
+      <div style="margin-top: 24px; text-align: left;">
+        <button type="button" class="action-btn action-btn-primary" onclick="BookingApp.goToStep(2)">
+          مرحله بعد: انتخاب تاریخ <i class="fas fa-arrow-left"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- Step 2: Date & Slot Selection -->
+    <section id="step-content-2" style="display: none;">
+      <h2 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 14px;">انتخاب روز و ساعت عکاسی:</h2>
+      <div style="background: var(--bk-card); border: 1px solid var(--bk-card-border); border-radius: 20px; padding: 22px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <button type="button" class="action-btn action-btn-ghost" style="padding: 8px 16px;" onclick="BookingApp.prevMonth()">
+            <i class="fas fa-chevron-right"></i> ماه قبل
+          </button>
+          <h3 id="cal-month-title" style="margin: 0; font-size: 1.15rem; color: var(--bk-gold); font-weight: 800;"></h3>
+          <button type="button" class="action-btn action-btn-ghost" style="padding: 8px 16px;" onclick="BookingApp.nextMonth()">
+            ماه بعد <i class="fas fa-chevron-left"></i>
+          </button>
+        </div>
+
+        <div class="cal-grid" id="cal-grid-box">
+          <!-- Days injected here -->
+        </div>
+      </div>
+
+      <!-- Time Slots for Selected Date -->
+      <div id="slots-container" style="display: none; margin-top: 24px;">
+        <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <i class="fas fa-clock" style="color: var(--bk-emerald);"></i>
+          شیفت‌های زمانی موجود برای تاریخ <span id="selected-date-label" style="color: var(--bk-gold);"></span>:
+        </h3>
+        <div style="display: flex; flex-direction: column; gap: 10px;" id="slots-list">
+          <!-- Slots injected here -->
+        </div>
+      </div>
+
+      <div style="margin-top: 28px; display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="action-btn action-btn-ghost" onclick="BookingApp.goToStep(1)">
+          <i class="fas fa-arrow-right"></i> بازگشت
+        </button>
+        <button type="button" class="action-btn action-btn-primary" id="btn-to-step3" onclick="BookingApp.goToStep(3)">
+          مرحله بعد: انتخاب پکیج <i class="fas fa-arrow-left"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- Step 3: Package & Addons -->
+    <section id="step-content-3" style="display: none;">
+      <h2 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 14px;">انتخاب پکیج و خدمات جانبی:</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 24px;" id="packages-list">
+        <!-- Packages injected here -->
+      </div>
+
+      <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 12px;">خدمات مکمل اختیاری:</h3>
+      <div id="addons-list">
+        <!-- Addons injected here -->
+      </div>
+
+      <div style="margin-top: 28px; display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="action-btn action-btn-ghost" onclick="BookingApp.goToStep(2)">
+          <i class="fas fa-arrow-right"></i> بازگشت
+        </button>
+        <button type="button" class="action-btn action-btn-primary" onclick="BookingApp.goToStep(4)">
+          مرحله بعد: ثبت مشخصات <i class="fas fa-arrow-left"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- Step 4: Client Info & Confirmation -->
+    <section id="step-content-4" style="display: none;">
+      <h2 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 14px;">مشخصات مراجع و تایید قطعی نوبت:</h2>
+      <div style="background: var(--bk-card); border: 1px solid var(--bk-card-border); border-radius: 20px; padding: 24px; margin-bottom: 20px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+          <div>
+            <label style="display: block; font-size: 12.5px; color: var(--bk-text-muted); margin-bottom: 6px;">نام و نام‌خانوادگی مراجع *</label>
+            <input type="text" id="inp-client-name" class="sm-input" placeholder="مثال: سارا محمدی" style="width: 100%; box-sizing: border-box; padding: 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--bk-card-border); border-radius: 12px; color: #fff; font-family: inherit;" />
+          </div>
+          <div>
+            <label style="display: block; font-size: 12.5px; color: var(--bk-text-muted); margin-bottom: 6px;">شماره موبایل جهت پیامک تاییدیه *</label>
+            <input type="tel" id="inp-client-phone" dir="ltr" class="sm-input" placeholder="09181234567" style="width: 100%; box-sizing: border-box; padding: 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--bk-card-border); border-radius: 12px; color: #fff; font-family: inherit;" />
+          </div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 12.5px; color: var(--bk-text-muted); margin-bottom: 6px;">شهر / لوکیشن مدنظر</label>
+          <input type="text" id="inp-client-city" class="sm-input" value="مریوان" placeholder="مریوان، سنندج، تهران..." style="width: 100%; box-sizing: border-box; padding: 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--bk-card-border); border-radius: 12px; color: #fff; font-family: inherit;" />
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 12.5px; color: var(--bk-text-muted); margin-bottom: 6px;">توضیحات و درخواست‌های ویژه (اختیاری)</label>
+          <textarea id="inp-client-notes" rows="3" class="sm-input" placeholder="مثلاً: هماهنگی جهت اکسسوری و رنگ لباس، تم تولد، حضور نوازنده و..." style="width: 100%; box-sizing: border-box; padding: 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--bk-card-border); border-radius: 12px; color: #fff; font-family: inherit;"></textarea>
+        </div>
+      </div>
+
+      <!-- Financial Summary -->
+      <div id="booking-financial-summary" style="background: rgba(212, 175, 55, 0.08); border: 1px solid rgba(212, 175, 55, 0.3); border-radius: 18px; padding: 20px; margin-bottom: 24px;">
+        <!-- Injected dynamically -->
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="action-btn action-btn-ghost" onclick="BookingApp.goToStep(3)">
+          <i class="fas fa-arrow-right"></i> بازگشت
+        </button>
+        <button type="button" class="action-btn action-btn-primary" id="btn-submit-booking" onclick="BookingApp.submit()">
+          <i class="fas fa-credit-card"></i> پرداخت بیعانه و ثبت قطعی نوبت
+        </button>
+      </div>
+    </section>
+
+    <!-- Success View -->
+    <section id="step-content-success" style="display: none;">
+      <div id="booking-card-result"></div>
+      <div style="text-align: center; margin-top: 24px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+        <button type="button" class="action-btn action-btn-ghost" onclick="window.print()">
+          <i class="fas fa-print"></i> چاپ یا ذخیره PDF
+        </button>
+        <button type="button" class="action-btn action-btn-primary" onclick="BookingApp.shareOnWhatsApp()">
+          <i class="fab fa-whatsapp"></i> ارسال در واتساپ استودیو
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Core Scripts -->
+  <script src="js/app-config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/secure-db.js"></script>
+  <script src="js/golden-hour-weather.js"></script>
+  <script src="js/contract-templates.js"></script>
+  <script src="js/document-seal-qr.js"></script>
+  <script src="js/payment-gateway.js"></script>
+  <script src="js/online-booking.js"></script>
+
+  <script>
+    const BookingApp = {
+      currentStep: 1,
+      selectedBranch: 'wedding',
+      selectedYear: 1405,
+      selectedMonth: 1,
+      selectedDate: '',
+      selectedSlot: 'golden_hour',
+      selectedPackage: '',
+      selectedAddons: [],
+      lastConfirmedBooking: null,
+
+      init() {
+        if (typeof Utils !== 'undefined') {
+          const today = Utils.todayJalali().split('/')
+          this.selectedYear = parseInt(today[0], 10)
+          this.selectedMonth = parseInt(today[1], 10)
+          this.selectedDate = Utils.todayJalali()
+        }
+
+        const studioInfo = (typeof DB !== 'undefined' && DB.get ? DB.get('studioInfo') : null) || {}
+        if (studioInfo.name) {
+          document.getElementById('studio-title-heading').textContent = studioInfo.name
+        }
+
+        this.renderBranches()
+        this.renderCalendar()
+        this.renderPackages()
+      },
+
+      goToStep(step) {
+        if (step === 2 && !this.selectedBranch) return
+        if (step === 3 && !this.selectedDate) {
+          if (typeof Utils !== 'undefined') Utils.toast('لطفاً یک تاریخ از تقویم انتخاب نمایید', 'warning')
+          return
+        }
+        if (step === 4 && !this.selectedPackage) {
+          if (typeof Utils !== 'undefined') Utils.toast('لطفاً یک پکیج انتخاب فرمایید', 'warning')
+          return
+        }
+
+        this.currentStep = step
+        for (let i = 1; i <= 4; i++) {
+          const content = document.getElementById(`step-content-${i}`)
+          const pill = document.getElementById(`pill-step-${i}`)
+          if (content) content.style.display = (i === step) ? 'block' : 'none'
+          if (pill) {
+            pill.className = 'step-pill'
+            if (i === step) pill.classList.add('active')
+            else if (i < step) pill.classList.add('done')
+          }
+        }
+
+        if (step === 4) this.renderSummary()
+      },
+
+      renderBranches() {
+        const box = document.getElementById('branches-list')
+        if (!box || !window.OnlineBooking) return
+        const branches = window.OnlineBooking.BRANCHES
+
+        box.innerHTML = Object.values(branches).map(b => `
+          <div class="branch-card ${b.id === this.selectedBranch ? 'selected' : ''}" onclick="BookingApp.selectBranch('${b.id}')">
+            <div style="font-size: 2rem;">${b.emoji}</div>
+            <strong style="font-size: 1.05rem; color: #fff;">${b.title}</strong>
+            <div style="font-size: 12px; color: var(--bk-text-muted);">شروع از ${Number(b.basePrice).toLocaleString('fa-IR')} تومان</div>
+            <div style="font-size: 11px; color: #38bdf8;">مدت زمان معمول: ${b.defaultDuration}</div>
+          </div>
+        `).join('')
+      },
+
+      selectBranch(id) {
+        this.selectedBranch = id
+        this.selectedPackage = ''
+        this.selectedAddons = []
+        this.renderBranches()
+        this.renderPackages()
+      },
+
+      renderCalendar() {
+        if (typeof Utils === 'undefined') return
+        const monthTitle = document.getElementById('cal-month-title')
+        if (monthTitle) {
+          monthTitle.textContent = `${Utils.jalaliMonthName(this.selectedMonth)} ${this.selectedYear}`
+        }
+
+        const grid = document.getElementById('cal-grid-box')
+        if (!grid) return
+
+        const daysInMonth = Utils.jalaliMonthDays(this.selectedYear, this.selectedMonth)
+        const startWeekday = Utils.jalaliMonthStartWeekday(this.selectedYear, this.selectedMonth)
+        const busyMap = window.OnlineBooking.checkMonthAvailability(this.selectedYear, this.selectedMonth)
+
+        const pad = n => String(n).padStart(2, '0')
+        const weekdays = Utils.jalaliWeekdaysShort()
+
+        let html = weekdays.map(w => `<div class="cal-header-day">${w}</div>`).join('')
+
+        for (let i = 0; i < startWeekday; i++) {
+          html += '<div class="cal-day-cell disabled"></div>'
+        }
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dStr = `${this.selectedYear}/${pad(this.selectedMonth)}/${pad(d)}`
+          const isSelected = (dStr === this.selectedDate)
+          const busyCount = busyMap[dStr] || 0
+          const isBusy = busyCount >= 2
+
+          html += `
+            <div class="cal-day-cell ${isSelected ? 'selected' : ''} ${isBusy ? 'busy' : ''}" onclick="BookingApp.selectDate('${dStr}')">
+              <span>${d}</span>
+              ${isBusy ? '<span style="font-size:9px;color:#f87171">تکمیل</span>' : '<span style="font-size:9px;color:#4ade80">باز</span>'}
+            </div>
+          `
+        }
+
+        grid.innerHTML = html
+      },
+
+      prevMonth() {
+        if (this.selectedMonth === 1) {
+          this.selectedMonth = 12
+          this.selectedYear--
+        } else {
+          this.selectedMonth--
+        }
+        this.renderCalendar()
+      },
+
+      nextMonth() {
+        if (this.selectedMonth === 12) {
+          this.selectedMonth = 1
+          this.selectedYear++
+        } else {
+          this.selectedMonth++
+        }
+        this.renderCalendar()
+      },
+
+      selectDate(dStr) {
+        this.selectedDate = dStr
+        this.renderCalendar()
+
+        const label = document.getElementById('selected-date-label')
+        if (label) label.textContent = dStr
+
+        const container = document.getElementById('slots-container')
+        if (container) container.style.display = 'block'
+
+        this.renderSlots()
+      },
+
+      renderSlots() {
+        const list = document.getElementById('slots-list')
+        if (!list || !window.OnlineBooking) return
+
+        const slots = window.OnlineBooking.getTimeSlotsForDate(this.selectedDate, 'مریوان')
+        list.innerHTML = slots.map(s => `
+          <div class="slot-card ${s.id === this.selectedSlot ? 'selected' : ''} ${s.isGolden ? 'golden' : ''}" onclick="BookingApp.selectSlot('${s.id}')">
+            <div>
+              <div style="font-weight: 800; font-size: 14px; color: ${s.isGolden ? '#d4af37' : '#fff'};">
+                <i class="fas ${s.icon}"></i> ${s.title} ${s.badge ? `<span style="font-size:10.5px;padding:2px 8px;border-radius:10px;background:rgba(212,175,55,0.2);color:#d4af37;margin-right:6px">${s.badge}</span>` : ''}
+              </div>
+              <div style="font-size: 12px; color: var(--bk-text-muted); margin-top: 4px;">${s.desc}</div>
+            </div>
+            <div style="font-weight: 700; font-size: 13.5px; color: ${s.isGolden ? '#d4af37' : '#38bdf8'}; direction: ltr;">
+              ${s.range}
+            </div>
+          </div>
+        `).join('')
+      },
+
+      selectSlot(id) {
+        this.selectedSlot = id
+        this.renderSlots()
+      },
+
+      renderPackages() {
+        const pkgBox = document.getElementById('packages-list')
+        const addBox = document.getElementById('addons-list')
+        if (!pkgBox || !window.OnlineBooking) return
+
+        const branch = window.OnlineBooking.BRANCHES[this.selectedBranch] || window.OnlineBooking.BRANCHES.wedding
+        if (!this.selectedPackage && branch.packages[0]) {
+          this.selectedPackage = branch.packages[0].id
+        }
+
+        pkgBox.innerHTML = branch.packages.map(p => `
+          <div class="pkg-card ${p.id === this.selectedPackage ? 'selected' : ''}" onclick="BookingApp.selectPackage('${p.id}')">
+            <h4 style="margin: 0 0 6px; font-size: 1.1rem; color: #fff;">${p.name}</h4>
+            <div style="font-size: 1.25rem; font-weight: 900; color: #d4af37; margin-bottom: 8px;">
+              ${Number(p.price).toLocaleString('fa-IR')} <span style="font-size: 12px; font-weight: normal;">تومان</span>
+            </div>
+            <p style="margin: 0; font-size: 12px; color: var(--bk-text-muted); line-height: 1.6;">${p.desc}</p>
+          </div>
+        `).join('')
+
+        addBox.innerHTML = branch.addons.map(a => {
+          const isSel = this.selectedAddons.includes(a.id)
+          return `
+            <div class="addon-item ${isSel ? 'selected' : ''}" onclick="BookingApp.toggleAddon('${a.id}')">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <input type="checkbox" ${isSel ? 'checked' : ''} style="accent-color: #10b981;" />
+                <span style="font-size: 13px; font-weight: 600;">${a.name}</span>
+              </div>
+              <strong style="color: #38bdf8; font-size: 13px;">${Number(a.price).toLocaleString('fa-IR')} تومان</strong>
+            </div>
+          `
+        }).join('')
+      },
+
+      selectPackage(id) {
+        this.selectedPackage = id
+        this.renderPackages()
+      },
+
+      toggleAddon(id) {
+        if (this.selectedAddons.includes(id)) {
+          this.selectedAddons = this.selectedAddons.filter(x => x !== id)
+        } else {
+          this.selectedAddons.push(id)
+        }
+        this.renderPackages()
+      },
+
+      renderSummary() {
+        const box = document.getElementById('booking-financial-summary')
+        if (!box || !window.OnlineBooking) return
+
+        const pricing = window.OnlineBooking.calculatePricing(this.selectedBranch, this.selectedPackage, this.selectedAddons)
+        box.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <strong style="font-size: 1.05rem; color: #d4af37;">خلاصه فاکتور و بیعانه رزرو</strong>
+            <span style="font-size: 12px; color: var(--bk-text-muted);">تاریخ مراسم: ${this.selectedDate}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+            <span>${pricing.package.name}:</span>
+            <strong>${Number(pricing.package.price).toLocaleString('fa-IR')} تومان</strong>
+          </div>
+          ${pricing.addons.map(a => `
+            <div style="display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">
+              <span>+ ${a.name}:</span>
+              <span>${Number(a.price).toLocaleString('fa-IR')} تومان</span>
+            </div>
+          `).join('')}
+          <div style="border-top: 1px dashed rgba(212,175,55,0.3); margin: 12px 0 10px; padding-top: 10px; display: flex; justify-content: space-between; font-size: 14px; font-weight: 800;">
+            <span>مبلغ کل پکیج:</span>
+            <span style="color: #38bdf8;">${Number(pricing.totalPrice).toLocaleString('fa-IR')} تومان</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 1.15rem; font-weight: 900; color: #4ade80;">
+            <span>مبلغ بیعانه جهت تایید نهایی:</span>
+            <span>${Number(pricing.depositAmount).toLocaleString('fa-IR')} تومان</span>
+          </div>
+        `
+      },
+
+      async submit() {
+        const name = (document.getElementById('inp-client-name')?.value || '').trim()
+        const phone = (document.getElementById('inp-client-phone')?.value || '').trim()
+        const city = (document.getElementById('inp-client-city')?.value || '').trim() || 'مریوان'
+        const notes = (document.getElementById('inp-client-notes')?.value || '').trim()
+
+        if (!name) {
+          if (typeof Utils !== 'undefined') Utils.toast('نام و نام‌خانوادگی خود را وارد نمایید', 'error')
+          return
+        }
+        if (!phone || (typeof Utils !== 'undefined' && !Utils.isValidPhone(phone))) {
+          if (typeof Utils !== 'undefined') Utils.toast('شماره همراه معتبر وارد فرمایید', 'error')
+          return
+        }
+
+        const pricing = window.OnlineBooking.calculatePricing(this.selectedBranch, this.selectedPackage, this.selectedAddons)
+
+        // Trigger payment via PaymentGateway
+        if (typeof PaymentGateway !== 'undefined') {
+          PaymentGateway.requestPayment({
+            contractNum: 'BK-' + Date.now().toString().slice(-4),
+            amount: pricing.depositAmount,
+            customerName: name,
+            customerPhone: phone,
+            description: `بیعانه رزرو نوبت ${pricing.branch.title} در تاریخ ${this.selectedDate}`
+          })
+        }
+
+        const res = await window.OnlineBooking.submitBooking({
+          branchId: this.selectedBranch,
+          packageId: this.selectedPackage,
+          addonIds: this.selectedAddons,
+          date: this.selectedDate,
+          slotId: this.selectedSlot,
+          clientName: name,
+          clientPhone: phone,
+          city,
+          notes
+        })
+
+        if (!res.ok) {
+          if (typeof Utils !== 'undefined') Utils.toast(res.error || 'خطا در ثبت نوبت', 'error')
+          return
+        }
+
+        this.lastConfirmedBooking = res.booking
+
+        // Show Success Section
+        document.getElementById('step-content-4').style.display = 'none'
+        document.getElementById('steps-tracker').style.display = 'none'
+        const successSec = document.getElementById('step-content-success')
+        successSec.style.display = 'block'
+
+        const cardBox = document.getElementById('booking-card-result')
+        const studioInfo = (typeof DB !== 'undefined' && DB.get ? DB.get('studioInfo') : null) || {}
+        cardBox.innerHTML = window.OnlineBooking.renderBookingCard(res.booking, studioInfo)
+
+        if (typeof Utils !== 'undefined') {
+          Utils.toast('نوبت با موفقیت ثبت گردید ✓', 'success')
+        }
+      },
+
+      shareOnWhatsApp() {
+        if (!this.lastConfirmedBooking) return
+        const b = this.lastConfirmedBooking
+        const text = `سلام، نوبت عکاسی با کد ${b.code} در تاریخ ${b.date} به نام ${b.client} با بیعانه ${Number(b.deposit).toLocaleString('fa-IR')} تومان ثبت شد.`
+        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => BookingApp.init())
+  </script>
+</body>
+</html>

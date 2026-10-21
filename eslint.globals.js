@@ -57,6 +57,7 @@ export const browserGlobals = {
   DocumentSeal: "readonly",
   GoldenHourWeather: "readonly",
   ContractTemplates: "readonly",
+  OnlineBooking: "readonly",
   SmartConflictDetector: "readonly",
   SmartLifecycleSMS: "readonly",
   CrewHub: "readonly",

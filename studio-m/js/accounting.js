@@ -178,7 +178,8 @@ const SMAccounting = {
         { id: 'banks', fa: 'بانک و صندوق', en: 'Banks', icon: 'fa-building-columns', onclick: "SMAccounting.setTab('banks')" },
         { id: 'ledger', fa: 'دفتر روزنامه', en: 'Ledger', icon: 'fa-book', onclick: "SMAccounting.setTab('ledger')" },
         { id: 'cheques', fa: 'اسناد و چک‌ها', en: 'Cheques', icon: 'fa-money-check-alt', onclick: "SMAccounting.setTab('cheques')" },
-        { id: 'balance', fa: 'تراز مالی ERP', en: 'Balance', icon: 'fa-scale-balanced', onclick: "SMAccounting.setTab('balance')" }
+        { id: 'balance', fa: 'تراز مالی ERP', en: 'Balance', icon: 'fa-scale-balanced', onclick: "SMAccounting.setTab('balance')" },
+        { id: 'bi_reports', fa: 'گزارش تحلیلی BI', en: 'Analytics', icon: 'fa-chart-pie', onclick: "SMAccounting.setTab('bi_reports')" }
       ], this._tab)}
       <div class="sm-acc-body">${this._renderTab(q)}</div>`
   },
@@ -190,6 +191,8 @@ const SMAccounting = {
       extra = `<button type="button" class="sm-btn sm-btn-ghost" onclick="SMAccounting.addBank()"><i class="fas fa-plus"></i> افزودن بانک</button>`
     } else if (this._tab === 'cheques') {
       extra = `<button type="button" class="sm-btn sm-btn-ghost" onclick="SMAccounting.addCheque()"><i class="fas fa-plus"></i> ثبت چک</button>`
+    } else if (this._tab === 'bi_reports') {
+      extra = `<button type="button" class="sm-btn sm-btn-ghost" onclick="window.print()"><i class="fas fa-print"></i> چاپ گزارش رسمی</button>`
     }
     return `<div class="sm-acc-head-actions">${flow}${extra}</div>`
   },
@@ -213,6 +216,7 @@ const SMAccounting = {
     if (this._tab === 'banks') return this._banksView(q)
     if (this._tab === 'cheques') return this._chequesView(q)
     if (this._tab === 'balance') return this._balanceView(q)
+    if (this._tab === 'bi_reports') return this._biReportsView(q)
     return this._ledgerView(q)
   },
 
@@ -303,6 +307,129 @@ const SMAccounting = {
             </tr>
           </tbody>
         </table>
+      </div>`
+  },
+
+  _biReportsView(_q) {
+    const tx = DB.get('transactions') || []
+    const contracts = DB.get('contracts') || []
+
+    const deposits = tx.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0)
+    const withdrawals = tx.filter(t => t.type === 'withdrawal').reduce((s, t) => s + (t.amount || 0), 0)
+    const netProfit = deposits - withdrawals
+    const profitMargin = deposits > 0 ? Math.round((netProfit / deposits) * 100) : 0
+
+    const contractReceivables = contracts.reduce((s, c) => {
+      const total = Number(c.totalPrice || c.price || 0)
+      const prepay = Number(c.prepayment || 0)
+      const paid = Number(c.paidAmount || prepay)
+      return s + Math.max(0, total - paid)
+    }, 0)
+
+    // Branch revenue breakdown
+    const branches = {
+      wedding: { title: 'عروسی و فرمالیته', emoji: '💒', amount: 0, count: 0, color: '#f59e0b' },
+      newborn_kids: { title: 'کودک و نوزاد', emoji: '👶', amount: 0, count: 0, color: '#06b6d4' },
+      maternity: { title: 'بارداری و جنسیت', emoji: '🤰', amount: 0, count: 0, color: '#ec4899' },
+      modeling: { title: 'مدلینگ و پرتره', emoji: '📸', amount: 0, count: 0, color: '#a855f7' },
+      commercial: { title: 'تیزر صنعتی و ریلز', emoji: '🎬', amount: 0, count: 0, color: '#10b981' }
+    }
+
+    contracts.forEach(c => {
+      const type = c.type || c.contractType || ''
+      const price = Number(c.totalPrice || c.price || 0)
+      const text = `${c.title || ''} ${c.couple || ''} ${c.notes || ''}`.toLowerCase()
+
+      let matched = 'wedding'
+      if (type === 'newborn_kids' || text.includes('کودک') || text.includes('نوزاد') || text.includes('تولد')) matched = 'newborn_kids'
+      else if (type === 'maternity' || text.includes('بارداری') || text.includes('جنسیت')) matched = 'maternity'
+      else if (type === 'modeling' || text.includes('مدل') || text.includes('پرتره') || text.includes('فشن')) matched = 'modeling'
+      else if (type === 'commercial' || text.includes('تیزر') || text.includes('صنعتی') || text.includes('ریلز') || text.includes('برند')) matched = 'commercial'
+
+      branches[matched].amount += price
+      branches[matched].count++
+    })
+
+    const totalContractVol = Object.values(branches).reduce((s, b) => s + b.amount, 0) || 1
+
+    // 12-Month revenue trend
+    const currentYear = (typeof Utils !== 'undefined' ? Utils.todayJalali().split('/')[0] : '1405') || '1405'
+    const monthNames = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
+    const monthRevenues = new Array(12).fill(0)
+
+    tx.filter(t => t.type === 'deposit' && t.date && t.date.startsWith(currentYear)).forEach(t => {
+      const m = parseInt(t.date.split('/')[1], 10)
+      if (m >= 1 && m <= 12) {
+        monthRevenues[m - 1] += (t.amount || 0)
+      }
+    })
+
+    const maxMonthRev = Math.max(...monthRevenues, 1)
+
+    return `
+      <div class="sm-acc-bi-reports">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:16px;margin-bottom:20px;">
+          <div style="padding:16px;background:var(--sm-card-bg);border:1px solid var(--sm-border);border-radius:14px;">
+            <span style="font-size:0.8rem;color:var(--sm-text-muted);">درآمد کل واریزی (دوره جاری)</span>
+            <div style="font-size:1.35rem;font-weight:800;color:var(--sm-success);margin-top:4px;">${SM.fmt(deposits)} <small>تومان</small></div>
+            <div style="font-size:0.75rem;color:var(--sm-text-muted);margin-top:4px;">مجموع کلیه تراکنش‌های واریز</div>
+          </div>
+          <div style="padding:16px;background:var(--sm-card-bg);border:1px solid var(--sm-border);border-radius:14px;">
+            <span style="font-size:0.8rem;color:var(--sm-text-muted);">کل هزینه‌ها و برداشت‌ها</span>
+            <div style="font-size:1.35rem;font-weight:800;color:var(--sm-danger);margin-top:4px;">${SM.fmt(withdrawals)} <small>تومان</small></div>
+            <div style="font-size:0.75rem;color:var(--sm-text-muted);margin-top:4px;">پرسنل، آفیش، تجهیزات، جاری</div>
+          </div>
+          <div style="padding:16px;background:var(--sm-card-bg);border:1px solid var(--sm-border);border-radius:14px;">
+            <span style="font-size:0.8rem;color:var(--sm-text-muted);">سود خالص عملیاتی استودیو</span>
+            <div style="font-size:1.35rem;font-weight:800;color:var(--sm-accent);margin-top:4px;">${SM.fmt(netProfit)} <small>تومان</small></div>
+            <div style="font-size:0.75rem;color:var(--sm-success);margin-top:4px;">حاشیه سود: ${profitMargin}٪</div>
+          </div>
+          <div style="padding:16px;background:var(--sm-card-bg);border:1px solid var(--sm-border);border-radius:14px;">
+            <span style="font-size:0.8rem;color:var(--sm-text-muted);">مانده مطالبات تسویه نشده</span>
+            <div style="font-size:1.35rem;font-weight:800;color:var(--sm-warning);margin-top:4px;">${SM.fmt(contractReceivables)} <small>تومان</small></div>
+            <div style="font-size:0.75rem;color:var(--sm-text-muted);margin-top:4px;">باقیمانده قراردادهای فعال</div>
+          </div>
+        </div>
+
+        <!-- 12-Month Bar Chart -->
+        <div class="sm-card" style="margin-bottom:20px;background:var(--sm-card-bg);border:1px solid var(--sm-border);border-radius:16px;padding:20px;">
+          <div style="font-weight:700;font-size:1.05rem;margin-bottom:18px;display:flex;align-items:center;gap:8px;">
+            <i class="fas fa-chart-column" style="color:var(--sm-accent);"></i> روند درآمدهای ماهانه استودیو در سال ${currentYear}
+          </div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px;height:140px;padding:0 8px 10px;border-bottom:1px solid var(--sm-border);">
+            ${monthRevenues.map((rev, idx) => {
+              const heightPct = Math.max(8, Math.round((rev / maxMonthRev) * 100))
+              return `
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;gap:6px;" title="${monthNames[idx]}: ${SM.fmt(rev)} تومان">
+                  <span style="font-size:0.65rem;color:var(--sm-text-muted);">${rev > 0 ? SM.fmt(Math.round(rev / 1000000)) + 'M' : ''}</span>
+                  <div style="width:100%;max-width:28px;height:${heightPct}%;background:linear-gradient(180deg, var(--sm-accent), rgba(0,113,227,0.4));border-radius:6px 6px 0 0;transition:all .2s ease;"></div>
+                  <span style="font-size:0.7rem;color:var(--sm-text-muted);white-space:nowrap;">${monthNames[idx].slice(0, 3)}</span>
+                </div>`
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Branch Breakdown -->
+        <div class="sm-card" style="background:var(--sm-card-bg);border:1px solid var(--sm-border);border-radius:16px;padding:20px;">
+          <div style="font-weight:700;font-size:1.05rem;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+            <i class="fas fa-chart-pie" style="color:#d4af37;"></i> تفکیک حجم مالی و سهم شاخه‌های مختلف عکاسی استودیو
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            ${Object.values(branches).map(b => {
+              const pct = Math.round((b.amount / totalContractVol) * 100) || 0
+              return `
+                <div>
+                  <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px;">
+                    <span>${b.emoji} <strong>${b.title}</strong> (${b.count} قرارداد)</span>
+                    <span style="font-weight:700;">${SM.fmt(b.amount)} تومان <small style="color:var(--sm-text-muted);">(${pct}٪)</small></span>
+                  </div>
+                  <div style="width:100%;height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;">
+                    <div style="width:${pct}%;height:100%;background:${b.color};border-radius:4px;"></div>
+                  </div>
+                </div>`
+            }).join('')}
+          </div>
+        </div>
       </div>`
   },
 
