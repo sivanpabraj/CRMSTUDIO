@@ -287,16 +287,26 @@
           </div>
 
           <!-- امضا و مهر -->
-          <div style="display:flex;justify-content:space-between;text-align:center;padding:16px 24px 8px;font-size:11px">
-            <div style="width:40%">
+          <div style="display:flex;justify-content:space-between;align-items:center;text-align:center;padding:16px 14px 8px;font-size:11px;border-top:1px dashed #888;margin-top:10px">
+            <div style="width:34%">
               <div>مهر و امضای امور مالی / مدیریت استودیو</div>
-              <div style="height:60px"></div>
-              <div style="border-top:1px dashed #888;padding-top:4px">${data.studioName}</div>
+              <div style="height:65px;display:flex;align-items:center;justify-content:center">
+                ${typeof DocumentSeal !== 'undefined' ? `<img src="${DocumentSeal.generateStudioSeal({ name: data.studioName, licenseNo: data.studioEconomicCode })}" alt="مهر" style="width:75px;height:75px;pointer-events:none"/>` : ''}
+              </div>
+              <div style="font-weight:700">${data.studioName}</div>
             </div>
-            <div style="width:40%">
+            <div style="width:28%;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              ${typeof DocumentSeal !== 'undefined' ? `
+                <img src="${DocumentSeal.generateQrCode(window.location.origin + '/invoice.html?id=' + data.invoiceNumber, 80)}" alt="QR" style="width:64px;height:64px;border:1px solid #ddd;padding:3px;background:#fff;border-radius:6px"/>
+                <div style="font-size:9px;color:#666;margin-top:2px">استعلام اصالت رسمی سند</div>
+              ` : ''}
+            </div>
+            <div style="width:34%">
               <div>امضا و اثر انگشت خریدار / متقاضی</div>
-              <div style="height:60px"></div>
-              <div style="border-top:1px dashed #888;padding-top:4px">${data.customerName || 'مشتری'}</div>
+              <div style="height:65px;display:flex;align-items:center;justify-content:center">
+                <span style="color:#10b981;font-weight:700;font-size:11px"><i class="fas fa-check-circle"></i> تایید الکترونیک با رمز یکبارمصرف</span>
+              </div>
+              <div style="font-weight:700">${data.customerName || 'مشتری'}</div>
             </div>
           </div>
         </div>

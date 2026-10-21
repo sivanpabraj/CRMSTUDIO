@@ -60,7 +60,26 @@
     <div class="step-panel active" id="sp-1">
       <div class="sp-header">
         <div class="sp-icon gold">💍</div>
-        <div><h2>اطلاعات طرفین قرارداد</h2><p>مشخصات هویتی عروس، داماد و استودیو</p></div>
+        <div><h2>اطلاعات طرفین قرارداد</h2><p>مشخصات هویتی طرفین، نوع قرارداد و استودیو</p></div>
+      </div>
+
+      <!-- انتخاب شاخه و نوع قرارداد -->
+      <div class="ct-type-bar" style="margin-bottom:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:6px;display:flex;gap:6px;flex-wrap:wrap">
+        <button type="button" class="ct-type-btn active" data-type="wedding" onclick="selectContractType('wedding')" style="background:#d4af37;color:#000;border:none;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer">
+          💒 عروسی و فرمالیته
+        </button>
+        <button type="button" class="ct-type-btn" data-type="newborn_kids" onclick="selectContractType('newborn_kids')" style="background:rgba(255,255,255,0.05);color:#fff;border:none;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">
+          👶 کودک و نوزاد
+        </button>
+        <button type="button" class="ct-type-btn" data-type="maternity" onclick="selectContractType('maternity')" style="background:rgba(255,255,255,0.05);color:#fff;border:none;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">
+          🤰 بارداری و جنسیت
+        </button>
+        <button type="button" class="ct-type-btn" data-type="modeling" onclick="selectContractType('modeling')" style="background:rgba(255,255,255,0.05);color:#fff;border:none;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">
+          📸 مدلینگ و پرتره
+        </button>
+        <button type="button" class="ct-type-btn" data-type="commercial" onclick="selectContractType('commercial')" style="background:rgba(255,255,255,0.05);color:#fff;border:none;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">
+          🎬 تیزر صنعتی و ریلز
+        </button>
       </div>
 
       <div class="form-grid-2">
@@ -121,6 +140,8 @@
           </div>
         </div>
       </div>
+
+      <div id="contract-golden-hour-container" style="margin-top:14px"></div>
 
       <div class="step-foot">
         <div></div>
@@ -444,6 +465,8 @@
         <div class="inv-verify-grid" id="inv-verify-grid"></div>
       </div>
 
+      <div id="inv-seal-container"></div>
+
       <div class="inv-footer-note">
         این قرارداد در دو نسخه تنظیم و هر کدام از طرفین یک نسخه دریافت نمود.
         <span class="inv-format-badge" id="inv-format-badge">A4</span>
@@ -477,6 +500,9 @@
 <script src="js/smart-conflict-detector.js" defer></script>
 <script src="js/payment-gateway.js" defer></script>
 <script src="js/invoice-generator.js" defer></script>
+<script src="js/document-seal-qr.js" defer></script>
+<script src="js/golden-hour-weather.js" defer></script>
+<script src="js/contract-templates.js" defer></script>
 <script src="js/eng-whatsapp.js" defer></script>
 <script src="contract.js" defer></script>
 <script src="js/sw-register.js"></script>

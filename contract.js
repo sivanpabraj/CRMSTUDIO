@@ -554,6 +554,7 @@ function syncPreview() {
       <div><div class="totals-lbl">جمع قرارداد</div><div class="totals-val">${fmtNum(state.total)}</div></div>
       <div style="text-align:left"><div class="totals-lbl">مانده پرداخت</div><div class="totals-val">${fmtNum(state.balance)}</div></div>`
   }
+  updateGoldenHourCard()
 }
 
 // ════════════════════════════════════════════
@@ -624,6 +625,47 @@ function formatTermsHtml(text) {
     return '<ul>' + lines.map(l => `<li>${escapeHtml(l.replace(/^[-•]\s*/, ''))}</li>`).join('') + '</ul>'
   }
   return escapeHtml(text).replace(/\n/g, '<br>')
+}
+
+let currentContractType = 'wedding'
+
+function selectContractType(typeId) {
+  currentContractType = typeId
+  const buttons = document.querySelectorAll('.ct-type-btn')
+  buttons.forEach(btn => {
+    const isActive = btn.getAttribute('data-type') === typeId
+    btn.style.background = isActive ? '#d4af37' : 'rgba(255,255,255,0.05)'
+    btn.style.color = isActive ? '#000' : '#fff'
+    btn.style.fontWeight = isActive ? '800' : '700'
+  })
+
+  if (typeof ContractTemplates !== 'undefined') {
+    const cfg = ContractTemplates.getTypeConfig(typeId)
+    const groomHead = document.querySelector('.party-box.groom .party-head')
+    const brideHead = document.querySelector('.party-box.bride .party-head')
+    if (groomHead) groomHead.innerHTML = `<span>${cfg.emoji}</span> ${cfg.party1Label}`
+    if (brideHead) brideHead.innerHTML = `<span>👤</span> ${cfg.party2Label}`
+
+    const studio = gv('studio-name') || 'استودیو'
+    const termsEl = document.getElementById('contract-terms')
+    if (termsEl) {
+      termsEl.value = ContractTemplates.buildTermsText(typeId, studio)
+    }
+  }
+  syncPreview()
+}
+
+function updateGoldenHourCard() {
+  const container = document.getElementById('contract-golden-hour-container')
+  if (!container || typeof GoldenHourWeather === 'undefined') return
+  const eventDate = gv('event-date') || todayFa()
+  const venue = gv('event-venue') || ''
+  const studio = gv('studio-name') || ''
+  container.innerHTML = GoldenHourWeather.renderWidget({
+    date: eventDate,
+    venue,
+    cityName: studio.includes('مریوان') ? 'مریوان' : (studio.includes('سنندج') ? 'سنندج' : 'تهران')
+  })
 }
 
 function openOfficialInvoiceModal() {
@@ -753,6 +795,21 @@ function openInvoice() {
     const cBox = document.getElementById('contract-conflict-box')
     if (cBox) {
       cBox.innerHTML = conflictScan.hasConflicts ? SmartConflictDetector.renderConflictHtml(conflictScan) : ''
+    }
+  }
+
+  if (typeof DocumentSeal !== 'undefined') {
+    const sealBox = document.getElementById('inv-seal-container')
+    const studioInfo = (typeof DB !== 'undefined' && DB.get ? DB.get('studioInfo') : null) || { name: studio }
+    const sealHtml = DocumentSeal.renderSealAndSignatures({
+      id: contractNum,
+      contractNum,
+      couple: bride && groom ? `${bride} و ${groom}` : (bride || groom || 'کارفرما'),
+      customerSignature: state.customerSignature || null,
+      managerSignature: state.managerSignature || null
+    }, studioInfo)
+    if (sealBox) {
+      sealBox.innerHTML = sealHtml
     }
   }
 

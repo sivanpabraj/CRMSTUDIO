@@ -18,6 +18,11 @@ const ROLE_DEFS = {
   editor_clip:        { id: 'editor_clip',        emoji: '✂️', title: 'ادیتور کلیپ',     type: 'office', perms: ['view_own_projects', 'editing'] },
   album_designer:     { id: 'album_designer',     emoji: '🎨', title: 'طراح آلبوم',      type: 'office', perms: ['view_own_projects', 'editing'] },
   colorist:           { id: 'colorist',           emoji: '🌈', title: 'کالریست',         type: 'office', perms: ['view_own_projects', 'editing'] },
+  photographer_kids:  { id: 'photographer_kids',  emoji: '👶', title: 'عکاس کودک و نوزاد', type: 'field', perms: ['view_contract', 'view_own_projects'] },
+  photographer_fashion: { id: 'photographer_fashion', emoji: '📸', title: 'عکاس مدلینگ و پرتره', type: 'field', perms: ['view_contract', 'view_own_projects'] },
+  vid_commercial:     { id: 'vid_commercial',     emoji: '🎬', title: 'تصویربردار صنعتی و تیزر', type: 'field', perms: ['view_contract', 'view_own_projects'] },
+  social_media:       { id: 'social_media',       emoji: '📱', title: 'تولید محتوا و ریلز', type: 'office', perms: ['view_own_projects', 'editing'] },
+  accountant:         { id: 'accountant',         emoji: '💼', title: 'حسابدار رسمی',    type: 'management', perms: ['manage_finance', 'view_contract'] },
   other:              { id: 'other',              emoji: '👤', title: 'سایر',            type: 'field', perms: ['view_own_projects'] }
 }
 
@@ -28,14 +33,18 @@ const ROLE_COLORS = {
   vid_venue: '#E68619', vid_clip: '#FF9500',
   helishot: '#00A3BF', crane: '#009688',
   editor_venue: '#34C759', editor_clip: '#30D158',
-  album_designer: '#BF5AF2', colorist: '#FF375F', other: '#94A3B8'
+  album_designer: '#BF5AF2', colorist: '#FF375F',
+  photographer_kids: '#F59E0B', photographer_fashion: '#EC4899',
+  vid_commercial: '#8B5CF6', social_media: '#06B6D4',
+  accountant: '#10B981', other: '#94A3B8'
 }
 
 /** نقش‌های قابل انتخاب برای پرسنل (چند نقش همزمان) */
 const PERSONNEL_ROLE_IDS = [
   'photographer', 'photographer_clip', 'vid_venue', 'vid_clip',
   'helishot', 'crane', 'editor_venue', 'editor_clip',
-  'album_designer', 'colorist', 'office_secretary', 'other'
+  'album_designer', 'colorist', 'photographer_kids', 'photographer_fashion',
+  'vid_commercial', 'social_media', 'accountant', 'office_secretary', 'other'
 ]
 
 const ROLE_LEGACY_MAP = {

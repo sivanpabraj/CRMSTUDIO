@@ -179,6 +179,12 @@
             </div>
           </div>
 
+          ${typeof GoldenHourWeather !== 'undefined' ? `
+            <div style="margin: 12px 0">
+              ${GoldenHourWeather.renderWidget({ date: shoot.date, venue: shoot.venue, cityName: 'مریوان', compact: true })}
+            </div>
+          ` : ''}
+
           <div class="crew-action-grid">
             <a href="tel:${shoot.phoneBride}" class="crew-action-btn primary">
               <i class="fas fa-phone"></i> تماس با عروس

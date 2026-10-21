@@ -421,14 +421,29 @@ const Portal = {
               <i class="fas fa-camera"></i>
               <select id="reg-staff-role" style="background:transparent;border:none;color:#fff;width:100%;outline:none;font-family:inherit;font-size:13px;padding:8px 4px">
                 <option value="photographer" style="background:#1e1e24;color:#fff">عکاس (آتلیه و مراسم)</option>
-                <option value="videographer" style="background:#1e1e24;color:#fff">تصویربردار / فیلمبردار</option>
+                <option value="photographer_kids" style="background:#1e1e24;color:#fff">عکاس کودک، نوزاد و بارداری</option>
+                <option value="photographer_fashion" style="background:#1e1e24;color:#fff">عکاس مدلینگ و پرتره فشن</option>
+                <option value="videographer" style="background:#1e1e24;color:#fff">تصویربردار / فیلمبردار مراسم</option>
+                <option value="vid_commercial" style="background:#1e1e24;color:#fff">تصویربردار تیزر صنعتی و تبلیغاتی</option>
+                <option value="social_media" style="background:#1e1e24;color:#fff">تولید محتوا و ریلز اینستاگرام</option>
                 <option value="editor" style="background:#1e1e24;color:#fff">تدوین‌گر و ادیتور فیلم</option>
                 <option value="album_designer" style="background:#1e1e24;color:#fff">طراح آلبوم ژورنال</option>
                 <option value="colorist" style="background:#1e1e24;color:#fff">اصلاح رنگ و نور (داوینچی)</option>
+                <option value="accountant" style="background:#1e1e24;color:#fff">حسابدار رسمی استودیو</option>
                 <option value="office_secretary" style="background:#1e1e24;color:#fff">مسئول دفتر و پذیرش مراجعین</option>
               </select>
             </div>
           </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-staff-email">ایمیل همکار (جهت بازیابی رمز و اعلانات)</label>
+            <div class="auth-input-wrap">
+              <i class="fas fa-envelope"></i>
+              <input type="email" id="reg-staff-email" class="ltr" dir="ltr" placeholder="colleague@gmail.com"/>
+            </div>
+          </div>
+        </div>
+
+        <div class="auth-grid-2col">
           <div class="auth-field">
             <label class="auth-label" for="reg-staff-code" style="color:#f59e0b">کد اختصاصی اتصال به استودیو</label>
             <div class="auth-input-wrap" style="border-color:rgba(245,158,11,0.5)">
@@ -544,6 +559,7 @@ const Portal = {
 
     const name = document.getElementById('reg-staff-name')?.value?.trim()
     const phone = Utils.normalizePhone(document.getElementById('reg-staff-phone')?.value)
+    const email = (document.getElementById('reg-staff-email')?.value || '').trim().toLowerCase()
     const role = document.getElementById('reg-staff-role')?.value || 'photographer'
     const joinCode = (document.getElementById('reg-staff-code')?.value || '').trim().toUpperCase()
     const password = Utils.normalizePassword(document.getElementById('reg-staff-password')?.value)
@@ -565,7 +581,7 @@ const Portal = {
       const res = await fetch('/api/auth/register-staff', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone, role, joinCode, password })
+        body: JSON.stringify({ name, phone, email, role, joinCode, password })
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok || !j.ok) {

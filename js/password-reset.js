@@ -156,6 +156,120 @@ const PasswordReset = {
 
     sessionStorage.removeItem(this.SESSION_KEY)
     return Auth.resetManagerPassword(phone, newPassword, { otpVerified: true })
+  },
+
+  findUserByEmail(email) {
+    if (!email) return null
+    const norm = String(email).trim().toLowerCase()
+    const users = (typeof DB !== 'undefined' && DB.get ? DB.get('users') : []) || []
+    return users.find(u => (u.email && String(u.email).trim().toLowerCase() === norm) || (u.username && String(u.username).trim().toLowerCase() === norm)) || null
+  },
+
+  _maskEmail(email) {
+    const s = String(email || '').trim()
+    const parts = s.split('@')
+    if (parts.length !== 2) return s
+    const name = parts[0]
+    const domain = parts[1]
+    const maskedName = name.length <= 2 ? name + '***' : name[0] + '***' + name[name.length - 1]
+    return `${maskedName}@${domain}`
+  },
+
+  async sendOtpEmail(email) {
+    const norm = String(email || '').trim().toLowerCase()
+    if (!norm || !norm.includes('@') || !norm.includes('.')) {
+      return { ok: false, error: 'آدرس ایمیل نامعتبر است' }
+    }
+
+    const user = this.findUserByEmail(norm)
+    if (!user) {
+      return { ok: false, error: 'کاربری با این نشانی ایمیل در سیستم یافت نشد' }
+    }
+
+    const code = this._generateOtp()
+    const studio = (typeof DB !== 'undefined' && DB.get ? DB.get('studioInfo')?.name : null) || AppConfig.APP_NAME
+    const subject = `کد بازیابی رمز عبور استودیو ${studio}`
+    const html = `
+      <div dir="rtl" style="font-family:Tahoma,sans-serif;padding:20px;color:#333;background:#f9f9f9;border-radius:10px">
+        <h2 style="color:#d4af37;margin-top:0">بازیابی رمز عبور استودیو ${studio}</h2>
+        <p>با سلام، کد یکبار مصرف (OTP) جهت تغییر و بازیابی رمز عبور شما:</p>
+        <div style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#0071E3;padding:12px;background:#fff;border:1px dashed #ccc;text-align:center;border-radius:8px;margin:16px 0">
+          ${code}
+        </div>
+        <p style="font-size:12px;color:#666">این کد به مدت ۵ دقیقه معتبر است. اگر شما درخواستی ثبت نکرده‌اید، این پیام را نادیده بگیرید.</p>
+      </div>`
+
+    try {
+      if (typeof fetch !== 'undefined') {
+        await fetch('/api/auth/forgot-password/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: norm, code, html, subject })
+        }).catch(() => null)
+      }
+    } catch { /* continue */ }
+
+    sessionStorage.setItem('talar_pw_reset_email_otp', JSON.stringify({
+      email: norm,
+      userId: user.id,
+      code,
+      expiresAt: Date.now() + AppConfig.OTP_TTL_MS,
+      verifyAttempts: 0
+    }))
+
+    if (typeof DB !== 'undefined' && DB.log) {
+      DB.log('password_reset_email_otp', `ارسال کد بازیابی رمز ایمیل به ${norm}`)
+    }
+
+    return { ok: true, maskedEmail: this._maskEmail(norm), demoCode: code }
+  },
+
+  async verifyAndResetEmail(email, otp, newPassword) {
+    const norm = String(email || '').trim().toLowerCase()
+    otp = Utils.faToEn(String(otp || '')).replace(/\D/g, '')
+
+    let session = null
+    try {
+      const raw = sessionStorage.getItem('talar_pw_reset_email_otp')
+      if (raw) session = JSON.parse(raw)
+    } catch { /* ignore */ }
+
+    if (!session || !session.expiresAt || Date.now() > session.expiresAt) {
+      return { ok: false, error: 'کد منقضی شده است. لطفاً مجدداً کد دریافت نمایید.' }
+    }
+    if (session.email !== norm) {
+      return { ok: false, error: 'نشانی ایمیل با درخواست کد مطابقت ندارد' }
+    }
+
+    session.verifyAttempts = (session.verifyAttempts || 0) + 1
+    if (session.verifyAttempts > AppConfig.OTP_MAX_VERIFY_ATTEMPTS) {
+      sessionStorage.removeItem('talar_pw_reset_email_otp')
+      return { ok: false, error: 'تعداد تلاش‌های ناموفق بیش از حد مجاز است. کد جدید بگیرید.' }
+    }
+    sessionStorage.setItem('talar_pw_reset_email_otp', JSON.stringify(session))
+
+    if (otp.length !== 6 || otp !== session.code) {
+      const left = AppConfig.OTP_MAX_VERIFY_ATTEMPTS - session.verifyAttempts
+      return { ok: false, error: `کد وارد شده صحیح نیست (${Utils.fmtNum(left)} تلاش باقی‌مانده)` }
+    }
+
+    sessionStorage.removeItem('talar_pw_reset_email_otp')
+
+    const user = this.findUserByEmail(norm)
+    if (!user) return { ok: false, error: 'کاربر یافت نشد' }
+
+    if (typeof PasswordSecurity !== 'undefined' && PasswordSecurity.hashPassword) {
+      const hash = await PasswordSecurity.hashPassword(newPassword)
+      user.passwordHash = hash
+      delete user.password
+    } else {
+      user.password = newPassword
+    }
+    user.updatedAt = new Date().toISOString()
+    if (typeof DB !== 'undefined' && DB.update) {
+      DB.update('users', user.id, user)
+    }
+    return { ok: true }
   }
 }
 
