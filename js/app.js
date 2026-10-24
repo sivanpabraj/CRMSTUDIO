@@ -104,7 +104,9 @@ const Portal = {
   },
 
   renderAuth(force = false) {
-    document.body.classList.add('auth-screen')
+    if (document?.body?.classList) {
+      document.body.classList.add('auth-screen')
+    }
     const studio = this._studio()
     const authTab = this.state.authTab || 'login'
     const step = this.state.step || 'login'
@@ -2085,9 +2087,12 @@ window.Portal = Portal
 
 function bootPortal() {
   try {
-    const params = new URLSearchParams(location.search)
-    const tabParam = params.get('tab')
-    if (tabParam === 'register' || location.hash === '#register') {
+    let tabParam = null
+    if (typeof URLSearchParams !== 'undefined' && typeof location !== 'undefined' && location.search) {
+      const params = new URLSearchParams(location.search)
+      tabParam = params.get('tab')
+    }
+    if (tabParam === 'register' || (typeof location !== 'undefined' && location.hash === '#register')) {
       Portal.state.authTab = 'register'
     }
     // رندر بلادرنگ برای جلوگیری کامل از هرگونه صفحه خالی

@@ -408,8 +408,24 @@
       selectedPackage: '',
       selectedAddons: [],
       lastConfirmedBooking: null,
+      studioId: '',
 
       init() {
+        const params = new URLSearchParams(window.location.search)
+        const isEmbed = params.get('embed') === 'true' || params.get('embed') === '1'
+        if (isEmbed) {
+          const hdr = document.querySelector('.bk-header')
+          if (hdr) hdr.style.display = 'none'
+          document.body.style.background = 'transparent'
+        }
+
+        const preBranch = params.get('branch')
+        if (preBranch && window.OnlineBooking && window.OnlineBooking.BRANCHES && window.OnlineBooking.BRANCHES[preBranch]) {
+          this.selectedBranch = preBranch
+        }
+
+        this.studioId = params.get('studioId') || ''
+
         if (typeof Utils !== 'undefined') {
           const today = Utils.todayJalali().split('/')
           this.selectedYear = parseInt(today[0], 10)
@@ -690,7 +706,8 @@
           clientName: name,
           clientPhone: phone,
           city,
-          notes
+          notes,
+          studioId: this.studioId
         })
 
         if (!res.ok) {
