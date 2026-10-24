@@ -1,11 +1,12 @@
 /**
- * API v2 Multi-Tenant — فاز B/C + سخت‌سازی امنیتی (membership اجباری)
+ * API v2 Multi-Tenant — فاز B/C + سخت‌سازی امنیتی (membership اجباری) + OTP
  */
 import { createAuthService } from './auth-service.mjs'
 import { requireStudioMember, isUuid } from './tenant-context.mjs'
 
 export function createSaasHandler(pool, opts = {}) {
   const auth = createAuthService(pool, opts)
+  const allowedOrigin = opts.allowedOrigin || process.env.ALLOWED_ORIGIN || 'http://localhost:5173'
   const hits = new Map()
   const idem = new Map()
 
@@ -70,7 +71,7 @@ export function createSaasHandler(pool, opts = {}) {
     const body = JSON.stringify(data)
     res.writeHead(status, {
       'Content-Type': 'application/json; charset=utf-8',
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': allowedOrigin,
       'Access-Control-Allow-Headers':
         'Content-Type, Authorization, X-Studio-Id, Idempotency-Key',
       'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
@@ -122,8 +123,8 @@ export function createSaasHandler(pool, opts = {}) {
           ok: true,
           service: 'saas-v2',
           db,
-          version: '2.1.0-hardened',
-          features: ['membership-guard', 'idempotency', 'dual-read']
+          version: '2.2.0-otp',
+          features: ['membership-guard', 'idempotency', 'dual-read', 'otp']
         })
         return true
       }
@@ -146,6 +147,28 @@ export function createSaasHandler(pool, opts = {}) {
         }
         const body = await readBody(req)
         const result = await auth.login(body)
+        send(res, 200, result)
+        return true
+      }
+
+      if (pathname === '/api/v2/auth/request-otp' && req.method === 'POST') {
+        if (!rate('otp-req:' + ip, 15)) {
+          send(res, 429, { ok: false, error: 'تعداد درخواست کد زیاد است' })
+          return true
+        }
+        const body = await readBody(req)
+        const result = await auth.requestOtp(body)
+        send(res, 200, result)
+        return true
+      }
+
+      if (pathname === '/api/v2/auth/verify-otp' && req.method === 'POST') {
+        if (!rate('otp-verify:' + ip, 30)) {
+          send(res, 429, { ok: false, error: 'تلاش تأیید زیاد است' })
+          return true
+        }
+        const body = await readBody(req)
+        const result = await auth.verifyOtp(body)
         send(res, 200, result)
         return true
       }
