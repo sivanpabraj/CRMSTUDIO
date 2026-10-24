@@ -16,89 +16,93 @@
     /**
      * شروع فرآیند پرداخت آنلاین بانکی
      */
-    async requestPayment(opts = {}) {
-      const {
-        contractId = '',
-        contractNum = '',
-        amount = 0,
-        description = 'پرداخت قسط/بیعانه قرارداد استودیو',
-        customerPhone = '',
-        customerName = '',
-        gateway = 'zarinpal',
-        merchantId = '',
-        installmentIndex = null
-      } = opts
+    requestPayment(opts = {}) {
+      return new Promise((resolve) => {
+        const {
+          contractId = '',
+          contractNum = '',
+          amount = 0,
+          description = 'پرداخت قسط/بیعانه قرارداد استودیو',
+          customerPhone = '',
+          customerName = '',
+          gateway = 'zarinpal',
+          merchantId = '',
+          installmentIndex = null
+        } = opts
 
-      if (!amount || Number(amount) <= 0) {
-        if (typeof window.Utils !== 'undefined' && window.Utils.toast) {
-          window.Utils.toast('مبلغ پرداختی نامعتبر است', 'error')
+        if (!amount || Number(amount) <= 0) {
+          if (typeof window.Utils !== 'undefined' && window.Utils.toast) {
+            window.Utils.toast('مبلغ پرداختی نامعتبر است', 'error')
+          }
+          return resolve({ ok: false, error: 'مبلغ نامعتبر است' })
         }
-        return { ok: false, error: 'مبلغ نامعتبر است' }
-      }
 
-      const modalId = 'payment-gateway-modal-' + Date.now()
-      const overlay = document.createElement('div')
-      overlay.id = modalId
-      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(10px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;direction:rtl'
+        const modalId = 'payment-gateway-modal-' + Date.now()
+        const overlay = document.createElement('div')
+        overlay.id = modalId
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(10px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;direction:rtl'
 
-      overlay.innerHTML = `
-        <div class="sm-card" style="width:100%;max-width:440px;background:#18181c;border:1px solid rgba(255,255,255,0.1);border-radius:20px;box-shadow:0 24px 60px rgba(0,0,0,0.6);overflow:hidden;color:#fff">
-          <div style="padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center">
-            <h3 style="margin:0;font-size:1.05rem;font-weight:800;color:#10b981;display:flex;align-items:center;gap:8px">
-              <i class="fas fa-credit-card"></i>
-              درگاه پرداخت امن شاپرک
-            </h3>
-            <button type="button" id="pay-close-btn" style="background:none;border:none;color:#aaa;font-size:1.2rem;cursor:pointer">✕</button>
-          </div>
-          
-          <div style="padding:22px">
-            <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:12px;padding:14px;margin-bottom:16px;text-align:center">
-              <div style="font-size:.82rem;color:rgba(255,255,255,0.7)">مبلغ قابل پرداخت:</div>
-              <div style="font-size:1.45rem;font-weight:900;color:#10b981;margin:6px 0">
-                ${Number(amount).toLocaleString('fa-IR')} <span style="font-size:.85rem;font-weight:normal">تومان</span>
+        overlay.innerHTML = `
+          <div class="sm-card" style="width:100%;max-width:440px;background:#18181c;border:1px solid rgba(255,255,255,0.1);border-radius:20px;box-shadow:0 24px 60px rgba(0,0,0,0.6);overflow:hidden;color:#fff">
+            <div style="padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center">
+              <h3 style="margin:0;font-size:1.05rem;font-weight:800;color:#10b981;display:flex;align-items:center;gap:8px">
+                <i class="fas fa-credit-card"></i>
+                درگاه پرداخت امن شاپرک
+              </h3>
+              <button type="button" id="pay-close-btn" style="background:none;border:none;color:#aaa;font-size:1.2rem;cursor:pointer">✕</button>
+            </div>
+            
+            <div style="padding:22px">
+              <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:12px;padding:14px;margin-bottom:16px;text-align:center">
+                <div style="font-size:.82rem;color:rgba(255,255,255,0.7)">مبلغ قابل پرداخت:</div>
+                <div style="font-size:1.45rem;font-weight:900;color:#10b981;margin:6px 0">
+                  ${Number(amount).toLocaleString('fa-IR')} <span style="font-size:.85rem;font-weight:normal">تومان</span>
+                </div>
+                <div style="font-size:.76rem;color:rgba(255,255,255,0.5)">قرارداد #${contractNum || contractId} — ${customerName || 'مشتری گرامی'}</div>
               </div>
-              <div style="font-size:.76rem;color:rgba(255,255,255,0.5)">قرارداد #${contractNum || contractId} — ${customerName || 'مشتری گرامی'}</div>
-            </div>
 
-            <div style="font-size:.82rem;color:rgba(255,255,255,0.8);line-height:1.7;margin-bottom:16px">
-              شما در حال اتصال به درگاه رسمی پرداخت شاپرک جهت واریز وجه هستید. پس از تکمیل فرآیند، فاکتور و مانده‌حساب شما به صورت آنی تسویه می‌گردد.
-            </div>
+              <div style="font-size:.82rem;color:rgba(255,255,255,0.8);line-height:1.7;margin-bottom:16px">
+                شما در حال اتصال به درگاه رسمی پرداخت شاپرک جهت واریز وجه هستید. پس از تکمیل فرآیند، فاکتور و مانده‌حساب شما به صورت آنی تسویه می‌گردد.
+              </div>
 
-            <div style="display:flex;flex-direction:column;gap:10px">
-              <button type="button" class="portal-btn portal-btn-primary" id="pay-simulate-btn" style="padding:12px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:10px;color:#fff;font-weight:800;font-size:.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
-                <i class="fas fa-shield-halved"></i> اتصال به درگاه و ثبت تراکنش موفق
-              </button>
-              <button type="button" class="portal-btn portal-btn-ghost" id="pay-cancel-btn" style="padding:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#ccc;cursor:pointer">
-                انصراف و بازگشت
-              </button>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <button type="button" class="portal-btn portal-btn-primary" id="pay-simulate-btn" style="padding:12px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:10px;color:#fff;font-weight:800;font-size:.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+                  <i class="fas fa-shield-halved"></i> اتصال به درگاه و ثبت تراکنش موفق
+                </button>
+                <button type="button" class="portal-btn portal-btn-ghost" id="pay-cancel-btn" style="padding:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#ccc;cursor:pointer">
+                  انصراف و بازگشت
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      `
+        `
 
-      document.body.appendChild(overlay)
+        document.body.appendChild(overlay)
 
-      function close() {
-        overlay.remove()
-      }
+        function close() {
+          overlay.remove()
+          resolve({ ok: false, cancelled: true })
+        }
 
-      document.getElementById('pay-close-btn').onclick = close
-      document.getElementById('pay-cancel-btn').onclick = close
+        document.getElementById('pay-close-btn').onclick = close
+        document.getElementById('pay-cancel-btn').onclick = close
 
-      document.getElementById('pay-simulate-btn').onclick = async () => {
-        close()
-        await PaymentGateway.recordSuccessfulPayment({
-          contractId,
-          contractNum,
-          amount,
-          customerName,
-          customerPhone,
-          description,
-          gateway,
-          merchantId,
-          installmentIndex
-        })
-      }
+        document.getElementById('pay-simulate-btn').onclick = async () => {
+          overlay.remove()
+          const result = await PaymentGateway.recordSuccessfulPayment({
+            contractId,
+            contractNum,
+            amount,
+            customerName,
+            customerPhone,
+            description,
+            gateway,
+            merchantId,
+            installmentIndex
+          })
+          resolve({ ok: true, ...result })
+        }
+      })
     },
 
     /**
@@ -211,6 +215,72 @@
         return `${base}?${params.toString()}`
       }
       return `${base}?cid=${encodeURIComponent(contractId || '')}&amount=${encodeURIComponent(amount || '')}`
+    },
+
+    generateInvoiceUrl(contractId, amount = null, installmentIndex = null) {
+      return this.createInvoiceUrl(contractId, amount, installmentIndex)
+    },
+
+    /**
+     * ثبت فیش کارت‌به‌کارت جهت بررسی و تأیید امن حسابداری استودیو
+     */
+    async recordPendingReceipt(data = {}) {
+      const nowJalali = typeof window.Utils !== 'undefined' && window.Utils.todayJalali ? window.Utils.todayJalali() : ''
+      const receiptId = 'c2c_' + Date.now()
+      const ref = String(data.reference || data.refId || data.ref || '').trim()
+
+      const record = {
+        id: receiptId,
+        contractId: data.contractId || '',
+        contractNum: data.contractNum || '',
+        amount: Number(data.amount) || 0,
+        customerName: data.customerName || '',
+        installmentIndex: data.installmentIndex !== undefined ? data.installmentIndex : null,
+        referenceId: ref,
+        paymentMethod: 'card_to_card',
+        status: 'pending_approval',
+        description: data.description || `واریز کارت‌به‌کارت فاکتور #${data.contractNum || data.contractId}`,
+        date: nowJalali,
+        createdAt: new Date().toISOString()
+      }
+
+      const db = getDB()
+      if (typeof window.SecureDB !== 'undefined' && window.SecureDB.insert) {
+        await window.SecureDB.insert('customerRequests', {
+          contractId: record.contractId,
+          type: 'receipt',
+          title: `فیش کارت‌به‌کارت: ${Number(record.amount).toLocaleString('fa-IR')} ت (پیگیری: ${ref})`,
+          detail: record.description,
+          meta: record,
+          status: 'pending',
+          createdAt: nowJalali
+        })
+      } else if (db && db.insert) {
+        db.insert('customerRequests', {
+          contractId: record.contractId,
+          type: 'receipt',
+          title: `فیش کارت‌به‌کارت: ${Number(record.amount).toLocaleString('fa-IR')} ت (پیگیری: ${ref})`,
+          detail: record.description,
+          meta: record,
+          status: 'pending',
+          createdAt: nowJalali
+        })
+      }
+
+      if (db && db.find && db.update && data.contractId) {
+        const c = db.find('contracts', x => x.id === data.contractId)
+        if (c) {
+          const receipts = Array.isArray(c.pendingReceipts) ? [...c.pendingReceipts] : []
+          receipts.push(record)
+          db.update('contracts', c.id, { pendingReceipts: receipts })
+        }
+      }
+
+      if (typeof window.ServerSync !== 'undefined' && window.ServerSync.pushNow) {
+        window.ServerSync.pushNow().catch(() => {})
+      }
+
+      return { ok: true, receiptId, record }
     }
   }
 

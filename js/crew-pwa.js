@@ -20,7 +20,9 @@
     init() {
       this.initPwaInstall()
       this.loadUser()
-      this.loadData()
+      if (this.state.currentUser) {
+        this.loadData()
+      }
       this.renderAll()
       this.bindEvents()
       this.startCountdown()
@@ -38,23 +40,12 @@
         } catch { /* */ }
       }
       if (!this.state.currentUser) {
-        const db = typeof DB !== 'undefined' ? DB : (window.DB || null)
-        const pers = (db && db.get ? db.get('personnel') : []) || []
-        if (pers.length > 0) {
-          const first = pers[0]
-          this.state.currentUser = {
-            id: first.id,
-            name: first.name,
-            role: first.role || 'عکاس و تصویربردار استودیو',
-            phone: first.phone || ''
-          }
-        } else {
-          this.state.currentUser = {
-            name: 'همکار استودیو',
-            role: 'عکاس و تصویربردار صحنه',
-            phone: ''
-          }
+        // امنیت کارتابل عوامل: عدم دسترسی به داده‌ها بدون احراز هویت
+        if (typeof window !== 'undefined' && window.location && typeof window.location.replace === 'function' && !window.__VITEST__) {
+          window.location.replace('index.html?portal=crew&auth=required')
+          return
         }
+        this.state.currentUser = null
       }
     },
 
@@ -179,9 +170,38 @@
     },
 
     renderShootsTab() {
-      const shoot = this.state.todayShoot
       const container = document.getElementById('tab-shoots')
-      if (!container || !shoot) return
+      if (!container) return
+
+      if (!this.state.currentUser) {
+        container.innerHTML = `
+          <div style="text-align:center;padding:48px 20px;background:var(--crew-card);border:1px solid var(--crew-border);border-radius:20px;margin-top:20px">
+            <div style="width:64px;height:64px;border-radius:20px;background:rgba(239,68,68,0.15);color:#ef4444;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 16px">
+              <i class="fas fa-lock"></i>
+            </div>
+            <h2 style="font-size:18px;font-weight:800;color:#fff;margin-bottom:8px">ورود به کارتابل عوامل استودیو</h2>
+            <p style="font-size:13px;color:var(--crew-muted);line-height:1.7;max-width:320px;margin:0 auto 20px">
+              برای مشاهده آفیش‌های تصویربرداری، تجهیزات تحویلی و کارکرد مالی، لطفاً با حساب کاربری همکار وارد شوید.
+            </p>
+            <a href="index.html?portal=crew" class="crew-action-btn" style="display:inline-flex;width:auto;padding:10px 24px;background:var(--crew-accent);color:#fff;text-decoration:none;border-radius:12px;font-weight:700">
+              <i class="fas fa-arrow-right-to-bracket"></i> صفحه ورود عوامل
+            </a>
+          </div>
+        `
+        return
+      }
+
+      const shoot = this.state.todayShoot
+      if (!shoot) {
+        container.innerHTML = `
+          <div style="text-align:center;padding:48px 20px;background:var(--crew-card);border:1px solid var(--crew-border);border-radius:20px;margin-top:20px">
+            <i class="fas fa-calendar-check" style="font-size:40px;color:var(--crew-emerald);margin-bottom:14px"></i>
+            <h3 style="color:#fff;font-size:16px;font-weight:700;margin-bottom:6px">امروز آفیش فعالی برای شما ثبت نشده است</h3>
+            <p style="color:var(--crew-muted);font-size:12.5px">آفیش‌های پروژه‌های آینده را در تب «تقویم کاری» بررسی نمایید.</p>
+          </div>
+        `
+        return
+      }
 
       container.innerHTML = `
         <div class="crew-hero-card">
@@ -466,18 +486,24 @@
       const update = () => {
         const el = document.getElementById('crew-countdown-text')
         if (!el) return
+        const shoot = this.state.todayShoot
         const now = new Date()
-        // ساعت هدف آفیش امروز (مثلاً ساعت ۱۵:۳۰ امروز)
         const target = new Date()
-        target.setHours(15, 30, 0, 0)
-        const diff = target - now
 
+        // استخراج ساعت آفیش امروز از پروژه یا ساعت پیش‌فرض استودیو
+        const timeStr = String(shoot?.time || shoot?.callTime || '15:30').trim()
+        const parts = timeStr.split(':').map(Number)
+        const targetH = !isNaN(parts[0]) ? parts[0] : 15
+        const targetM = !isNaN(parts[1]) ? parts[1] : 30
+        target.setHours(targetH, targetM, 0, 0)
+
+        const diff = target - now
         if (diff <= 0) {
           el.innerHTML = '<span style="color:#10b981;font-weight:800"><i class="fas fa-circle-play"></i> زمان مراسم فرا رسیده است — موفق باشید!</span>'
         } else {
           const hours = Math.floor(diff / (1000 * 60 * 60))
           const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-          el.innerHTML = `زمان تا شروع مراسم: <strong style="color:var(--crew-gold)">${hours} ساعت و ${mins} دقیقه</strong>`
+          el.innerHTML = `زمان تا شروع مراسم (${timeStr}): <strong style="color:var(--crew-gold)">${hours} ساعت و ${mins} دقیقه</strong>`
         }
       }
       setInterval(update, 60000)

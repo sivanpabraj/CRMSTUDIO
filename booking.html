@@ -686,15 +686,29 @@
 
         const pricing = window.OnlineBooking.calculatePricing(this.selectedBranch, this.selectedPackage, this.selectedAddons)
 
-        // Trigger payment via PaymentGateway
-        if (typeof PaymentGateway !== 'undefined') {
-          PaymentGateway.requestPayment({
+        let paymentStatus = 'pending'
+        let bookingStatus = 'confirmed'
+
+        // بررسی و اجرای درگاه پرداخت بیعانه
+        if (typeof PaymentGateway !== 'undefined' && pricing.depositAmount > 0) {
+          const payRes = await PaymentGateway.requestPayment({
             contractNum: 'BK-' + Date.now().toString().slice(-4),
             amount: pricing.depositAmount,
             customerName: name,
             customerPhone: phone,
             description: `بیعانه رزرو نوبت ${pricing.branch.title} در تاریخ ${this.selectedDate}`
           })
+
+          if (payRes && payRes.ok) {
+            paymentStatus = 'paid'
+            bookingStatus = 'confirmed'
+          } else {
+            // مشتری از درگاه پرداخت انصراف داد یا مایل به بیعانه حضوری است
+            const confirmPending = confirm('پرداخت آنلاین بیعانه انجام نشد.\nآیا تمایل دارید نوبت شما به عنوان «رزرو اولیه در انتظار پرداخت بیعانه» ثبت گردد؟')
+            if (!confirmPending) return
+            paymentStatus = 'pending_deposit'
+            bookingStatus = 'pending_deposit'
+          }
         }
 
         const res = await window.OnlineBooking.submitBooking({
@@ -707,7 +721,9 @@
           clientPhone: phone,
           city,
           notes,
-          studioId: this.studioId
+          studioId: this.studioId,
+          paymentStatus,
+          status: bookingStatus
         })
 
         if (!res.ok) {

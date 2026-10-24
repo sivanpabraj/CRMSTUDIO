@@ -135,3 +135,41 @@ self.addEventListener('message', (event) => {
     )
   }
 })
+
+// پشتیبانی از وب‌پوش نوتیفیکیشن PWA برای استودیو، مشتری و عوامل صحنه
+self.addEventListener('push', (event) => {
+  let data = { title: 'Studio ERP', body: 'اعلان جدید دریافت شد', icon: './icons/icon-192.png' }
+  try {
+    if (event.data) {
+      data = { ...data, ...event.data.json() }
+    }
+  } catch {
+    if (event.data) data.body = event.data.text()
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon || './icons/icon-192.png',
+      badge: './icons/icon.svg',
+      data: data.url || './'
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const targetUrl = event.notification.data || './'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url === targetUrl && 'focus' in client) {
+          return client.focus()
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl)
+      }
+    })
+  )
+})

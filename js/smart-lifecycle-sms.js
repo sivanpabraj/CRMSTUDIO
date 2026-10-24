@@ -97,9 +97,11 @@
      */
     buildInstallmentMessage(contract, balance, studio) {
       const couple = contract.couple || `${contract.bride || ''} و ${contract.groom || ''}`.trim() || 'مشتری گرامی'
-      const invoiceUrl = typeof PaymentGateway !== 'undefined'
-        ? PaymentGateway.generateInvoiceUrl(contract.id)
-        : (window.location.origin + `/invoice.html?id=${contract.id}`)
+      const invoiceUrl = typeof PaymentGateway !== 'undefined' && typeof PaymentGateway.createInvoiceUrl === 'function'
+        ? PaymentGateway.createInvoiceUrl(contract.id)
+        : (typeof PaymentGateway !== 'undefined' && typeof PaymentGateway.generateInvoiceUrl === 'function'
+          ? PaymentGateway.generateInvoiceUrl(contract.id)
+          : (typeof window !== 'undefined' && window.location ? window.location.origin + `/invoice.html?cid=${contract.id}` : `/invoice.html?cid=${contract.id}`))
 
       return `عروس و داماد گرامی «${couple}»\n` +
         `با سلام، یادآوری سررسید پرداخت قسط در استودیو ${studio.name}.\n` +

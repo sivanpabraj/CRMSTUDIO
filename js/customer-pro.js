@@ -259,6 +259,10 @@
       const c = this.getContractData()
       if (!c) return
 
+      const studioInfo = (typeof DB !== 'undefined' && DB.get ? DB.get('studioInfo') : null) || {}
+      const rawPhone = studioInfo.whatsappPhone || studioInfo.phone || '09120000000'
+      const waNumber = String(rawPhone).replace(/\D/g, '').replace(/^0/, '98')
+
       const activeIdx = this.getTimelineStageIndex(c)
       const pct = Math.min(100, Math.round(((activeIdx + 1) / this.STAGES.length) * 100))
       const currentStage = this.STAGES[activeIdx] || this.STAGES[0]
@@ -331,10 +335,10 @@
               <i class="fas fa-user-headset"></i> پشتیبانی و سرپرست تدوین استودیو
             </div>
             <div style="display:flex;gap:8px">
-              <a href="https://wa.me/989187766554?text=${encodeURIComponent('سلام، در مورد مراحل تدوین قرارداد ' + (c.contractNum || c.id) + ' سوال داشتم')}" target="_blank" rel="noopener noreferrer" class="sm-btn sm-btn-sm sm-btn-ghost" style="color:#25d366;border-color:rgba(37,211,102,0.3);text-decoration:none;padding:5px 12px;border-radius:8px;font-size:11px;display:flex;align-items:center;gap:6px">
+              <a href="https://wa.me/${waNumber}?text=${encodeURIComponent('سلام، در مورد مراحل تدوین قرارداد ' + (c.contractNum || c.id) + ' سوال داشتم')}" target="_blank" rel="noopener noreferrer" class="sm-btn sm-btn-sm sm-btn-ghost" style="color:#25d366;border-color:rgba(37,211,102,0.3);text-decoration:none;padding:5px 12px;border-radius:8px;font-size:11px;display:flex;align-items:center;gap:6px">
                 <i class="fab fa-whatsapp"></i> واتساپ استودیو
               </a>
-              <a href="tel:09187766554" class="sm-btn sm-btn-sm sm-btn-ghost" style="color:#38bdf8;border-color:rgba(56,189,248,0.3);text-decoration:none;padding:5px 12px;border-radius:8px;font-size:11px;display:flex;align-items:center;gap:6px">
+              <a href="tel:${Utils.escapeHtml(rawPhone)}" class="sm-btn sm-btn-sm sm-btn-ghost" style="color:#38bdf8;border-color:rgba(56,189,248,0.3);text-decoration:none;padding:5px 12px;border-radius:8px;font-size:11px;display:flex;align-items:center;gap:6px">
                 <i class="fas fa-phone"></i> تماس تلفنی
               </a>
             </div>

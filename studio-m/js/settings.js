@@ -1409,12 +1409,13 @@ const SMSettings = {
     SM.toast('در حال تهیه پشتیبان خودکار سرور و دریافت تغییرات از گیت‌هاب...', 'info', 10000)
     if (typeof AudioNotifier !== 'undefined') AudioNotifier.playSent()
 
+    const adminKey = localStorage.getItem('system_admin_key') || (typeof AppConfig !== 'undefined' && AppConfig.SYSTEM_UPDATE_KEY) || ''
     try {
       const res = await fetch('/api/system/update', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-key': 'mandani_root_2026'
+          'x-admin-key': adminKey
         }
       })
       const data = await res.json().catch(() => ({}))

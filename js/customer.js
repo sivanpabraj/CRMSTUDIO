@@ -78,7 +78,9 @@ const CustomerPortal = {
     const congrats = PortalShared.getCustomerCongrats(c)
     const live = PortalShared.getCustomerLiveStatus(c, persProjects)
     const myReqs = DB.filter('customerRequests', r => r.contractId === c.id)
-    const studio = DB.get('studioInfo')?.name || AppConfig.DEFAULT_STUDIO_NAME
+    const studioInfo = (typeof DB !== 'undefined' && DB.get ? DB.get('studioInfo') : null) || {}
+    const studio = studioInfo.name || AppConfig.DEFAULT_STUDIO_NAME
+    const studioWa = String(studioInfo.whatsappPhone || studioInfo.phone || '09120000000').replace(/\D/g, '').replace(/^0/, '98')
 
     const queueDisplay = queue.stage >= 2
       ? `<div class="customer-queue-card is-active">
@@ -111,7 +113,7 @@ const CustomerPortal = {
           💡 ${Utils.escapeHtml(aiInsight.tip)}
         </div>
         ${aiInsight.action ? `
-          <button type="button" class="portal-btn" style="width:100%;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:800;font-size:12px;padding:8px 12px;border-radius:8px;border:none;margin-top:6px" onclick="${aiInsight.action.type === 'contact' ? `window.open('https://wa.me/989187766554?text=' + encodeURIComponent('سلام، در رابطه با قرارداد ' + ('${Utils.escapeHtml(c.contractNum || '')}') + ' سوال داشتم'))` : `CustomerPortal.selectReqType('mp3')`}">
+          <button type="button" class="portal-btn" style="width:100%;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:800;font-size:12px;padding:8px 12px;border-radius:8px;border:none;margin-top:6px" onclick="${aiInsight.action.type === 'contact' ? `window.open('https://wa.me/' + ('${studioWa}') + '?text=' + encodeURIComponent('سلام، در رابطه با قرارداد ' + ('${Utils.escapeHtml(c.contractNum || '')}') + ' سوال داشتم'))` : `CustomerPortal.selectReqType('mp3')`}">
             <i class="fas fa-arrow-left"></i> ${Utils.escapeHtml(aiInsight.action.label)}
           </button>
         ` : ''}

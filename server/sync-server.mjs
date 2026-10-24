@@ -799,10 +799,10 @@ const server = http.createServer((req, res) => {
 
     const authHeader = req.headers['authorization'] || ''
     const adminKey = req.headers['x-admin-key'] || ''
-    const expectedAdminKey = process.env.SYSTEM_UPDATE_KEY || 'mandani_root_2026'
+    const expectedAdminKey = process.env.SYSTEM_UPDATE_KEY || ''
 
-    if (!expectedAdminKey) {
-      return sendJson(res, 503, { ok: false, error: 'به‌روزرسانی خودکار از طریق API به دلیل عدم تنظیم متغیر محیطی SYSTEM_UPDATE_KEY غیرفعال است.' })
+    if (!expectedAdminKey || expectedAdminKey.length < 12) {
+      return sendJson(res, 503, { ok: false, error: 'به‌روزرسانی خودکار از طریق API به دلیل عدم تنظیم متغیر محیطی SYSTEM_UPDATE_KEY ایمن غیرفعال است.' })
     }
 
     const isKeyValid = adminKey && adminKey === expectedAdminKey
@@ -840,7 +840,11 @@ const server = http.createServer((req, res) => {
 
     const authHeader = req.headers['authorization'] || ''
     const adminKey = req.headers['x-admin-key'] || ''
-    const expectedAdminKey = process.env.SYSTEM_UPDATE_KEY || 'mandani_root_2026'
+    const expectedAdminKey = process.env.SYSTEM_UPDATE_KEY || ''
+
+    if (!expectedAdminKey || expectedAdminKey.length < 12) {
+      return sendJson(res, 503, { ok: false, error: 'بازنشانی پایگاه داده از طریق API به دلیل عدم تنظیم متغیر محیطی SYSTEM_UPDATE_KEY ایمن غیرفعال است.' })
+    }
 
     const isKeyValid = adminKey && adminKey === expectedAdminKey
     const isBearerValid = authHeader.startsWith('Bearer ') && authHeader.slice(7).trim() === expectedAdminKey
