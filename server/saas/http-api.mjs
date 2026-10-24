@@ -1,11 +1,12 @@
 /**
- * API v2 Multi-Tenant — فاز B/C + سخت‌سازی امنیتی (membership اجباری)
+ * API v2 Multi-Tenant — فاز B/C + سخت‌سازی امنیتی (membership اجباری) + OTP
  */
 import { createAuthService } from './auth-service.mjs'
 import { requireStudioMember, isUuid } from './tenant-context.mjs'
 
 export function createSaasHandler(pool, opts = {}) {
   const auth = createAuthService(pool, opts)
+  const allowedOrigin = opts.allowedOrigin || process.env.ALLOWED_ORIGIN || 'http://localhost:5173'
   const hits = new Map()
   const idem = new Map()
 
@@ -70,7 +71,7 @@ export function createSaasHandler(pool, opts = {}) {
     const body = JSON.stringify(data)
     res.writeHead(status, {
       'Content-Type': 'application/json; charset=utf-8',
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': allowedOrigin,
       'Access-Control-Allow-Headers':
         'Content-Type, Authorization, X-Studio-Id, Idempotency-Key',
       'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
@@ -122,8 +123,8 @@ export function createSaasHandler(pool, opts = {}) {
           ok: true,
           service: 'saas-v2',
           db,
-          version: '2.1.0-hardened',
-          features: ['membership-guard', 'idempotency', 'dual-read']
+          version: '2.2.0-otp',
+          features: ['membership-guard', 'idempotency', 'dual-read', 'otp']
         })
         return true
       }
@@ -146,6 +147,28 @@ export function createSaasHandler(pool, opts = {}) {
         }
         const body = await readBody(req)
         const result = await auth.login(body)
+        send(res, 200, result)
+        return true
+      }
+
+      if (pathname === '/api/v2/auth/request-otp' && req.method === 'POST') {
+        if (!rate('otp-req:' + ip, 15)) {
+          send(res, 429, { ok: false, error: 'تعداد درخواست کد زیاد است' })
+          return true
+        }
+        const body = await readBody(req)
+        const result = await auth.requestOtp(body)
+        send(res, 200, result)
+        return true
+      }
+
+      if (pathname === '/api/v2/auth/verify-otp' && req.method === 'POST') {
+        if (!rate('otp-verify:' + ip, 30)) {
+          send(res, 429, { ok: false, error: 'تلاش تأیید زیاد است' })
+          return true
+        }
+        const body = await readBody(req)
+        const result = await auth.verifyOtp(body)
         send(res, 200, result)
         return true
       }
@@ -174,7 +197,6 @@ export function createSaasHandler(pool, opts = {}) {
       }
       const { studioId } = await requireStudioMember(pool, req, claims)
 
-      /* Contracts */
       if (pathname === '/api/v2/contracts' && req.method === 'GET') {
         const r = await pool.query(
           `SELECT id, contract_num, bride, groom, couple, phone, bride_phone, groom_phone,
@@ -219,11 +241,8 @@ export function createSaasHandler(pool, opts = {}) {
         return true
       }
 
-      /* Banks */
       if (pathname === '/api/v2/banks' && req.method === 'GET') {
-        const r = await pool.query(`SELECT * FROM banks WHERE studio_id = $1 ORDER BY created_at DESC`, [
-          studioId
-        ])
+        const r = await pool.query(`SELECT * FROM banks WHERE studio_id = $1 ORDER BY created_at DESC`, [studioId])
         send(res, 200, { ok: true, items: r.rows })
         return true
       }
@@ -248,7 +267,6 @@ export function createSaasHandler(pool, opts = {}) {
         return true
       }
 
-      /* Transactions */
       if (pathname === '/api/v2/transactions' && req.method === 'GET') {
         const r = await pool.query(
           `SELECT * FROM transactions WHERE studio_id = $1 ORDER BY created_at DESC LIMIT 500`,
@@ -280,37 +298,24 @@ export function createSaasHandler(pool, opts = {}) {
         try {
           await client.query('BEGIN')
           if (bankId) {
-            const b = await client.query(`SELECT id FROM banks WHERE id=$1 AND studio_id=$2`, [
-              bankId,
-              studioId
-            ])
+            const b = await client.query(`SELECT id FROM banks WHERE id=$1 AND studio_id=$2`, [bankId, studioId])
             if (!b.rows[0]) throw Object.assign(new Error('حساب بانکی متعلق به این استودیو نیست'), { status: 400 })
           }
           if (contractId) {
-            const c = await client.query(`SELECT id FROM contracts WHERE id=$1 AND studio_id=$2`, [
-              contractId,
-              studioId
-            ])
+            const c = await client.query(`SELECT id FROM contracts WHERE id=$1 AND studio_id=$2`, [contractId, studioId])
             if (!c.rows[0]) throw Object.assign(new Error('قرارداد متعلق به این استودیو نیست'), { status: 400 })
           }
           if (personnelId) {
-            const p = await client.query(`SELECT id FROM personnel WHERE id=$1 AND studio_id=$2`, [
-              personnelId,
-              studioId
-            ])
+            const p = await client.query(`SELECT id FROM personnel WHERE id=$1 AND studio_id=$2`, [personnelId, studioId])
             if (!p.rows[0]) throw Object.assign(new Error('پرسنل متعلق به این استودیو نیست'), { status: 400 })
           }
           const r = await client.query(
             `INSERT INTO transactions (studio_id, type, amount, date_jalali, bank_id, contract_id, personnel_id, purpose_category, purpose, client_name, payload)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
             [
-              studioId,
-              type,
-              amount,
+              studioId, type, amount,
               body.date || body.date_jalali || null,
-              bankId,
-              contractId,
-              personnelId,
+              bankId, contractId, personnelId,
               body.purposeCategory || body.purpose_category || null,
               body.purpose || body.notes || null,
               body.client || body.client_name || null,
@@ -319,11 +324,7 @@ export function createSaasHandler(pool, opts = {}) {
           )
           if (bankId) {
             const delta = type === 'deposit' ? amount : -amount
-            await client.query(`UPDATE banks SET balance = balance + $1 WHERE id = $2 AND studio_id = $3`, [
-              delta,
-              bankId,
-              studioId
-            ])
+            await client.query(`UPDATE banks SET balance = balance + $1 WHERE id = $2 AND studio_id = $3`, [delta, bankId, studioId])
           }
           if (contractId && type === 'deposit') {
             await client.query(
@@ -344,11 +345,8 @@ export function createSaasHandler(pool, opts = {}) {
         return true
       }
 
-      /* Personnel */
       if (pathname === '/api/v2/personnel' && req.method === 'GET') {
-        const r = await pool.query(`SELECT * FROM personnel WHERE studio_id = $1 ORDER BY created_at DESC`, [
-          studioId
-        ])
+        const r = await pool.query(`SELECT * FROM personnel WHERE studio_id = $1 ORDER BY created_at DESC`, [studioId])
         send(res, 200, { ok: true, items: r.rows })
         return true
       }
@@ -373,7 +371,6 @@ export function createSaasHandler(pool, opts = {}) {
         return true
       }
 
-      /* Afish */
       if (pathname === '/api/v2/afish' && req.method === 'GET') {
         const r = await pool.query(
           `SELECT pp.*, p.name AS personnel_name, c.couple, c.bride, c.groom, c.event_date
@@ -393,20 +390,14 @@ export function createSaasHandler(pool, opts = {}) {
         const contractId = optUuid(body.contractId || body.contract_id)
         const personnelId = optUuid(body.personnelId || body.personnel_id)
         if (contractId) {
-          const c = await pool.query(`SELECT id FROM contracts WHERE id=$1 AND studio_id=$2`, [
-            contractId,
-            studioId
-          ])
+          const c = await pool.query(`SELECT id FROM contracts WHERE id=$1 AND studio_id=$2`, [contractId, studioId])
           if (!c.rows[0]) {
             send(res, 400, { ok: false, error: 'قرارداد نامعتبر برای این استودیو' })
             return true
           }
         }
         if (personnelId) {
-          const p = await pool.query(`SELECT id FROM personnel WHERE id=$1 AND studio_id=$2`, [
-            personnelId,
-            studioId
-          ])
+          const p = await pool.query(`SELECT id FROM personnel WHERE id=$1 AND studio_id=$2`, [personnelId, studioId])
           if (!p.rows[0]) {
             send(res, 400, { ok: false, error: 'پرسنل نامعتبر برای این استودیو' })
             return true
@@ -416,9 +407,7 @@ export function createSaasHandler(pool, opts = {}) {
           `INSERT INTO pers_projects (studio_id, contract_id, personnel_id, role_id, accepted, payload)
            VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
           [
-            studioId,
-            contractId,
-            personnelId,
+            studioId, contractId, personnelId,
             body.roleId || body.role_id || body.role || null,
             Boolean(body.accepted),
             JSON.stringify(body.payload || body)
@@ -428,18 +417,13 @@ export function createSaasHandler(pool, opts = {}) {
         return true
       }
 
-      /* Snapshot */
       if (pathname === '/api/v2/studio/snapshot' && req.method === 'GET') {
         const [contracts, banks, transactions, personnel, afish] = await Promise.all([
           pool.query(`SELECT * FROM contracts WHERE studio_id=$1 ORDER BY created_at DESC LIMIT 300`, [studioId]),
           pool.query(`SELECT * FROM banks WHERE studio_id=$1`, [studioId]),
-          pool.query(`SELECT * FROM transactions WHERE studio_id=$1 ORDER BY created_at DESC LIMIT 300`, [
-            studioId
-          ]),
+          pool.query(`SELECT * FROM transactions WHERE studio_id=$1 ORDER BY created_at DESC LIMIT 300`, [studioId]),
           pool.query(`SELECT * FROM personnel WHERE studio_id=$1`, [studioId]),
-          pool.query(`SELECT * FROM pers_projects WHERE studio_id=$1 ORDER BY created_at DESC LIMIT 300`, [
-            studioId
-          ])
+          pool.query(`SELECT * FROM pers_projects WHERE studio_id=$1 ORDER BY created_at DESC LIMIT 300`, [studioId])
         ])
         send(res, 200, {
           ok: true,
