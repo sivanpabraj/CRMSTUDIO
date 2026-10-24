@@ -64,6 +64,12 @@
       "short_name": "عوامل",
       "url": "./crew.html",
       "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "رزرو آنلاین نوبت",
+      "short_name": "رزرو",
+      "url": "./booking.html",
+      "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
     }
   ],
   "related_applications": []

@@ -32,12 +32,41 @@
         this.state.currentUser = auth.getUser()
       }
       if (!this.state.currentUser) {
-        // Fallback user from personnel or demo
-        this.state.currentUser = {
-          name: 'علی رستمی',
-          role: 'عکاس و فیلمبردار ارشد تالار',
-          phone: '09187766554'
+        try {
+          const raw = sessionStorage.getItem('crm_current_user') || localStorage.getItem('crm_current_user')
+          if (raw) this.state.currentUser = JSON.parse(raw)
+        } catch { /* */ }
+      }
+      if (!this.state.currentUser) {
+        const db = typeof DB !== 'undefined' ? DB : (window.DB || null)
+        const pers = (db && db.get ? db.get('personnel') : []) || []
+        if (pers.length > 0) {
+          const first = pers[0]
+          this.state.currentUser = {
+            id: first.id,
+            name: first.name,
+            role: first.role || 'عکاس و تصویربردار استودیو',
+            phone: first.phone || ''
+          }
+        } else {
+          this.state.currentUser = {
+            name: 'همکار استودیو',
+            role: 'عکاس و تصویربردار صحنه',
+            phone: ''
+          }
         }
+      }
+    },
+
+    logout() {
+      const auth = typeof Auth !== 'undefined' ? Auth : (window.Auth || null)
+      if (auth && auth.logout) auth.logout()
+      try {
+        sessionStorage.removeItem('crm_current_user')
+        sessionStorage.removeItem('talar_session_token')
+      } catch { /* */ }
+      if (typeof window !== 'undefined' && window.location && window.location.replace) {
+        window.location.replace('index.html')
       }
     },
 

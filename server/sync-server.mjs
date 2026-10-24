@@ -68,6 +68,7 @@ const smsPhoneLimiter = new RateLimiter(10 * 60 * 1000, 3) // max 3 SMS per 10 m
 const emailIpLimiter = new RateLimiter(60 * 1000, 15) // max 15 emails per min per IP
 const authLimiter = new RateLimiter(60 * 1000, 30) // max 30 auth lookups per min per IP
 const syncLimiter = new RateLimiter(60 * 1000, 120) // max 120 sync requests per min per IP
+const bookingLimiter = new RateLimiter(60 * 1000, 15) // max 15 booking requests per min per IP
 
 function getClientIp(req) {
   const forwarded = req.headers['x-forwarded-for']
@@ -2709,6 +2710,136 @@ const server = http.createServer((req, res) => {
         })
       } catch (err) {
         return sendJson(res, 400, { ok: false, error: 'خطا در تایید تراکنش: ' + err.message })
+      }
+    })
+    return
+  }
+
+  // Public Online Booking Endpoint (Integrated with Tenant Database & Manager Alerts)
+  if (req.method === 'POST' && (url.pathname === '/api/public/booking' || url.pathname === '/api/booking/create')) {
+    const bookingCheck = bookingLimiter.check(clientIp)
+    if (!bookingCheck.allowed) {
+      return sendJson(res, 429, {
+        ok: false,
+        error: `تعداد درخواست‌های رزرو بیش از حد مجاز است. لطفاً ${bookingCheck.retryAfterSec} ثانیه دیگر تلاش کنید.`
+      })
+    }
+
+    readJsonBody(req, res, async (body) => {
+      try {
+        const clientName = String(body.clientName || body.client || '').trim()
+        const clientPhone = normalizePhone(String(body.clientPhone || body.phone || ''))
+        const date = String(body.date || '').trim()
+        const branchId = String(body.branchId || body.branch || 'wedding').trim()
+        const branchTitle = String(body.branchTitle || 'عکاسی و تصویربرداری').trim()
+        const packageId = String(body.packageId || '').trim()
+        const packageName = String(body.packageName || 'پکیج انتخابی').trim()
+        const slotTitle = String(body.timeSlot || body.time || 'شیفت اختصاصی').trim()
+        const city = String(body.city || 'مریوان').trim()
+        const notes = String(body.notes || '').trim()
+        const totalPrice = Number(body.totalPrice || 0)
+        const deposit = Number(body.deposit || 0)
+        const remaining = Number(body.remaining || (totalPrice - deposit))
+
+        if (!clientName) {
+          return sendJson(res, 400, { ok: false, error: 'نام و نام‌خانوادگی مراجع الزامی است' })
+        }
+        if (!clientPhone || !isValidPhone(clientPhone)) {
+          return sendJson(res, 400, { ok: false, error: 'شماره موبایل وارد شده معتبر نیست (مثال: 09181234567)' })
+        }
+        if (!date) {
+          return sendJson(res, 400, { ok: false, error: 'تاریخ رزرو الزامی است' })
+        }
+
+        const effectiveTenant = resolveTenantKey(body.studioId || url.searchParams.get('studioId'))
+        const dbFile = getTenantDbPath(effectiveTenant)
+        const meta = readTenantMeta(effectiveTenant)
+
+        let dbData = { bookings: [], leads: [], studioInfo: {} }
+        if (fs.existsSync(dbFile)) {
+          try {
+            dbData = JSON.parse(fs.readFileSync(dbFile, 'utf8'))
+          } catch { /* use default */ }
+        }
+
+        if (!Array.isArray(dbData.bookings)) dbData.bookings = []
+        if (!Array.isArray(dbData.leads)) dbData.leads = []
+
+        const bookingCode = body.code || ('BK-' + (body.date ? body.date.replace(/[^0-9]/g, '').slice(2, 6) : '1405') + '-' + Math.floor(1000 + Math.random() * 9000))
+        const bookingId = body.id || ('bk_' + Date.now())
+
+        const newBooking = {
+          id: bookingId,
+          code: bookingCode,
+          title: `رزرو ${branchTitle} — ${clientName}`,
+          branch: branchId,
+          branchTitle,
+          client: clientName,
+          phone: clientPhone,
+          date,
+          time: slotTitle,
+          timeSlot: slotTitle,
+          packageId,
+          packageName,
+          addons: Array.isArray(body.addons) ? body.addons : [],
+          totalPrice,
+          deposit,
+          remaining,
+          city,
+          notes,
+          paymentMethod: body.paymentMethod || 'online_gateway',
+          paymentStatus: body.paymentStatus || 'pending',
+          status: 'confirmed',
+          source: 'public_portal',
+          createdAt: new Date().toISOString()
+        }
+
+        dbData.bookings.push(newBooking)
+
+        // Insert lead
+        dbData.leads.push({
+          id: 'lead_' + Date.now(),
+          name: clientName,
+          phone: clientPhone,
+          category: branchId,
+          stage: 'won',
+          budget: totalPrice,
+          eventDate: date,
+          source: 'رزرو آنلاین',
+          notes: `کد رزرو ${bookingCode} — بیعانه: ${deposit.toLocaleString('fa-IR')} تومان`,
+          createdAt: new Date().toISOString()
+        })
+
+        // Write tenant file atomically
+        fs.writeFileSync(dbFile, JSON.stringify(dbData, null, 2), 'utf8')
+        const nextRev = (meta.revision || 0) + 1
+        writeTenantMeta(effectiveTenant, nextRev, new Date().toISOString(), meta.syncToken)
+
+        // Dispatch alert to studio manager if Bale / SMS configured
+        try {
+          const sInfo = dbData.studioInfo || {}
+          const studioName = sInfo.name || 'استودیو ماندنی'
+          const alertMsg = `📅 نوبت آنلاین جدید ثبت شد!\nاستودیو: ${studioName}\nمراجع: ${clientName}\nهمراه: ${clientPhone}\nشاخه: ${branchTitle} (${packageName})\nتاریخ: ${date} (${slotTitle})\nبیعانه: ${deposit.toLocaleString('fa-IR')} تومان\nکد رهگیری: ${bookingCode}`
+
+          if (sInfo.baleBotToken && sInfo.phone) {
+            sendBaleMessage(sInfo.phone, alertMsg, sInfo.baleBotToken).catch(() => {})
+          }
+          if (sInfo.phone) {
+            sendSmsMeliPayamak(sInfo.phone, alertMsg).catch(() => {})
+          }
+        } catch { /* alert best effort */ }
+
+        console.log(`[Public Booking] Registered ${bookingCode} for ${clientName} (${clientPhone}) on [${effectiveTenant || 'default'}]`)
+
+        return sendJson(res, 201, {
+          ok: true,
+          booking: newBooking,
+          code: bookingCode,
+          message: 'نوبت شما با موفقیت در سامانه استودیو ثبت گردید ✓'
+        })
+      } catch (err) {
+        console.error('[SyncServer] Public booking error:', err.message)
+        return sendJson(res, 500, { ok: false, error: 'خطای سرور در ثبت نوبت: ' + err.message })
       }
     })
     return

@@ -153,7 +153,10 @@ const Portal = {
         : step === 'consultation' ? this._consultationStep(phone)
         : this._doneStep())
 
-    document.getElementById('portal-app').innerHTML = `
+    const portalAppEl = document.getElementById('portal-app')
+    if (!portalAppEl) return
+
+    portalAppEl.innerHTML = `
       <div class="auth-page auth-page--cinema">
         <canvas class="auth-ambient" data-auth-ambient aria-hidden="true"></canvas>
         <div class="auth-ambient-fallback" aria-hidden="true"></div>

@@ -12,6 +12,9 @@ const SHELL_URLS = [
   './start.html',
   './join.html',
   './index.html',
+  './landing.html',
+  './booking.html',
+  './invoice.html',
   './admin.html',
   './contract.html',
   './customer.html',
@@ -42,7 +45,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((k) => k.startsWith('studio-erp-') && k !== SHELL_CACHE && k !== ASSET_CACHE)
+          .filter((k) => (k.startsWith('mandani-studio-') || k.startsWith('studio-erp-')) && k !== SHELL_CACHE && k !== ASSET_CACHE)
           .map((k) => caches.delete(k))
       )
     ).then(() => self.clients.claim())

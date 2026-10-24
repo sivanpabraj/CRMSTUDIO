@@ -248,6 +248,28 @@
         createdAt: new Date().toISOString()
       }
 
+      // تلاش جهت همگام‌سازی ابری مستقیم با سرور استودیو
+      try {
+        if (typeof fetch !== 'undefined') {
+          const sRes = await fetch('/api/public/booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...newBooking,
+              clientName: newBooking.client,
+              clientPhone: newBooking.phone
+            })
+          }).catch(() => null)
+          if (sRes && sRes.ok) {
+            const sData = await sRes.json().catch(() => null)
+            if (sData && sData.booking) {
+              newBooking.code = sData.code || newBooking.code
+              newBooking.id = sData.booking.id || newBooking.id
+            }
+          }
+        }
+      } catch { /* آفلاین — ادامه ذخیره محلی */ }
+
       const db = getDB()
       if (typeof window.SecureDB !== 'undefined' && window.SecureDB.insert) {
         await window.SecureDB.insert('bookings', newBooking)
