@@ -1,5 +1,5 @@
 /**
- * Auth Service — کاربر سراسری + memberships
+ * Auth Service — کاربر سراسری + memberships + OTP
  * نیازمند pg Pool
  */
 import crypto from 'node:crypto'
@@ -60,14 +60,21 @@ function verifyAccessToken(token, secret) {
   }
 }
 
+function hashOtp(code) {
+  return crypto.createHash('sha256').update(String(code).trim()).digest('hex')
+}
+
 export function createAuthService(pool, opts = {}) {
-  const secret = opts.jwtSecret || process.env.JWT_SECRET || 'change-me-in-production'
+  const secret = opts.jwtSecret || process.env.JWT_SECRET
+  if (!secret || secret === 'change-me-in-production' || secret.length < 32) {
+    throw new Error('JWT_SECRET قوی (حداقل ۳۲ کاراکتر) الزامی است')
+  }
 
   async function registerStudio({ studioName, managerName, phone, email, password }) {
     const p = normalizePhone(phone)
     if (!p) throw Object.assign(new Error('شماره موبایل نامعتبر'), { status: 400 })
-    if (!password || String(password).length < 6) {
-      throw Object.assign(new Error('رمز حداقل ۶ کاراکتر'), { status: 400 })
+    if (!password || String(password).length < 8) {
+      throw Object.assign(new Error('رمز حداقل ۸ کاراکتر باشد'), { status: 400 })
     }
     const client = await pool.connect()
     try {
@@ -192,6 +199,158 @@ export function createAuthService(pool, opts = {}) {
     }
   }
 
+  async function requestOtp({ phone, purpose = 'login' }) {
+    const p = normalizePhone(phone)
+    if (!p) {
+      throw Object.assign(new Error('شماره موبایل نامعتبر'), {
+        status: 400,
+        code: 'invalid_phone'
+      })
+    }
+
+    const recent = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM otp_codes
+       WHERE phone = $1 AND purpose = $2
+         AND created_at > now() - interval '5 minutes'`,
+      [p, purpose]
+    )
+    if (recent.rows[0].c >= 3) {
+      throw Object.assign(new Error('تعداد درخواست کد زیاد است. کمی صبر کنید.'), {
+        status: 429,
+        code: 'otp_rate_limited'
+      })
+    }
+
+    await pool.query(`DELETE FROM otp_codes WHERE expires_at < now()`)
+
+    const code = String(Math.floor(100000 + Math.random() * 900000))
+    const codeHash = hashOtp(code)
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
+
+    await pool.query(
+      `INSERT INTO otp_codes (phone, code_hash, purpose, expires_at)
+       VALUES ($1, $2, $3, $4)`,
+      [p, codeHash, purpose, expiresAt.toISOString()]
+    )
+
+    const isDev = process.env.NODE_ENV !== 'production'
+    return {
+      ok: true,
+      phone: p,
+      expiresIn: 300,
+      ...(isDev ? { devCode: code } : {})
+    }
+  }
+
+  async function verifyOtp({ phone, code, purpose = 'login' }) {
+    const p = normalizePhone(phone)
+    const cleanCode = String(code || '').trim()
+
+    if (!p || !/^\d{6}$/.test(cleanCode)) {
+      throw Object.assign(new Error('ورودی نامعتبر'), {
+        status: 400,
+        code: 'invalid_input'
+      })
+    }
+
+    const row = await pool.query(
+      `SELECT * FROM otp_codes
+       WHERE phone = $1 AND purpose = $2 AND expires_at > now()
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [p, purpose]
+    )
+    const otp = row.rows[0]
+
+    if (!otp) {
+      throw Object.assign(new Error('کد منقضی شده یا یافت نشد'), {
+        status: 400,
+        code: 'otp_expired'
+      })
+    }
+
+    if (otp.attempts >= 5) {
+      throw Object.assign(new Error('تعداد تلاش بیش از حد مجاز'), {
+        status: 429,
+        code: 'otp_locked'
+      })
+    }
+
+    await pool.query(`UPDATE otp_codes SET attempts = attempts + 1 WHERE id = $1`, [otp.id])
+
+    const expected = Buffer.from(otp.code_hash, 'utf8')
+    const actual = Buffer.from(hashOtp(cleanCode), 'utf8')
+    const match =
+      expected.length === actual.length && crypto.timingSafeEqual(expected, actual)
+
+    if (!match) {
+      throw Object.assign(new Error('کد اشتباه است'), {
+        status: 401,
+        code: 'otp_wrong'
+      })
+    }
+
+    await pool.query(`DELETE FROM otp_codes WHERE phone = $1 AND purpose = $2`, [p, purpose])
+
+    let userRes = await pool.query(`SELECT * FROM users WHERE phone = $1`, [p])
+    let user = userRes.rows[0]
+
+    if (!user) {
+      userRes = await pool.query(
+        `INSERT INTO users (phone, name, status)
+         VALUES ($1, $2, 'active')
+         RETURNING *`,
+        [p, 'کاربر']
+      )
+      user = userRes.rows[0]
+    }
+
+    if (user.status === 'disabled') {
+      throw Object.assign(new Error('حساب غیرفعال است'), {
+        status: 403,
+        code: 'inactive'
+      })
+    }
+
+    await pool.query(`UPDATE users SET last_login_at = now() WHERE id = $1`, [user.id])
+
+    const mem = await pool.query(
+      `SELECT m.*, s.name AS studio_name, s.slug AS studio_slug
+       FROM memberships m
+       JOIN studios s ON s.id = m.studio_id
+       WHERE m.user_id = $1 AND m.status = 'active' AND s.status = 'active'`,
+      [user.id]
+    )
+
+    const memberships = mem.rows.map((r) => ({
+      studioId: r.studio_id,
+      role: r.role,
+      roles: r.roles,
+      title: r.title,
+      studioName: r.studio_name,
+      studioSlug: r.studio_slug
+    }))
+
+    const primary = memberships[0]
+    const accessToken = signAccessToken(
+      {
+        sub: user.id,
+        phone: user.phone,
+        studioId: primary?.studioId || null,
+        role: primary?.role || null
+      },
+      secret
+    )
+
+    return {
+      ok: true,
+      user: publicUser(user),
+      memberships,
+      accessToken,
+      mustChangePassword: !!user.must_change_pw
+    }
+  }
+
   async function listMemberships(userId) {
     const mem = await pool.query(
       `SELECT m.*, s.name AS studio_name, s.slug AS studio_slug
@@ -222,6 +381,8 @@ export function createAuthService(pool, opts = {}) {
     registerStudio,
     login,
     listMemberships,
+    requestOtp,
+    verifyOtp,
     verifyAccessToken: (t) => verifyAccessToken(t, secret),
     signAccessToken: (p) => signAccessToken(p, secret),
     normalizePhone,
