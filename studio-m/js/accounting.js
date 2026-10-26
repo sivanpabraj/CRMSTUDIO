@@ -614,6 +614,7 @@ const SMAccounting = {
         <div class="sm-acc-tx-title"><span dir="ltr">${SM.esc(c.number || '—')}</span> · ${SM.esc(c.bank || this._bankName(c.bankId))}</div>
         <div class="sm-acc-tx-meta">
           <span>📋 ${SM.esc(purpose)}</span>
+          ${c.sayadId ? `<span dir="ltr" style="font-family:monospace;background:rgba(212,175,55,0.12);color:#d4af37;padding:2px 6px;border-radius:4px;font-size:11px">صیاد: ${SM.esc(c.sayadId)}</span>` : ''}
           ${c.client || c.drawer ? `<span>👤 ${SM.esc(c.client || c.drawer)}</span>` : ''}
           ${c.transactionRef ? `<span dir="ltr">🔖 ${SM.esc(c.transactionRef)}</span>` : ''}
         </div>
@@ -993,6 +994,7 @@ const SMAccounting = {
         { value: 'outgoing', label: 'چک پرداختی (صدور)' }
       ]})}
       ${SMUI.formField('شماره چک', 'ch-num', { value: item?.number || '', dir: 'ltr' })}
+      ${SMUI.formField('شناسه ۱۶ رقمی صیادی', 'ch-sayad', { value: item?.sayadId || '', dir: 'ltr', placeholder: 'مثلاً: 1234567890123456' })}
       ${SMUI.formField('حساب بانکی', 'ch-bank-sel', { type: 'select', value: item?.bankId || '', options: bankOpts })}
       ${SMUI.formField('نام بانک', 'ch-bank', { value: item?.bank || '' })}
       ${SMUI.formField('مبلغ (تومان)', 'ch-amt', { type: 'number', value: item?.amount || '', dir: 'ltr' })}
@@ -1014,13 +1016,14 @@ const SMAccounting = {
       ]})}
       ${SMUI.formField('توضیحات', 'ch-notes', { type: 'textarea', value: item?.notes || '' })}`, {
       onSave: async () => {
-        const d = SMUI.readForm(['ch-type', 'ch-num', 'ch-bank-sel', 'ch-bank', 'ch-amt', 'ch-due', 'ch-issue', 'ch-month', 'ch-cat', 'ch-purpose', 'ch-contract', 'ch-client', 'ch-ref', 'ch-iban', 'ch-card', 'ch-status', 'ch-notes'])
+        const d = SMUI.readForm(['ch-type', 'ch-num', 'ch-sayad', 'ch-bank-sel', 'ch-bank', 'ch-amt', 'ch-due', 'ch-issue', 'ch-month', 'ch-cat', 'ch-purpose', 'ch-contract', 'ch-client', 'ch-ref', 'ch-iban', 'ch-card', 'ch-status', 'ch-notes'])
         const amount = +d['ch-amt'] || 0
         if (!amount) return SM.toast('مبلغ الزامی است', 'error')
         const selBank = banks.find(b => b.id === d['ch-bank-sel'])
         const data = {
           type: d['ch-type'] || 'incoming',
           number: d['ch-num'],
+          sayadId: d['ch-sayad'] ? String(d['ch-sayad']).replace(/\D/g, '') : '',
           bankId: d['ch-bank-sel'] || '',
           bank: d['ch-bank'] || (selBank ? (selBank.bank || selBank.name) : ''),
           amount,

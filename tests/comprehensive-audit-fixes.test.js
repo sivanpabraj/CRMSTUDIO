@@ -101,4 +101,61 @@ describe('Comprehensive Engineering Audit Fixes — CRMSTUDIO v6.5.0', () => {
       expect(swCode).toContain("self.addEventListener('notificationclick'")
     })
   })
+
+  describe('Section 7: ERP Core Enhancements & Sayad Cheques', () => {
+    it('supports 16-digit Sayad cheque ID in accounting modal and list view', () => {
+      const code = fs.readFileSync(path.join(process.cwd(), 'studio-m/js/accounting.js'), 'utf-8')
+      expect(code).toContain('ch-sayad')
+      expect(code).toContain('sayadId')
+      expect(code).toContain('صیاد:')
+    })
+
+    it('supports interactive bonus, deductions and recalculation in payroll', () => {
+      const code = fs.readFileSync(path.join(process.cwd(), 'studio-m/js/payroll.js'), 'utf-8')
+      expect(code).toContain('pay-bonus')
+      expect(code).toContain('pay-deduction')
+      expect(code).toContain('baseCalculated')
+      expect(code).toContain('finalTotal')
+    })
+
+    it('tracks camera shutter count and triggers service interval alert', () => {
+      const code = fs.readFileSync(path.join(process.cwd(), 'studio-m/js/equipment.js'), 'utf-8')
+      expect(code).toContain('shutterCount')
+      expect(code).toContain('serviceIntervalShots')
+      expect(code).toContain('سرویس شاتر!')
+    })
+
+    it('tracks archive HDD and folder in contracts form, module view and edit modal', () => {
+      const contractHtml = fs.readFileSync(path.join(process.cwd(), 'contract.html'), 'utf-8')
+      const contractJs = fs.readFileSync(path.join(process.cwd(), 'contract.js'), 'utf-8')
+      const modulesJs = fs.readFileSync(path.join(process.cwd(), 'studio-m/js/modules.js'), 'utf-8')
+
+      expect(contractHtml).toContain('id="archive-hdd"')
+      expect(contractHtml).toContain('id="archive-folder"')
+
+      expect(contractJs).toContain('archiveHdd: gv(\'archive-hdd\') || \'\'')
+      expect(contractJs).toContain('archiveFolder: gv(\'archive-folder\') || \'\'')
+
+      expect(modulesJs).toContain('c.archiveHdd')
+      expect(modulesJs).toContain('c.archiveFolder')
+      expect(modulesJs).toContain('ct-archive-hdd')
+      expect(modulesJs).toContain('ct-archive-folder')
+    })
+
+    it('integrates customer photo selection dashboard and submission flow', () => {
+      const custCode = fs.readFileSync(path.join(process.cwd(), 'js/customer.js'), 'utf-8')
+      expect(custCode).toContain('_renderPhotoSelectionSection')
+      expect(custCode).toContain('submitPhotoSelection')
+      expect(custCode).toContain('photo-sel-numbers')
+      expect(custCode).toContain('photoSelections')
+    })
+
+    it('has zero broken CSS and JS assets in booking.html', () => {
+      const bookingHtml = fs.readFileSync(path.join(process.cwd(), 'booking.html'), 'utf-8')
+      expect(bookingHtml).not.toContain('css/style.css')
+      expect(bookingHtml).not.toContain('js/app-config.js')
+      expect(bookingHtml).toContain('css/ui-kit.css')
+      expect(bookingHtml).toContain('js/config.js')
+    })
+  })
 })

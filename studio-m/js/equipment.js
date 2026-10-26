@@ -97,6 +97,7 @@ const SMEquipment = {
       <div class="sm-eq-card-body">
         <div class="sm-eq-name">${SM.esc(e.name)}</div>
         <div class="sm-eq-meta">${SM.esc(e.brand || '')}${e.model ? ` · ${SM.esc(e.model)}` : ''}</div>
+        ${e.shutterCount ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px"><i class="fas fa-camera" style="font-size:10px"></i> شاتر: ${Number(e.shutterCount).toLocaleString('fa-IR')} ${e.serviceIntervalShots && Number(e.shutterCount) >= Number(e.serviceIntervalShots) ? '<span class="sm-badge sm-badge-xs sm-badge-danger">سرویس شاتر!</span>' : ''}</div>` : ''}
         ${e.serial ? `<div class="sm-eq-serial" dir="ltr">${SM.esc(e.serial)}</div>` : ''}
         ${e.location ? `<div class="sm-eq-loc"><i class="fas fa-location-dot"></i> ${SM.esc(e.location)}</div>` : ''}
       </div>
@@ -147,11 +148,13 @@ const SMEquipment = {
       ${SMUI.formField('تخصیص به پروژه / قرارداد', 'eq-contract', { type: 'select', value: item?.assignedContractId || '', options: contracts })}
       ${SMUI.formField('تحویل به مسئول تجهیزات (پرسنل)', 'eq-personnel', { type: 'select', value: item?.assignedPersonnelId || '', options: personnel })}
       ${SMUI.formField('محل نگهداری', 'eq-loc', { value: item?.location || '', placeholder: 'مثلاً اتاق تدوین، قفسه ۲' })}
+      ${SMUI.formField('شمارنده شاتر بدنه (اختیاری)', 'eq-shutter', { type: 'number', value: item?.shutterCount || '', dir: 'ltr', placeholder: 'مثلاً 45000' })}
+      ${SMUI.formField('سقف مجاز شات تا سرویس دوره‌ای', 'eq-svc-limit', { type: 'number', value: item?.serviceIntervalShots || '', dir: 'ltr', placeholder: 'مثلاً 100000' })}
       ${SMUI.formField('تاریخ خرید', 'eq-pdate', { value: item?.purchaseDate || '' })}
       ${SMUI.formField('یادداشت', 'eq-notes', { type: 'textarea', value: item?.notes || '' })}`, {
       width: 480,
       onSave: async () => {
-        const d = SMUI.readForm(['eq-name', 'eq-cat', 'eq-brand', 'eq-model', 'eq-serial', 'eq-status', 'eq-contract', 'eq-personnel', 'eq-loc', 'eq-pdate', 'eq-notes'])
+        const d = SMUI.readForm(['eq-name', 'eq-cat', 'eq-brand', 'eq-model', 'eq-serial', 'eq-status', 'eq-contract', 'eq-personnel', 'eq-loc', 'eq-shutter', 'eq-svc-limit', 'eq-pdate', 'eq-notes'])
         if (!d['eq-name']) return SM.toast('نام تجهیز الزامی است', 'error')
         const data = {
           name: d['eq-name'],
@@ -163,6 +166,8 @@ const SMEquipment = {
           assignedContractId: d['eq-contract'] || '',
           assignedPersonnelId: d['eq-personnel'] || '',
           location: d['eq-loc'],
+          shutterCount: Number(d['eq-shutter']) || 0,
+          serviceIntervalShots: Number(d['eq-svc-limit']) || 0,
           purchaseDate: d['eq-pdate'],
           notes: d['eq-notes']
         }

@@ -459,6 +459,8 @@ SMModules.contracts = {
               <p style="margin-top:8px"><strong>مانده:</strong> ${SM.fmt(remain)} تومان</p>
               ${c.depositBankId && typeof FinanceSync !== 'undefined' ? `<p style="margin-top:8px"><strong>حساب بیعانه:</strong> ${SM.esc(FinanceSync.bankLabel(c.depositBankId))}</p>` : ''}
               ${c.venue ? `<p style="margin-top:8px"><strong>تالار:</strong> ${SM.esc(c.venue)}</p>` : ''}
+              ${c.archiveHdd ? `<p style="margin-top:8px"><strong>💽 هارد آرشیو:</strong> <span dir="ltr">${SM.esc(c.archiveHdd)}</span></p>` : ''}
+              ${c.archiveFolder ? `<p style="margin-top:8px"><strong>📁 پوشه در هارد:</strong> <span dir="ltr">${SM.esc(c.archiveFolder)}</span></p>` : ''}
               <p style="margin-top:12px"><strong>استعلام پیامکی:</strong> ${this._verifyLabel(c)}</p>
             </div>
           </div>
@@ -538,12 +540,19 @@ SMModules.contracts = {
         ]})}
         ${SMUI.formField('توضیحات عملیاتی', 'ct-notes', { type: 'textarea', value: cr.refundNotes || '' })}
       </div>
+      ${SMUI.formField('هارد آرشیو پروژه (راش‌ها)', 'ct-archive-hdd', { value: c.archiveHdd || '', dir: 'ltr', placeholder: 'مثلاً HDD-04 / WD-Gold' })}
+      ${SMUI.formField('مسیر پوشه در هارد آرشیو', 'ct-archive-folder', { value: c.archiveFolder || '', dir: 'ltr', placeholder: 'مثلاً 1405/Farvardin/Wedding-...' })}
       ${SMUI.formField('یادداشت مدیر', 'ct-note', { type: 'textarea', value: c.managerNote || '' })}`, {
       width: 520,
       onSave: async () => {
-        const d = SMUI.readForm(['ct-status', 'ct-paid', 'ct-bank', 'ct-paid-to', 'ct-refund', 'ct-notes', 'ct-note'])
+        const d = SMUI.readForm(['ct-status', 'ct-archive-hdd', 'ct-archive-folder', 'ct-paid', 'ct-bank', 'ct-paid-to', 'ct-refund', 'ct-notes', 'ct-note'])
         const status = d['ct-status']
-        const patch = { status, managerNote: d['ct-note'] }
+        const patch = {
+          status,
+          archiveHdd: d['ct-archive-hdd'] || '',
+          archiveFolder: d['ct-archive-folder'] || '',
+          managerNote: d['ct-note']
+        }
         if (status === 'cancelled') {
           patch.cancelRecord = {
             paidAmount: +d['ct-paid'] || 0,

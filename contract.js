@@ -1009,6 +1009,8 @@ function loadContractData(obj) {
   }
   if (obj.payPlan) sv('pay-plan', obj.payPlan)
   if (obj.terms) sv('contract-terms', obj.terms)
+  if (obj.archiveHdd) sv('archive-hdd', obj.archiveHdd)
+  if (obj.archiveFolder) sv('archive-folder', obj.archiveFolder)
 
   if (obj.packageId) {
     state.selectedPackageId = obj.packageId
@@ -1375,6 +1377,8 @@ function buildContractObject(isFinalized) {
     balance: total - depositVal,
     payPlan: gv('pay-plan') || '',
     terms: gv('contract-terms') || '',
+    archiveHdd: gv('archive-hdd') || '',
+    archiveFolder: gv('archive-folder') || '',
     progress: 0,
     status: isFinalized ? 'active' : 'draft',
     staffCost: staffCost,

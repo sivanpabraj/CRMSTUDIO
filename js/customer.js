@@ -185,6 +185,8 @@ const CustomerPortal = {
 
           ${this._renderContractAcceptanceCard(c)}
 
+          ${this._renderPhotoSelectionSection(c)}
+
           ${this._renderFinancialSection(c)}
 
           ${queuePreview}
@@ -338,6 +340,130 @@ const CustomerPortal = {
       AudioNotifier.playSent()
     }
     Utils.toast('✅ درخواست ثبت شد. پس از تأیید مدیر اطلاع‌رسانی می‌شود.', 'success')
+    this.renderDashboard()
+  },
+
+  _renderPhotoSelectionSection(c) {
+    const selections = (typeof DB !== 'undefined' && DB.filter)
+      ? DB.filter('photoSelections', s => s.contractId === c.id && !s._deleted)
+      : []
+
+    if (!selections || !selections.length) {
+      return ''
+    }
+
+    const s = selections[selections.length - 1]
+    const statusMap = {
+      pending: { label: 'در انتظار انتخاب شما', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', icon: '⏳' },
+      in_progress: { label: 'در حال انتخاب', color: '#38bdf8', bg: 'rgba(56,189,248,0.12)', icon: '🖼️' },
+      submitted: { label: 'ارسال شده به استودیو', color: '#a855f7', bg: 'rgba(168,85,247,0.12)', icon: '📤' },
+      approved: { label: 'تأیید شده برای طراحی و چاپ', color: '#22c55e', bg: 'rgba(34,197,94,0.12)', icon: '✅' },
+      rejected: { label: 'نیاز به ویرایش / اصلاح انتخاب', color: '#ef4444', bg: 'rgba(239,68,68,0.12)', icon: '⚠️' }
+    }
+    const currentStatus = statusMap[s.status] || { label: s.status, color: '#94a3b8', bg: 'rgba(255,255,255,0.05)', icon: '📷' }
+    const canEdit = ['pending', 'in_progress', 'rejected'].includes(s.status)
+    const photoCount = Array.isArray(s.selectedPhotos) ? s.selectedPhotos.length : 0
+    const rawPhotosVal = (s.selectedPhotos || []).map(p => (typeof p === 'object' ? (p.photoNumber || p.name || '') : String(p))).filter(Boolean).join(', ')
+
+    return `
+      <div class="customer-card" style="max-width:none;margin-bottom:16px;border:1px solid rgba(139,92,246,0.3);background:radial-gradient(ellipse at top, rgba(139,92,246,0.08) 0%, rgba(18,18,24,0.85) 100%)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:20px">🖼️</span>
+            <div>
+              <h1 style="font-size:16px;text-align:right;margin:0;color:#fff">انتخاب عکس‌های آلبوم و چاپ</h1>
+              <div style="font-size:11px;color:rgba(255,255,255,0.5)">سقف مجاز انتخاب: <strong>${Utils.fmtNum(s.maxPhotos || 50)}</strong> عکس</div>
+            </div>
+          </div>
+          <span style="font-size:11.5px;padding:4px 10px;border-radius:20px;font-weight:700;color:${currentStatus.color};background:${currentStatus.bg};border:1px solid ${currentStatus.color}40">
+            ${currentStatus.icon} ${currentStatus.label}
+          </span>
+        </div>
+
+        ${s.status === 'approved' ? `
+          <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px;font-size:12.5px;color:#86efac;line-height:1.7;margin-bottom:10px">
+            🎉 تبریک! شماره عکس‌های انتخابی شما با موفقیت به تأیید استودیو رسید و پروژه به واحد طراحی و صفحه‌آرایی آلبوم ارسال شد.
+          </div>
+        ` : s.status === 'submitted' ? `
+          <div style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:10px;padding:12px;font-size:12.5px;color:#d8b4fe;line-height:1.7;margin-bottom:10px">
+            📤 لیست عکس‌های شما (${Utils.fmtNum(photoCount)} قطعه) ارسال شده و در حال بررسی توسط کارشناس طراحی استودیو است.
+          </div>
+        ` : `
+          <p style="font-size:12.5px;color:rgba(255,255,255,0.7);line-height:1.6;margin-bottom:12px">
+            لطفاً شماره فایل عکس‌های مورد نظر خود را از روی فلش یا گالری استودیو در کادر زیر وارد کنید (حداکثر ${Utils.fmtNum(s.maxPhotos || 50)} عدد).
+          </p>
+        `}
+
+        <div style="margin-bottom:12px">
+          <label style="display:block;font-size:12px;color:rgba(255,255,255,0.8);margin-bottom:6px">
+            شماره عکس‌های انتخابی (با کاما یا خط جدا کنید):
+          </label>
+          <textarea id="photo-sel-numbers" class="customer-textarea" style="height:75px;font-family:monospace;direction:ltr;font-size:13px" placeholder="مثال: 0102, 0115, 0240, 0312, 0580..." ${canEdit ? '' : 'readonly'}>${Utils.escapeHtml(rawPhotosVal)}</textarea>
+        </div>
+
+        <div style="margin-bottom:12px">
+          <label style="display:block;font-size:12px;color:rgba(255,255,255,0.8);margin-bottom:6px">
+            نکات ادیت و درخواست‌های روتوش:
+          </label>
+          <input type="text" id="photo-sel-notes" class="portal-input" style="width:100%;font-size:12px" placeholder="مثال: عکس ۰۱۱۵ سیاه و سفید نشود، روتوش عکس ۰۲۴۰ طبیعی باشد..." value="${Utils.escapeHtml(s.notes || '')}" ${canEdit ? '' : 'readonly'}/>
+        </div>
+
+        ${canEdit ? `
+          <button type="button" class="portal-btn portal-btn-primary" style="width:100%;background:linear-gradient(135deg,#8b5cf6,#6d28d9)" onclick="CustomerPortal.submitPhotoSelection('${s.id}')">
+            <i class="fas fa-check-circle"></i> ثبت نهایی انتخاب عکس‌ها (${Utils.fmtNum(s.maxPhotos || 50)} قطعه)
+          </button>
+        ` : ''}
+      </div>`
+  },
+
+  async submitPhotoSelection(selectionId) {
+    const s = DB.find('photoSelections', x => x.id === selectionId)
+    if (!s) return Utils.toast('یافت نشد', 'error')
+
+    const rawPhotos = (document.getElementById('photo-sel-numbers')?.value || '').trim()
+    const notes = (document.getElementById('photo-sel-notes')?.value || '').trim()
+
+    if (!rawPhotos) {
+      return Utils.toast('لطفاً حداقل شماره چند عکس را وارد کنید', 'error')
+    }
+
+    const tokens = rawPhotos.split(/[\n,،\s]+/).map(t => t.trim()).filter(Boolean)
+    if (!tokens.length) {
+      return Utils.toast('شماره عکسی یافت نشد', 'error')
+    }
+
+    const max = Number(s.maxPhotos) || 50
+    if (tokens.length > max) {
+      return Utils.toast(`تعداد عکس‌های وارد شده (${tokens.length}) بیشتر از سقف مجاز (${max}) است`, 'error')
+    }
+
+    const selectedPhotos = tokens.map((num, i) => ({
+      id: 'p_' + (i + 1),
+      photoNumber: num,
+      name: 'IMG_' + num,
+      note: ''
+    }))
+
+    const patch = {
+      selectedPhotos,
+      notes,
+      status: 'submitted',
+      submittedAt: typeof Utils !== 'undefined' ? Utils.todayJalali() : new Date().toISOString()
+    }
+
+    if (typeof SecureDB !== 'undefined' && SecureDB.update) {
+      await SecureDB.update('photoSelections', selectionId, patch)
+    } else {
+      DB.update('photoSelections', selectionId, patch)
+    }
+
+    if (typeof DB.log === 'function') {
+      DB.log('photo_selection_submit', `${s.couple || s.contractNum || ''} — ${selectedPhotos.length} عکس`)
+    }
+
+    if (typeof DB.flush === 'function') await DB.flush()
+
+    Utils.toast('✅ انتخاب عکس‌ها با موفقیت ثبت شد و به آتلیه اطلاع داده شد', 'success')
     this.renderDashboard()
   },
 

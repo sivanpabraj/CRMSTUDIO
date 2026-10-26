@@ -127,6 +127,8 @@ const SMPayroll = {
           ${b.monthly ? `<p style="margin-top:8px"><strong>ماهانه:</strong> ${SM.fmt(b.monthly)}</p>` : ''}
           ${b.projectTotal ? `<p style="margin-top:8px"><strong>پروژه‌ای:</strong> ${SM.fmt(b.projectTotal)}</p>` : ''}
           ${b.percent ? `<p style="margin-top:8px"><strong>درصدی:</strong> ${SM.fmt(b.percent)}</p>` : ''}
+          ${p.bonus ? `<p style="margin-top:8px;color:#34d399"><strong>پاداش و اضافه‌کاری:</strong> +${SM.fmt(p.bonus)} تومان</p>` : ''}
+          ${p.deduction ? `<p style="margin-top:8px;color:#f87171"><strong>کسورات و مساعده:</strong> −${SM.fmt(p.deduction)} تومان</p>` : ''}
         </div></div>`)
   },
 
@@ -141,7 +143,13 @@ const SMPayroll = {
       ${SMUI.formField('پرسنل', 'pay-person', { type: 'select', value: defaultPerson, options: personnel.map(x => ({ value: x.id, label: x.name })) })}
       ${SMUI.formField('ماه حقوق', 'pay-month', { type: 'select', value: defaultMonth, options: this._monthOptions(defaultMonth) })}
       <div id="pay-breakdown-wrap">${this._breakdownHtml(calc)}</div>
-      <input type="hidden" id="pay-amount" value="${calc?.total || 0}"/>
+      <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px;margin:12px 0">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${SMUI.formField('پاداش و اضافه‌کاری (تومان)', 'pay-bonus', { type: 'number', value: '0', dir: 'ltr' })}
+          ${SMUI.formField('کسورات و مساعده (تومان)', 'pay-deduction', { type: 'number', value: '0', dir: 'ltr' })}
+        </div>
+        ${SMUI.formField('مبلغ نهایی پرداختی (تومان)', 'pay-amount', { type: 'number', value: calc?.total || 0, dir: 'ltr' })}
+      </div>
       ${SMUI.formField('پرداخت از حساب', 'pay-bank', { type: 'select', options: this._bankOptions('') })}
       <div id="pay-bank-info"></div>
       ${SMUI.formField('روش', 'pay-method', { type: 'select', value: 'transfer', options: [
@@ -162,11 +170,16 @@ const SMPayroll = {
       const c = this.calculate(personId, month)
       const wrap = document.getElementById('pay-breakdown-wrap')
       const amt = document.getElementById('pay-amount')
+      const bonus = Number(document.getElementById('pay-bonus')?.value || 0)
+      const ded = Number(document.getElementById('pay-deduction')?.value || 0)
       if (wrap) wrap.innerHTML = this._breakdownHtml(c)
-      if (amt) amt.value = c?.total || 0
+      const finalAmt = Math.max(0, (c?.total || 0) + bonus - ded)
+      if (amt) amt.value = finalAmt
     }
     document.getElementById('pay-person')?.addEventListener('change', recalc)
     document.getElementById('pay-month')?.addEventListener('change', recalc)
+    document.getElementById('pay-bonus')?.addEventListener('input', recalc)
+    document.getElementById('pay-deduction')?.addEventListener('input', recalc)
     document.getElementById('pay-bank')?.addEventListener('change', () => {
       const info = document.getElementById('pay-bank-info')
       if (info) info.innerHTML = this._bankInfoHtml(document.getElementById('pay-bank')?.value)
@@ -174,18 +187,17 @@ const SMPayroll = {
   },
 
   async _savePayment(existingId) {
-    const d = SMUI.readForm(['pay-person', 'pay-month', 'pay-amount', 'pay-bank', 'pay-method', 'pay-ref', 'pay-date', 'pay-notes'])
+    const d = SMUI.readForm(['pay-person', 'pay-month', 'pay-amount', 'pay-bonus', 'pay-deduction', 'pay-bank', 'pay-method', 'pay-ref', 'pay-date', 'pay-notes'])
     const person = DB.find('personnel', p => p.id === d['pay-person'])
     if (!person) return SM.toast('پرسنل را انتخاب کنید', 'error')
     if (!d['pay-bank']) return SM.toast('حساب بانکی را انتخاب کنید', 'error')
 
-    const calc = this.calculate(person.id, d['pay-month'])
-    const amount = calc?.total || (+d['pay-amount'] || 0)
-    if (amount <= 0) return SM.toast('مبلغ قابل پرداخت صفر است', 'error')
+    const amount = Number(d['pay-amount']) || 0
+    if (amount <= 0) return SM.toast('مبلغ قابل پرداخت باید بیشتر از صفر باشد', 'error')
 
-    if (!existingId && calc?.alreadyPaid) {
-      return SM.toast('برای این پرسنل در این ماه قبلاً پرداخت ثبت شده', 'error')
-    }
+    const calc = this.calculate(person.id, d['pay-month'])
+    const bonus = Number(d['pay-bonus']) || 0
+    const deduction = Number(d['pay-deduction']) || 0
 
     const bank = DB.find('banks', b => b.id === d['pay-bank'])
     const payload = {
@@ -194,6 +206,18 @@ const SMPayroll = {
       month: d['pay-month'],
       monthLabel: calc?.monthLabel || d['pay-month'],
       amount,
+      bonus,
+      deduction,
+      baseCalculated: calc?.total || 0,
+      breakdown: {
+        monthly: calc?.monthly || 0,
+        projectTotal: calc?.projectTotal || 0,
+        percent: calc?.percent || 0,
+        projectIds: (calc?.projects || []).map(p => p.id),
+        bonus,
+        deduction,
+        finalTotal: amount
+      },
       date: d['pay-date'] || Utils.todayJalali(),
       bankId: d['pay-bank'],
       bankName: bank?.name || bank?.bank || '',
@@ -203,12 +227,6 @@ const SMPayroll = {
       paymentMethod: d['pay-method'] || 'transfer',
       ref: d['pay-ref'] || '',
       notes: d['pay-notes'] || '',
-      breakdown: {
-        monthly: calc?.monthly || 0,
-        projectTotal: calc?.projectTotal || 0,
-        percent: calc?.percent || 0,
-        projectIds: (calc?.projects || []).map(p => p.id)
-      },
       status: 'paid'
     }
 
