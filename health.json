@@ -1,8 +1,8 @@
 {
   "status": "ok",
   "service": "crmstudio",
-  "version": "6.2.4",
-  "branch": "eng/glass-pwa-ux-v2",
+  "version": "1.0.0",
+  "branch": "main",
   "features": [
     "pwa-v41",
     "glass-kpi",
@@ -11,6 +11,12 @@
     "finance-overview",
     "global-search",
     "studio-ai-brain",
-    "portal-ai-stage"
+    "portal-ai-stage",
+    "sayad-cheque-16digit",
+    "payroll-bonuses",
+    "shutter-counter",
+    "archive-hdd-tracking",
+    "photo-house-selection",
+    "docker-compose-ready"
   ]
 }

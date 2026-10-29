@@ -1,7 +1,18 @@
 {
   "status": "ok",
   "service": "crmstudio",
-  "version": "6.2.2",
-  "branch": "eng/glass-pwa-ux-v2",
-  "features": ["pwa-v41", "glass-kpi", "share-log", "session-sign-v2"]
+  "version": "1.0.0",
+  "branch": "main",
+  "features": [
+    "pwa-v41",
+    "glass-kpi",
+    "share-log",
+    "session-sign-v2",
+    "sayad-cheque-16digit",
+    "payroll-bonuses",
+    "shutter-counter",
+    "archive-hdd-tracking",
+    "photo-house-selection",
+    "docker-compose-ready"
+  ]
 }

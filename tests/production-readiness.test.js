@@ -2,11 +2,12 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 
-describe('Production Readiness & Deployment Suite — CRMSTUDIO v6.5.0', () => {
+describe('Production Readiness & Deployment Suite — CRMSTUDIO v1.0.0', () => {
   const root = process.cwd()
 
-  it('package.json has valid start, server:sync and build scripts', () => {
+  it('package.json has version 1.0.0, valid start, server:sync and build scripts', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf-8'))
+    expect(pkg.version).toBe('1.0.0')
     expect(pkg.scripts.start).toBe('node server/sync-server.mjs')
     expect(pkg.scripts['server:sync']).toBe('node server/sync-server.mjs')
     expect(pkg.scripts.build).toContain('vite build')

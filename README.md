@@ -1,23 +1,28 @@
 # CRMSTUDIO — پلتفرم مدیریت سازمانی (ERP)
 
-نسخه **6.1.0** — سامانه جامع مدیریت سازمانی و ERP استودیو (RTL / فارسی)
+نسخه **1.0.0 (انتشار رسمی پایدار)** — سامانه جامع مدیریت سازمانی و ERP استودیو فیلم و عکس (RTL / فارسی / Offline-First / PWA)
 
 ## اجرا
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173/site.html
-npm run build    # خروجی در dist/
-npm run test     # unit tests
-npm run lint     # ESLint (zero warnings policy)
+npm run dev          # اجرای فرانت‌اند در محیط توسعه: http://localhost:5173/site.html
+npm start            # اجرای سرور همگام‌سازی و API (پورت ۳۰۰۰)
+npm run build        # بیلد کامل پروداکشن در dist/
+npm run test         # تست‌های خودکار Vitest (۲۹۲ تست سبز)
+npm run lint         # اعتبارسنجی کد با ESLint
 ```
 
-### Docker
+### اجرای آسان با داکر (Docker Compose)
 
 ```bash
-docker build -t crmstudio .
-docker run -p 8080:80 crmstudio
+# ۱. کپی متغیرهای محیطی
+cp .env.example .env
+
+# ۲. اجرای فرانت‌اند و بک‌اند با یک دستور
+docker compose up -d --build
 ```
+سپس سامانه روی پورت ۸۰ در دسترس خواهد بود.
 
 مستندات: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) · [docs/SMS_DEFERRED.md](docs/SMS_DEFERRED.md) (بدون SMS تا فردا)
 

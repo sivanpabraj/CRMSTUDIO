@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 
-describe('Engineering Pack v6.3.0 — Versions and Cache', () => {
-  it('has version 6.3.0 in package.json', () => {
+describe('Engineering Pack — Versions and Cache', () => {
+  it('has version 1.0.0 in package.json', () => {
     const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf8'))
-    expect(pkg.version).toBe('6.3.0')
+    expect(pkg.version).toBe('1.0.0')
   })
 
   it('has cache version mandani-studio-v48 in sw.js', () => {
@@ -16,7 +16,7 @@ describe('Engineering Pack v6.3.0 — Versions and Cache', () => {
 
   it('matches version in js/config.js', () => {
     const config = fs.readFileSync(path.resolve(__dirname, '../js/config.js'), 'utf8')
-    expect(config).toContain("APP_VERSION: '6.3.0'")
+    expect(config).toContain("APP_VERSION: '1.0.0'")
     expect(config).toContain("SW_CACHE: 'mandani-studio-v48'")
     expect(config).toContain('DB_VERSION: 21')
   })
@@ -74,16 +74,16 @@ describe('Engineering Pack v6.3.0 — EngExpenseLink', () => {
   })
 })
 
-describe('Engineering Pack v6.3.0 — EngRemainingComplete', () => {
+describe('Engineering Pack — EngRemainingComplete', () => {
   it('registers and boots without throwing in SSR/Node', async () => {
-    globalThis.AppConfig = { APP_VERSION: '6.3.0', SW_CACHE: 'mandani-studio-v48' }
+    globalThis.AppConfig = { APP_VERSION: '1.0.0', SW_CACHE: 'mandani-studio-v48' }
     await import('../js/eng-remaining-complete.js')
     const EngRemainingComplete = globalThis.EngRemainingComplete
     expect(EngRemainingComplete).toBeDefined()
     expect(typeof EngRemainingComplete.forceSyncPull).toBe('function')
     EngRemainingComplete.boot()
     expect(globalThis.__MANDANI_BUILD__).toBeDefined()
-    expect(globalThis.__MANDANI_BUILD__.version).toBe('6.3.0')
+    expect(globalThis.__MANDANI_BUILD__.version).toBe('1.0.0')
     expect(globalThis.__MANDANI_BUILD__.sw).toBe('mandani-studio-v48')
   })
 })
