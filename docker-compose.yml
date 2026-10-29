@@ -1,0 +1,38 @@
+services:
+  sync-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server
+    container_name: crmstudio-server
+    restart: always
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PORT=3000
+      - DATA_DIR=/var/lib/crmstudio
+    volumes:
+      - crmstudio_data:/var/lib/crmstudio
+      - crmstudio_backups:/var/backups/crmstudio
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crmstudio-frontend
+    restart: always
+    ports:
+      - "80:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      sync-server:
+        condition: service_healthy
+
+volumes:
+  crmstudio_data:
+    driver: local
+  crmstudio_backups:
+    driver: local

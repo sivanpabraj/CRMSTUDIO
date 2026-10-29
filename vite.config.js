@@ -22,6 +22,12 @@ export default defineConfig(({ mode }) => {
           admin: resolve(__dirname, 'admin.html'),
           contract: resolve(__dirname, 'contract.html'),
           customer: resolve(__dirname, 'customer.html'),
+          booking: resolve(__dirname, 'booking.html'),
+          crew: resolve(__dirname, 'crew.html'),
+          invoice: resolve(__dirname, 'invoice.html'),
+          landing: resolve(__dirname, 'landing.html'),
+          baleGuide: resolve(__dirname, 'bale_bot_guide.html'),
+          aiMap: resolve(__dirname, 'studio_architecture_ai_map.html'),
           studioM: resolve(__dirname, 'studio-m/index.html'),
           studioMAuthCallback: resolve(__dirname, 'studio-m/auth-callback.html')
         }

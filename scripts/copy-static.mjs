@@ -20,13 +20,32 @@ function copy(src, dest) {
 
 copy('js', 'js')
 copy('css', 'css')
+copy('icons', 'icons')
 copy('studio-m/js', 'studio-m/js')
 copy('studio-m/css', 'studio-m/css')
 
-for (const file of ['sw.js', 'manifest.json', 'admin.css', 'contract.css', 'admin.js', 'contract.js']) {
+for (const file of [
+  'sw.js',
+  'manifest.json',
+  'admin.css',
+  'contract.css',
+  'admin.js',
+  'contract.js',
+  'health.json',
+  'bale_bot_guide.html',
+  'studio_architecture_ai_map.html'
+]) {
   const from = join(root, file)
   if (existsSync(from)) {
     cpSync(from, join(dist, file))
     console.log(`copy-static: ${file} → dist/${file}`)
+  }
+}
+
+for (const smFile of ['bale_bot_guide.html', 'studio_architecture_ai_map.html']) {
+  const from = join(root, 'studio-m', smFile)
+  if (existsSync(from)) {
+    cpSync(from, join(dist, 'studio-m', smFile))
+    console.log(`copy-static: studio-m/${smFile} → dist/studio-m/${smFile}`)
   }
 }

@@ -1,9 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-BACKUP_DIR="/var/backups/crmstudio"
-DATA_FILE="/var/lib/crmstudio/crmstudio_db.json"
-TENANTS_DIR="/var/www/crmstudio/data/tenants"
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/crmstudio}"
+DATA_DIR="${DATA_DIR:-/var/lib/crmstudio}"
+DATA_FILE="$DATA_DIR/crmstudio_db.json"
+TENANTS_DIR="$DATA_DIR/tenants"
+if [ ! -d "$TENANTS_DIR" ] && [ -d "/var/www/crmstudio/data/tenants" ]; then
+    TENANTS_DIR="/var/www/crmstudio/data/tenants"
+fi
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
 mkdir -p "$BACKUP_DIR"
